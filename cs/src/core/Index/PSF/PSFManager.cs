@@ -14,7 +14,12 @@ using System.Threading.Tasks;
 
 namespace FASTER.core
 {
-    internal class PSFManager<TProviderData, TRecordId> where TRecordId : struct, IComparable<TRecordId>
+    /// <summary>
+    /// The class that manages PSFs. Called internally by the primary FasterKV.
+    /// </summary>
+    /// <typeparam name="TProviderData">The type of the provider data returned by PSF queries; for the primary FasterKV, it is <see cref="FasterKVProviderData{TKVKey, TKVValue}"/></typeparam>
+    /// <typeparam name="TRecordId">The type of the Record identifier in the data provider; for the primary FasterKV it is the record's logical address</typeparam>
+    public class PSFManager<TProviderData, TRecordId> where TRecordId : struct, IComparable<TRecordId>
     {
         private readonly ConcurrentDictionary<long, IExecutePSF<TProviderData, TRecordId>> psfGroups 
             = new ConcurrentDictionary<long, IExecutePSF<TProviderData, TRecordId>>();
@@ -23,7 +28,14 @@ namespace FASTER.core
 
         internal bool HasPSFs => this.psfGroups.Count > 0;
 
-        internal Status Upsert(TProviderData data, TRecordId recordId, PSFChangeTracker<TProviderData, TRecordId> changeTracker)
+        /// <summary>
+        /// Inserts a new PSF key/RecordId, or adds the RecordId to an existing chain
+        /// </summary>
+        /// <param name="data">The provider's data; will be passed to the PSF execution</param>
+        /// <param name="recordId">The record Id to be stored for any matching PSFs</param>
+        /// <param name="changeTracker">Tracks changes if this is an existing Key/RecordId entry</param>
+        /// <returns>A status code indicating the result of the operation</returns>
+        public Status Upsert(TProviderData data, TRecordId recordId, PSFChangeTracker<TProviderData, TRecordId> changeTracker)
         {
             // TODO: RecordId locking, to ensure consistency of multiple PSFs if the same record is updated
             // multiple times; possibly a single Array<CacheLine>[N] which is locked on TRecordId.GetHashCode % N.
@@ -47,7 +59,12 @@ namespace FASTER.core
             return this.Update(changeTracker);
         }
 
-        internal Status Update(PSFChangeTracker<TProviderData, TRecordId> changeTracker)
+        /// <summary>
+        /// Updates a PSF key/RecordId entry, possibly by RCU (Read-Copy-Update)
+        /// </summary>
+        /// <param name="changeTracker">Tracks changes for an existing Key/RecordId entry</param>
+        /// <returns>A status code indicating the result of the operation</returns>
+        public Status Update(PSFChangeTracker<TProviderData, TRecordId> changeTracker)
         {
             foreach (var group in this.psfGroups.Values)
             {
@@ -60,7 +77,12 @@ namespace FASTER.core
             return Status.OK;
         }
 
-        internal Status Delete(PSFChangeTracker<TProviderData, TRecordId> changeTracker)
+        /// <summary>
+        /// Deletes a PSF key/RecordId entry from the chain, possibly by insertion of a "marked deleted" record
+        /// </summary>
+        /// <param name="changeTracker">Tracks changes for an existing Key/RecordId entry</param>
+        /// <returns>A status code indicating the result of the operation</returns>
+        public Status Delete(PSFChangeTracker<TProviderData, TRecordId> changeTracker)
         {
             foreach (var group in this.psfGroups.Values)
             {
@@ -73,11 +95,28 @@ namespace FASTER.core
             return Status.OK;
         }
 
-        internal string[][] GetRegisteredPSFNames() => throw new NotImplementedException("TODO");
+        /// <summary>
+        /// Obtains a list of registered PSF names organized by the groups defined in previous RegisterPSF calls.
+        /// </summary>
+        /// <returns>A list of registered PSF names organized by the groups defined in previous RegisterPSF calls.</returns>
+        public string[][] GetRegisteredPSFNames() => throw new NotImplementedException("TODO");
 
-        internal PSFChangeTracker<TProviderData, TRecordId> CreateChangeTracker() 
+        /// <summary>
+        /// Creates an instance of a <see cref="PSFChangeTracker{TProviderData, TRecordId}"/> to track changes for an existing Key/RecordId entry.
+        /// </summary>
+        /// <returns>An instance of a <see cref="PSFChangeTracker{TProviderData, TRecordId}"/> to track changes for an existing Key/RecordId entry.</returns>
+        public PSFChangeTracker<TProviderData, TRecordId> CreateChangeTracker() 
             => new PSFChangeTracker<TProviderData, TRecordId>(this.psfGroups.Values.Select(group => group.Id));
 
+        /// <summary>
+        /// Sets the data for the state of a provider's data record prior to an update.
+        /// </summary>
+        /// <param name="changeTracker">Tracks changes for the Key/RecordId entry that will be updated.</param>
+        /// <param name="data">The provider's data prior to the update; will be passed to the PSF execution</param>
+        /// <param name="recordId">The record Id to be stored for any matching PSFs</param>
+        /// <param name="executePSFsNow">Whether PSFs should be executed now or deferred. Should be 'true' if the provider's value type is an Object,
+        ///     because the update will likely change the object's internal values, and thus a deferred 'before' execution will pick up the updated values instead.</param>
+        /// <returns>A status code indicating the result of the operation</returns>
         public Status SetBeforeData(PSFChangeTracker<TProviderData, TRecordId> changeTracker, TProviderData data, TRecordId recordId, bool executePSFsNow)
         {
             changeTracker.SetBeforeData(data, recordId);
@@ -96,6 +135,13 @@ namespace FASTER.core
             return Status.OK;
         }
 
+        /// <summary>
+        /// Sets the data for the state of a provider's data record after to an update.
+        /// </summary>
+        /// <param name="changeTracker">Tracks changes for the Key/RecordId entry that will be updated.</param>
+        /// <param name="data">The provider's data after to the update; will be passed to the PSF execution</param>
+        /// <param name="recordId">The record Id to be stored for any matching PSFs</param>
+        /// <returns>A status code indicating the result of the operation</returns>
         public Status SetAfterData(PSFChangeTracker<TProviderData, TRecordId> changeTracker, TProviderData data, TRecordId recordId)
         {
             changeTracker.SetAfterData(data, recordId);
@@ -176,7 +222,14 @@ namespace FASTER.core
                 throw new PSFArgumentException("PSFs do not support ReadCache or CopyReadsToTail");
         }
 
-        internal IPSF RegisterPSF<TPSFKey>(PSFRegistrationSettings<TPSFKey> registrationSettings, IPSFDefinition<TProviderData, TPSFKey> def)
+        /// <summary>
+        /// Register a <see cref="PSF{TPSFKey, TRecordId}"/> with a simple definition.
+        /// </summary>
+        /// <typeparam name="TPSFKey">The type of the key returned from the <see cref="PSF{TPSFKey, TRecordId}"/></typeparam>
+        /// <param name="registrationSettings">Registration settings for the secondary FasterKV instances, etc.</param>
+        /// <param name="def">The PSF definition</param>
+        /// <returns>A PSF implementation(</returns>
+        public IPSF RegisterPSF<TPSFKey>(PSFRegistrationSettings<TPSFKey> registrationSettings, IPSFDefinition<TProviderData, TPSFKey> def)
             where TPSFKey : struct
         {
             this.VerifyIsBlittable<TPSFKey>();
@@ -198,7 +251,14 @@ namespace FASTER.core
             }
         }
 
-        internal IPSF[] RegisterPSF<TPSFKey>(PSFRegistrationSettings<TPSFKey> registrationSettings, IPSFDefinition<TProviderData, TPSFKey>[] defs)
+        /// <summary>
+        /// Register multiple <see cref="PSF{TPSFKey, TRecordId}"/>s with a vector of definitions.
+        /// </summary>
+        /// <typeparam name="TPSFKey">The type of the key returned from the <see cref="PSF{TPSFKey, TRecordId}"/></typeparam>
+        /// <param name="registrationSettings">Registration settings for the secondary FasterKV instances, etc.</param>
+        /// <param name="defs">The PSF definitions</param>
+        /// <returns>A PSF implementation(</returns>
+        public IPSF[] RegisterPSF<TPSFKey>(PSFRegistrationSettings<TPSFKey> registrationSettings, IPSFDefinition<TProviderData, TPSFKey>[] defs)
             where TPSFKey : struct
         {
             this.VerifyIsBlittable<TPSFKey>();
@@ -237,7 +297,15 @@ namespace FASTER.core
             }
         }
 
-        internal IEnumerable<TRecordId> QueryPSF<TPSFKey>(IPSF psf, TPSFKey key, PSFQuerySettings querySettings)
+        /// <summary>
+        /// Does a synchronous scan of a single PSF for records matching a single key
+        /// </summary>
+        /// <typeparam name="TPSFKey">The type of the key returned from the <see cref="PSF{TPSFKey, TRecordId}"/></typeparam>
+        /// <param name="psf">The PSF to be queried</param>
+        /// <param name="key">The <typeparamref name="TPSFKey"/> identifying the records to be retrieved</param>
+        /// <param name="querySettings">Options for the PSF query operation</param>
+        /// <returns>An enumeration of the <typeparamref name="TRecordId"/>s matching <paramref name="key"/></returns>
+        public IEnumerable<TRecordId> QueryPSF<TPSFKey>(IPSF psf, TPSFKey key, PSFQuerySettings querySettings)
             where TPSFKey : struct
         {
             var psfImpl = this.GetImplementingPSF<TPSFKey>(psf);
@@ -251,7 +319,15 @@ namespace FASTER.core
         }
 
 #if DOTNETCORE
-        internal async IAsyncEnumerable<TRecordId> QueryPSFAsync<TPSFKey>(IPSF psf, TPSFKey key, PSFQuerySettings querySettings)
+        /// <summary>
+        /// Does an asynchronous scan of a single PSF for records matching a single key
+        /// </summary>
+        /// <typeparam name="TPSFKey">The type of the key returned from the <see cref="PSF{TPSFKey, TRecordId}"/></typeparam>
+        /// <param name="psf">The PSF to be queried</param>
+        /// <param name="key">The <typeparamref name="TPSFKey"/> identifying the records to be retrieved</param>
+        /// <param name="querySettings">Options for the PSF query operation</param>
+        /// <returns>An async enumeration of the <typeparamref name="TRecordId"/>s matching <paramref name="key"/></returns>
+        public async IAsyncEnumerable<TRecordId> QueryPSFAsync<TPSFKey>(IPSF psf, TPSFKey key, PSFQuerySettings querySettings)
             where TPSFKey : struct
         {
             var psfImpl = this.GetImplementingPSF<TPSFKey>(psf);
@@ -266,7 +342,15 @@ namespace FASTER.core
 
 #endif // DOTNETCORE
 
-        internal IEnumerable<TRecordId> QueryPSF<TPSFKey>(IPSF psf, IEnumerable<TPSFKey> keys, PSFQuerySettings querySettings)
+        /// <summary>
+        /// Does a synchronous scan of a single PSF for records matching any of multiple keys, unioning the results.
+        /// </summary>
+        /// <typeparam name="TPSFKey">The type of the key returned from the <see cref="PSF{TPSFKey, TRecordId}"/></typeparam>
+        /// <param name="psf">The PSF to be queried</param>
+        /// <param name="keys">The <typeparamref name="TPSFKey"/>s identifying the records to be retrieved</param>
+        /// <param name="querySettings">Options for the PSF query operation</param>
+        /// <returns>An enumeration of the <typeparamref name="TRecordId"/>s matching <paramref name="keys"/></returns>
+        public IEnumerable<TRecordId> QueryPSF<TPSFKey>(IPSF psf, IEnumerable<TPSFKey> keys, PSFQuerySettings querySettings)
             where TPSFKey : struct
         {
             this.VerifyIsOurPSF(psf);
@@ -286,7 +370,15 @@ namespace FASTER.core
         }
 
 #if DOTNETCORE
-        internal async IAsyncEnumerable<TRecordId> QueryPSFAsync<TPSFKey>(IPSF psf, IEnumerable<TPSFKey> keys, PSFQuerySettings querySettings)
+        /// <summary>
+        /// Does an asynchronous scan of a single PSF for records matching any of multiple keys, unioning the results.
+        /// </summary>
+        /// <typeparam name="TPSFKey">The type of the key returned from the <see cref="PSF{TPSFKey, TRecordId}"/></typeparam>
+        /// <param name="psf">The PSF to be queried</param>
+        /// <param name="keys">The <typeparamref name="TPSFKey"/>s identifying the records to be retrieved</param>
+        /// <param name="querySettings">Options for the PSF query operation</param>
+        /// <returns>An async enumeration of the <typeparamref name="TRecordId"/>s matching <paramref name="keys"/></returns>
+        public async IAsyncEnumerable<TRecordId> QueryPSFAsync<TPSFKey>(IPSF psf, IEnumerable<TPSFKey> keys, PSFQuerySettings querySettings)
             where TPSFKey : struct
         {
             this.VerifyIsOurPSF(psf);
@@ -307,7 +399,20 @@ namespace FASTER.core
 
 #endif // DOTNETCORE
 
-        internal IEnumerable<TRecordId> QueryPSF<TPSFKey1, TPSFKey2>(
+        /// <summary>
+        /// Does a synchronous scan of one key on each of two PSFs, returning records matching these keys, with a union or intersection defined by <paramref name="matchPredicate"/>
+        /// </summary>
+        /// <typeparam name="TPSFKey1">The type of the key returned from the first <see cref="PSF{TPSFKey, TRecordId}"/></typeparam>
+        /// <typeparam name="TPSFKey2">The type of the key returned from the second <see cref="PSF{TPSFKey, TRecordId}"/></typeparam>
+        /// <param name="psf1">The first PSF to be queried</param>
+        /// <param name="psf2">The second PSF to be queried</param>
+        /// <param name="key1">The <typeparamref name="TPSFKey1"/> identifying the records to be retrieved from <paramref name="psf1"/></param>
+        /// <param name="key2">The <typeparamref name="TPSFKey2"/> identifying the records to be retrieved from <paramref name="psf2"/></param>
+        /// <param name="matchPredicate">Takes boolean parameters indicating which PSFs are matched by the current record, and returns a boolean indicating whether
+        ///     that record should be included in the result set</param>
+        /// <param name="querySettings">Options for the PSF query operation</param>
+        /// <returns>An enumeration of the <typeparamref name="TRecordId"/>s matching the PSF keys and <paramref name="matchPredicate"/></returns>
+        public IEnumerable<TRecordId> QueryPSF<TPSFKey1, TPSFKey2>(
                      IPSF psf1, TPSFKey1 key1,
                      IPSF psf2, TPSFKey2 key2,
                     Func<bool, bool, bool> matchPredicate,
@@ -323,7 +428,20 @@ namespace FASTER.core
         }
 
 #if DOTNETCORE
-        internal IAsyncEnumerable<TRecordId> QueryPSFAsync<TPSFKey1, TPSFKey2>(
+        /// <summary>
+        /// Does an synchronous scan of one key on each of two PSFs, returning records matching these keys, with a union or intersection defined by <paramref name="matchPredicate"/>
+        /// </summary>
+        /// <typeparam name="TPSFKey1">The type of the key returned from the first <see cref="PSF{TPSFKey, TRecordId}"/></typeparam>
+        /// <typeparam name="TPSFKey2">The type of the key returned from the second <see cref="PSF{TPSFKey, TRecordId}"/></typeparam>
+        /// <param name="psf1">The first PSF to be queried</param>
+        /// <param name="psf2">The second PSF to be queried</param>
+        /// <param name="key1">The <typeparamref name="TPSFKey1"/> identifying the records to be retrieved from <paramref name="psf1"/></param>
+        /// <param name="key2">The <typeparamref name="TPSFKey2"/> identifying the records to be retrieved from <paramref name="psf2"/></param>
+        /// <param name="matchPredicate">Takes boolean parameters indicating which PSFs are matched by the current record, and returns a boolean indicating whether
+        ///     that record should be included in the result set</param>
+        /// <param name="querySettings">Options for the PSF query operation</param>
+        /// <returns>An async enumeration of the <typeparamref name="TRecordId"/>s matching the PSF keys and <paramref name="matchPredicate"/></returns>
+        public IAsyncEnumerable<TRecordId> QueryPSFAsync<TPSFKey1, TPSFKey2>(
                      IPSF psf1, TPSFKey1 key1,
                      IPSF psf2, TPSFKey2 key2,
                     Func<bool, bool, bool> matchPredicate,
@@ -340,7 +458,20 @@ namespace FASTER.core
 
 #endif // DOTNETCORE
 
-        internal IEnumerable<TRecordId> QueryPSF<TPSFKey1, TPSFKey2>(
+        /// <summary>
+        /// Does a synchronous scan of multiple keys on each of two PSFs, returning records matching any of those keys, with a union or intersection defined by <paramref name="matchPredicate"/>
+        /// </summary>
+        /// <typeparam name="TPSFKey1">The type of the key returned from the first <see cref="PSF{TPSFKey, TRecordId}"/></typeparam>
+        /// <typeparam name="TPSFKey2">The type of the key returned from the second <see cref="PSF{TPSFKey, TRecordId}"/></typeparam>
+        /// <param name="psf1">The first PSF to be queried</param>
+        /// <param name="psf2">The second PSF to be queried</param>
+        /// <param name="keys1">The <typeparamref name="TPSFKey1"/>s identifying the records to be retrieved from <paramref name="psf1"/></param>
+        /// <param name="keys2">The <typeparamref name="TPSFKey2"/>s identifying the records to be retrieved from <paramref name="psf2"/></param>
+        /// <param name="matchPredicate">Takes boolean parameters indicating which PSFs are matched by the current record, and returns a boolean indicating whether
+        ///     that record should be included in the result set</param>
+        /// <param name="querySettings">Options for the PSF query operation</param>
+        /// <returns>An enumeration of the <typeparamref name="TRecordId"/>s matching the PSF keys and <paramref name="matchPredicate"/></returns>
+        public IEnumerable<TRecordId> QueryPSF<TPSFKey1, TPSFKey2>(
                      IPSF psf1, IEnumerable<TPSFKey1> keys1,
                      IPSF psf2, IEnumerable<TPSFKey2> keys2,
                     Func<bool, bool, bool> matchPredicate,
@@ -356,7 +487,20 @@ namespace FASTER.core
         }
 
 #if DOTNETCORE
-        internal IAsyncEnumerable<TRecordId> QueryPSFAsync<TPSFKey1, TPSFKey2>(
+        /// <summary>
+        /// Does an asynchronous scan of multiple keys on each of two PSFs, returning records matching any of those keys, with a union or intersection defined by <paramref name="matchPredicate"/>
+        /// </summary>
+        /// <typeparam name="TPSFKey1">The type of the key returned from the first <see cref="PSF{TPSFKey, TRecordId}"/></typeparam>
+        /// <typeparam name="TPSFKey2">The type of the key returned from the second <see cref="PSF{TPSFKey, TRecordId}"/></typeparam>
+        /// <param name="psf1">The first PSF to be queried</param>
+        /// <param name="psf2">The second PSF to be queried</param>
+        /// <param name="keys1">The <typeparamref name="TPSFKey1"/>s identifying the records to be retrieved from <paramref name="psf1"/></param>
+        /// <param name="keys2">The <typeparamref name="TPSFKey2"/>s identifying the records to be retrieved from <paramref name="psf2"/></param>
+        /// <param name="matchPredicate">Takes boolean parameters indicating which PSFs are matched by the current record, and returns a boolean indicating whether
+        ///     that record should be included in the result set</param>
+        /// <param name="querySettings">Options for the PSF query operation</param>
+        /// <returns>An async enumeration of the <typeparamref name="TRecordId"/>s matching the PSF keys and <paramref name="matchPredicate"/></returns>
+        public IAsyncEnumerable<TRecordId> QueryPSFAsync<TPSFKey1, TPSFKey2>(
                      IPSF psf1, IEnumerable<TPSFKey1> keys1,
                      IPSF psf2, IEnumerable<TPSFKey2> keys2,
                     Func<bool, bool, bool> matchPredicate,
@@ -372,6 +516,22 @@ namespace FASTER.core
         }
 #endif // DOTNETCORE
 
+        /// <summary>
+        /// Does a synchronous scan of one key on each of three PSFs, returning records matching these keys, with a union or intersection defined by <paramref name="matchPredicate"/>
+        /// </summary>
+        /// <typeparam name="TPSFKey1">The type of the key returned from the first <see cref="PSF{TPSFKey, TRecordId}"/></typeparam>
+        /// <typeparam name="TPSFKey2">The type of the key returned from the second <see cref="PSF{TPSFKey, TRecordId}"/></typeparam>
+        /// <typeparam name="TPSFKey3">The type of the key returned from the third <see cref="PSF{TPSFKey, TRecordId}"/></typeparam>
+        /// <param name="psf1">The first PSF to be queried</param>
+        /// <param name="psf2">The second PSF to be queried</param>
+        /// <param name="psf3">The third PSF to be queried</param>
+        /// <param name="key1">The <typeparamref name="TPSFKey1"/> identifying the records to be retrieved from <paramref name="psf1"/></param>
+        /// <param name="key2">The <typeparamref name="TPSFKey2"/> identifying the records to be retrieved from <paramref name="psf2"/></param>
+        /// <param name="key3">The <typeparamref name="TPSFKey3"/> identifying the records to be retrieved from <paramref name="psf3"/></param>
+        /// <param name="matchPredicate">Takes boolean parameters indicating which PSFs are matched by the current record, and returns a boolean indicating whether
+        ///     that record should be included in the result set</param>
+        /// <param name="querySettings">Options for the PSF query operation</param>
+        /// <returns>An enumeration of the <typeparamref name="TRecordId"/>s matching the PSF keys and <paramref name="matchPredicate"/></returns>
         public IEnumerable<TRecordId> QueryPSF<TPSFKey1, TPSFKey2, TPSFKey3>(
                      IPSF psf1, TPSFKey1 key1,
                      IPSF psf2, TPSFKey2 key2,
@@ -391,6 +551,22 @@ namespace FASTER.core
         }
 
 #if DOTNETCORE
+        /// <summary>
+        /// Does an asynchronous scan of one key on each of three PSFs, returning records matching these keys, with a union or intersection defined by <paramref name="matchPredicate"/>
+        /// </summary>
+        /// <typeparam name="TPSFKey1">The type of the key returned from the first <see cref="PSF{TPSFKey, TRecordId}"/></typeparam>
+        /// <typeparam name="TPSFKey2">The type of the key returned from the second <see cref="PSF{TPSFKey, TRecordId}"/></typeparam>
+        /// <typeparam name="TPSFKey3">The type of the key returned from the third <see cref="PSF{TPSFKey, TRecordId}"/></typeparam>
+        /// <param name="psf1">The first PSF to be queried</param>
+        /// <param name="psf2">The second PSF to be queried</param>
+        /// <param name="psf3">The third PSF to be queried</param>
+        /// <param name="key1">The <typeparamref name="TPSFKey1"/> identifying the records to be retrieved from <paramref name="psf1"/></param>
+        /// <param name="key2">The <typeparamref name="TPSFKey2"/> identifying the records to be retrieved from <paramref name="psf2"/></param>
+        /// <param name="key3">The <typeparamref name="TPSFKey3"/> identifying the records to be retrieved from <paramref name="psf3"/></param>
+        /// <param name="matchPredicate">Takes boolean parameters indicating which PSFs are matched by the current record, and returns a boolean indicating whether
+        ///     that record should be included in the result set</param>
+        /// <param name="querySettings">Options for the PSF query operation</param>
+        /// <returns>An async enumeration of the <typeparamref name="TRecordId"/>s matching the PSF keys and <paramref name="matchPredicate"/></returns>
         public IAsyncEnumerable<TRecordId> QueryPSFAsync<TPSFKey1, TPSFKey2, TPSFKey3>(
                      IPSF psf1, TPSFKey1 key1,
                      IPSF psf2, TPSFKey2 key2,
@@ -410,6 +586,22 @@ namespace FASTER.core
         }
 #endif // DOTNETCORE
 
+        /// <summary>
+        /// Does a synchronous scan of multiple keys on each of three PSFs, returning records matching any of those keys, with a union or intersection defined by <paramref name="matchPredicate"/>
+        /// </summary>
+        /// <typeparam name="TPSFKey1">The type of the key returned from the first <see cref="PSF{TPSFKey, TRecordId}"/></typeparam>
+        /// <typeparam name="TPSFKey2">The type of the key returned from the second <see cref="PSF{TPSFKey, TRecordId}"/></typeparam>
+        /// <typeparam name="TPSFKey3">The type of the key returned from the third <see cref="PSF{TPSFKey, TRecordId}"/></typeparam>
+        /// <param name="psf1">The first PSF to be queried</param>
+        /// <param name="psf2">The second PSF to be queried</param>
+        /// <param name="psf3">The third PSF to be queried</param>
+        /// <param name="keys1">The <typeparamref name="TPSFKey1"/>s identifying the records to be retrieved from <paramref name="psf1"/></param>
+        /// <param name="keys2">The <typeparamref name="TPSFKey2"/>s identifying the records to be retrieved from <paramref name="psf2"/></param>
+        /// <param name="keys3">The <typeparamref name="TPSFKey3"/>s identifying the records to be retrieved from <paramref name="psf3"/></param>
+        /// <param name="matchPredicate">Takes boolean parameters indicating which PSFs are matched by the current record, and returns a boolean indicating whether
+        ///     that record should be included in the result set</param>
+        /// <param name="querySettings">Options for the PSF query operation</param>
+        /// <returns>An enumeration of the <typeparamref name="TRecordId"/>s matching the PSF keys and <paramref name="matchPredicate"/></returns>
         public IEnumerable<TRecordId> QueryPSF<TPSFKey1, TPSFKey2, TPSFKey3>(
                      IPSF psf1, IEnumerable<TPSFKey1> keys1,
                      IPSF psf2, IEnumerable<TPSFKey2> keys2,
@@ -429,6 +621,22 @@ namespace FASTER.core
         }
 
 #if DOTNETCORE
+        /// <summary>
+        /// Does an asynchronous scan of multiple keys on each of three PSFs, returning records matching any of those keys, with a union or intersection defined by <paramref name="matchPredicate"/>
+        /// </summary>
+        /// <typeparam name="TPSFKey1">The type of the key returned from the first <see cref="PSF{TPSFKey, TRecordId}"/></typeparam>
+        /// <typeparam name="TPSFKey2">The type of the key returned from the second <see cref="PSF{TPSFKey, TRecordId}"/></typeparam>
+        /// <typeparam name="TPSFKey3">The type of the key returned from the third <see cref="PSF{TPSFKey, TRecordId}"/></typeparam>
+        /// <param name="psf1">The first PSF to be queried</param>
+        /// <param name="psf2">The second PSF to be queried</param>
+        /// <param name="psf3">The third PSF to be queried</param>
+        /// <param name="keys1">The <typeparamref name="TPSFKey1"/>s identifying the records to be retrieved from <paramref name="psf1"/></param>
+        /// <param name="keys2">The <typeparamref name="TPSFKey2"/>s identifying the records to be retrieved from <paramref name="psf2"/></param>
+        /// <param name="keys3">The <typeparamref name="TPSFKey3"/>s identifying the records to be retrieved from <paramref name="psf3"/></param>
+        /// <param name="matchPredicate">Takes boolean parameters indicating which PSFs are matched by the current record, and returns a boolean indicating whether
+        ///     that record should be included in the result set</param>
+        /// <param name="querySettings">Options for the PSF query operation</param>
+        /// <returns>An async enumeration of the <typeparamref name="TRecordId"/>s matching the PSF keys and <paramref name="matchPredicate"/></returns>
         public IAsyncEnumerable<TRecordId> QueryPSFAsync<TPSFKey1, TPSFKey2, TPSFKey3>(
                      IPSF psf1, IEnumerable<TPSFKey1> keys1,
                      IPSF psf2, IEnumerable<TPSFKey2> keys2,
@@ -448,9 +656,18 @@ namespace FASTER.core
         }
 #endif // DOTNETCORE
 
-        // Power user versions. Anything more complicated than this can be post-processed with LINQ.
+        // Power user versions. Anything more complicated than these can be post-processed with LINQ.
 
-        internal IEnumerable<TRecordId> QueryPSF<TPSFKey>(
+        /// <summary>
+        /// Does a synchronous scan of multiple keys on each of multiple PSFs with the same <typeparamref name="TPSFKey"/> type, returning records matching any of those keys, with a union or intersection defined by <paramref name="matchPredicate"/>
+        /// </summary>
+        /// <typeparam name="TPSFKey">The type of the key returned from the <see cref="PSF{TPSFKey, TRecordId}"/>s</typeparam>
+        /// <param name="psfsAndKeys">An enumeration of tuples containing a <see cref="PSF{TPSFKey, TRecordId}"/> and the <typeparamref name="TPSFKey"/>s to be queried on it</param>
+        /// <param name="matchPredicate">Takes boolean parameters indicating which PSFs are matched by the current record, and returns a boolean indicating whether
+        ///     that record should be included in the result set</param>
+        /// <param name="querySettings">Options for the PSF query operation</param>
+        /// <returns>An enumeration of the <typeparamref name="TRecordId"/>s matching the PSF keys and <paramref name="matchPredicate"/></returns>
+        public IEnumerable<TRecordId> QueryPSF<TPSFKey>(
                     IEnumerable<(IPSF psf, IEnumerable<TPSFKey> keys)> psfsAndKeys,
                     Func<bool[], bool> matchPredicate,
                     PSFQuerySettings querySettings = null)
@@ -464,7 +681,16 @@ namespace FASTER.core
         }
 
 #if DOTNETCORE
-        internal IAsyncEnumerable<TRecordId> QueryPSFAsync<TPSFKey>(
+        /// <summary>
+        /// Does an asynchronous scan of multiple keys on each of multiple PSFs with the same <typeparamref name="TPSFKey"/> type, returning records matching any of those keys, with a union or intersection defined by <paramref name="matchPredicate"/>
+        /// </summary>
+        /// <typeparam name="TPSFKey">The type of the key returned from the <see cref="PSF{TPSFKey, TRecordId}"/>s</typeparam>
+        /// <param name="psfsAndKeys">An enumeration of tuples containing a <see cref="PSF{TPSFKey, TRecordId}"/> and the <typeparamref name="TPSFKey"/>s to be queried on it</param>
+        /// <param name="matchPredicate">Takes boolean parameters indicating which PSFs are matched by the current record, and returns a boolean indicating whether
+        ///     that record should be included in the result set</param>
+        /// <param name="querySettings">Options for the PSF query operation</param>
+        /// <returns>An async enumeration of the <typeparamref name="TRecordId"/>s matching the PSF keys and <paramref name="matchPredicate"/></returns>
+        public IAsyncEnumerable<TRecordId> QueryPSFAsync<TPSFKey>(
                     IEnumerable<(IPSF psf, IEnumerable<TPSFKey> keys)> psfsAndKeys,
                     Func<bool[], bool> matchPredicate,
                     PSFQuerySettings querySettings = null)
@@ -478,7 +704,18 @@ namespace FASTER.core
         }
 #endif // DOTNETCORE
 
-        internal IEnumerable<TRecordId> QueryPSF<TPSFKey1, TPSFKey2>(
+        /// <summary>
+        /// Does a synchronous scan of multiple keys on each of multiple PSFs on each of two TPSFKey types, returning records matching any of those keys, with a union or intersection defined by <paramref name="matchPredicate"/>
+        /// </summary>
+        /// <typeparam name="TPSFKey1">The type of the key returned from the first set of <see cref="PSF{TPSFKey, TRecordId}"/>s</typeparam>
+        /// <typeparam name="TPSFKey2">The type of the key returned from the second set of <see cref="PSF{TPSFKey, TRecordId}"/>s</typeparam>
+        /// <param name="psfsAndKeys1">The first enumeration of tuples containing a <see cref="PSF{TPSFKey, TRecordId}"/> and the TPSFKey to be queried on it</param>
+        /// <param name="psfsAndKeys2">The second enumeration of tuples containing a <see cref="PSF{TPSFKey, TRecordId}"/> and the TPSFKey to be queried on it</param>
+        /// <param name="matchPredicate">Takes boolean parameters indicating which PSFs are matched by the current record, and returns a boolean indicating whether
+        ///     that record should be included in the result set</param>
+        /// <param name="querySettings">Options for the PSF query operation</param>
+        /// <returns>An enumeration of the <typeparamref name="TRecordId"/>s matching the PSF keys and <paramref name="matchPredicate"/></returns>
+        public IEnumerable<TRecordId> QueryPSF<TPSFKey1, TPSFKey2>(
                     IEnumerable<(IPSF psf, IEnumerable<TPSFKey1> keys)> psfsAndKeys1,
                     IEnumerable<(IPSF psf, IEnumerable<TPSFKey2> keys)> psfsAndKeys2,
                     Func<bool[], bool[], bool> matchPredicate,
@@ -495,7 +732,18 @@ namespace FASTER.core
         }
 
 #if DOTNETCORE
-        internal IAsyncEnumerable<TRecordId> QueryPSFAsync<TPSFKey1, TPSFKey2>(
+        /// <summary>
+        /// Does an asynchronous scan of multiple keys on each of multiple PSFs on each of two TPSFKey types, returning records matching any of those keys, with a union or intersection defined by <paramref name="matchPredicate"/>
+        /// </summary>
+        /// <typeparam name="TPSFKey1">The type of the key returned from the first set of <see cref="PSF{TPSFKey, TRecordId}"/>s</typeparam>
+        /// <typeparam name="TPSFKey2">The type of the key returned from the second set of <see cref="PSF{TPSFKey, TRecordId}"/>s</typeparam>
+        /// <param name="psfsAndKeys1">The first enumeration of tuples containing a <see cref="PSF{TPSFKey, TRecordId}"/> and the TPSFKey to be queried on it</param>
+        /// <param name="psfsAndKeys2">The second enumeration of tuples containing a <see cref="PSF{TPSFKey, TRecordId}"/> and the TPSFKey to be queried on it</param>
+        /// <param name="matchPredicate">Takes boolean parameters indicating which PSFs are matched by the current record, and returns a boolean indicating whether
+        ///     that record should be included in the result set</param>
+        /// <param name="querySettings">Options for the PSF query operation</param>
+        /// <returns>An async enumeration of the <typeparamref name="TRecordId"/>s matching the PSF keys and <paramref name="matchPredicate"/></returns>
+        public IAsyncEnumerable<TRecordId> QueryPSFAsync<TPSFKey1, TPSFKey2>(
                     IEnumerable<(IPSF psf, IEnumerable<TPSFKey1> keys)> psfsAndKeys1,
                     IEnumerable<(IPSF psf, IEnumerable<TPSFKey2> keys)> psfsAndKeys2,
                     Func<bool[], bool[], bool> matchPredicate,
@@ -512,7 +760,20 @@ namespace FASTER.core
         }
 #endif // DOTNETCORE
 
-        internal IEnumerable<TRecordId> QueryPSF<TPSFKey1, TPSFKey2, TPSFKey3>(
+        /// <summary>
+        /// Does a synchronous scan of multiple keys on each of multiple PSFs on each of three TPSFKey types, returning records matching any of those keys, with a union or intersection defined by <paramref name="matchPredicate"/>
+        /// </summary>
+        /// <typeparam name="TPSFKey1">The type of the key returned from the first set of <see cref="PSF{TPSFKey, TRecordId}"/>s</typeparam>
+        /// <typeparam name="TPSFKey2">The type of the key returned from the second set of <see cref="PSF{TPSFKey, TRecordId}"/>s</typeparam>
+        /// <typeparam name="TPSFKey3">The type of the key returned from the third set of <see cref="PSF{TPSFKey, TRecordId}"/>s</typeparam>
+        /// <param name="psfsAndKeys1">The first enumeration of tuples containing a <see cref="PSF{TPSFKey, TRecordId}"/> and the TPSFKey to be queried on it</param>
+        /// <param name="psfsAndKeys2">The second enumeration of tuples containing a <see cref="PSF{TPSFKey, TRecordId}"/> and the TPSFKey to be queried on it</param>
+        /// <param name="psfsAndKeys3">The third enumeration of tuples containing a <see cref="PSF{TPSFKey, TRecordId}"/> and the TPSFKey to be queried on it</param>
+        /// <param name="matchPredicate">Takes boolean parameters indicating which PSFs are matched by the current record, and returns a boolean indicating whether
+        ///     that record should be included in the result set</param>
+        /// <param name="querySettings">Options for the PSF query operation</param>
+        /// <returns>An enumeration of the <typeparamref name="TRecordId"/>s matching the PSF keys and <paramref name="matchPredicate"/></returns>
+        public IEnumerable<TRecordId> QueryPSF<TPSFKey1, TPSFKey2, TPSFKey3>(
                     IEnumerable<(IPSF psf, IEnumerable<TPSFKey1> keys)> psfsAndKeys1,
                     IEnumerable<(IPSF psf, IEnumerable<TPSFKey2> keys)> psfsAndKeys2,
                     IEnumerable<(IPSF psf, IEnumerable<TPSFKey3> keys)> psfsAndKeys3,
@@ -532,7 +793,20 @@ namespace FASTER.core
         }
 
 #if DOTNETCORE
-        internal IAsyncEnumerable<TRecordId> QueryPSFAsync<TPSFKey1, TPSFKey2, TPSFKey3>(
+        /// <summary>
+        /// Does an asynchronous scan of multiple keys on each of multiple PSFs on each of three TPSFKey types, returning records matching any of those keys, with a union or intersection defined by <paramref name="matchPredicate"/>
+        /// </summary>
+        /// <typeparam name="TPSFKey1">The type of the key returned from the first set of <see cref="PSF{TPSFKey, TRecordId}"/>s</typeparam>
+        /// <typeparam name="TPSFKey2">The type of the key returned from the second set of <see cref="PSF{TPSFKey, TRecordId}"/>s</typeparam>
+        /// <typeparam name="TPSFKey3">The type of the key returned from the third set of <see cref="PSF{TPSFKey, TRecordId}"/>s</typeparam>
+        /// <param name="psfsAndKeys1">The first enumeration of tuples containing a <see cref="PSF{TPSFKey, TRecordId}"/> and the TPSFKey to be queried on it</param>
+        /// <param name="psfsAndKeys2">The second enumeration of tuples containing a <see cref="PSF{TPSFKey, TRecordId}"/> and the TPSFKey to be queried on it</param>
+        /// <param name="psfsAndKeys3">The third enumeration of tuples containing a <see cref="PSF{TPSFKey, TRecordId}"/> and the TPSFKey to be queried on it</param>
+        /// <param name="matchPredicate">Takes boolean parameters indicating which PSFs are matched by the current record, and returns a boolean indicating whether
+        ///     that record should be included in the result set</param>
+        /// <param name="querySettings">Options for the PSF query operation</param>
+        /// <returns>An async enumeration of the <typeparamref name="TRecordId"/>s matching the PSF keys and <paramref name="matchPredicate"/></returns>
+        public IAsyncEnumerable<TRecordId> QueryPSFAsync<TPSFKey1, TPSFKey2, TPSFKey3>(
                     IEnumerable<(IPSF psf, IEnumerable<TPSFKey1> keys)> psfsAndKeys1,
                     IEnumerable<(IPSF psf, IEnumerable<TPSFKey2> keys)> psfsAndKeys2,
                     IEnumerable<(IPSF psf, IEnumerable<TPSFKey3> keys)> psfsAndKeys3,
@@ -554,21 +828,37 @@ namespace FASTER.core
 
         #region Checkpoint Operations
         // TODO Separate Tasks for each group's commit/restore operations?
+
+        /// <summary>
+        /// For each <see cref="PSFGroup{TProviderData, TPSFKey, TRecordId}"/>, take a full checkpoint of the FasterKV implementing the group's PSFs.
+        /// </summary>
         public bool TakeFullCheckpoint()
             => this.psfGroups.Values.Aggregate(true, (result, group) => group.TakeFullCheckpoint() && result);
 
+        /// <summary>
+        /// For each <see cref="PSFGroup{TProviderData, TPSFKey, TRecordId}"/>, complete ongoing checkpoint (spin-wait)
+        /// </summary>
         public Task CompleteCheckpointAsync(CancellationToken token = default)
         {
             var tasks = this.psfGroups.Values.Select(group => group.CompleteCheckpointAsync(token).AsTask()).ToArray();
             return Task.WhenAll(tasks);
         }
 
+        /// <summary>
+        /// For each <see cref="PSFGroup{TProviderData, TPSFKey, TRecordId}"/>, take a checkpoint of the Index (hashtable) only
+        /// </summary>
         public bool TakeIndexCheckpoint()
             => this.psfGroups.Values.Aggregate(true, (result, group) => group.TakeIndexCheckpoint() && result);
 
+        /// <summary>
+        /// For each <see cref="PSFGroup{TProviderData, TPSFKey, TRecordId}"/>, take a checkpoint of the hybrid log only
+        /// </summary>
         public bool TakeHybridLogCheckpoint() 
             => this.psfGroups.Values.Aggregate(true, (result, group) => group.TakeHybridLogCheckpoint() && result);
 
+        /// <summary>
+        /// For each <see cref="PSFGroup{TProviderData, TPSFKey, TRecordId}"/>, recover from last successful checkpoints
+        /// </summary>
         public void Recover()
         {
             foreach (var group in this.psfGroups.Values)
@@ -578,6 +868,10 @@ namespace FASTER.core
 
         #region Log Operations
 
+        /// <summary>
+        /// Flush logs for all <see cref="PSFGroup{TProviderData, TPSFKey, TRecordId}"/>s until their current tail (records are still retained in memory)
+        /// </summary>
+        /// <param name="wait">Synchronous wait for operation to complete</param>
         public void FlushLogs(bool wait)
         {
             foreach (var group in this.psfGroups.Values)
@@ -585,7 +879,7 @@ namespace FASTER.core
         }
 
         /// <summary>
-        /// Flush log and evict all records from memory
+        /// Flush logs for all <see cref="PSFGroup{TProviderData, TPSFKey, TRecordId}"/>s and evict all records from memory
         /// </summary>
         /// <param name="wait">Synchronous wait for operation to complete</param>
         /// <returns>When wait is false, this tells whether the full eviction was successfully registered with FASTER</returns>
@@ -602,7 +896,7 @@ namespace FASTER.core
         }
 
         /// <summary>
-        /// Delete log entirely from memory. Cannot allocate on the log
+        /// Delete logs for all <see cref="PSFGroup{TProviderData, TPSFKey, TRecordId}"/>s entirely from memory. Cannot allocate on the log
         /// after this point. This is a synchronous operation.
         /// </summary>
         public void DisposeLogsFromMemory()

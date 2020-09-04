@@ -10,7 +10,7 @@ namespace FASTER.core
     {
         /// <summary>
         /// When registring new PSFs over an existing store, this is the logicalAddress in the primary
-        /// FasterKV at which indexing will be started.
+        /// FasterKV at which indexing will be started. TODO: LogicalAddress is FasterKV-specific; revisit when indexing existing records.
         /// </summary>
         public long IndexFromAddress = Constants.kInvalidAddress;
 
@@ -47,13 +47,13 @@ namespace FASTER.core
         public bool ThreadAffinitized;
 
         /// <summary>
-        /// The size of the first IPU Cache; inserts are done into this cache only. If zero, no caching is done.
+        /// The size of the first IPU Cache; inserts are done into this cache only. If zero, no caching is done. // TODOCache
         /// </summary>
         public long IPU1CacheSize = 0;
 
         /// <summary>
         /// The size of the second IPU Cache; inserts are not done into this cache, so more distant records
-        /// are likelier to remain. If this is nonzero, <see cref="IPU1CacheSize"/> must also be nonzero.
+        /// are likelier to remain. If this is nonzero, <see cref="IPU1CacheSize"/> must also be nonzero.   // TODOCache
         /// </summary>
         public long IPU2CacheSize = 0;
     }

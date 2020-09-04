@@ -94,10 +94,10 @@ namespace FASTER.core
             get => this.offsetToStartOfKeys;
             set => this.offsetToStartOfKeys = (ushort)value;
         }
-        #endregion Accessors
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void ClearUpdateFlags() => this.flags = (byte)(this.flags & ~(kUnlinkOldBit | kLinkNewBit));
+        #endregion Accessors
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal unsafe static ref KeyPointer<TPSFKey> CastFromKeyRef(ref TPSFKey keyRef)
