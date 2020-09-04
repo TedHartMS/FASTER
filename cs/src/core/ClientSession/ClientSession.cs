@@ -250,18 +250,7 @@ namespace FASTER.core
         /// <param name="input"></param>
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Status RMW(ref Key key, ref Input input)
-        {
-            if (SupportAsync) UnsafeResumeThread();
-            try
-            {
-                return fht.ContextRMW(ref key, ref input, default, FasterSession, 0, ctx);
-            }
-            finally
-            {
-                if (SupportAsync) UnsafeSuspendThread();
-            }
-        }
+        public Status RMW(ref Key key, ref Input input) => this.RMW(ref key, ref input, default, 0);
 
         /// <summary>
         /// Async RMW operation
@@ -315,6 +304,10 @@ namespace FASTER.core
             {
                 if (SupportAsync) UnsafeSuspendThread();
             }
+
+            return status == Status.OK && this.fht.PSFManager.HasPSFs
+                ? this.fht.PSFManager.Delete(updateArgs.ChangeTracker)
+                : status;
         }
 
         /// <summary>
@@ -323,22 +316,7 @@ namespace FASTER.core
         /// <param name="key"></param>
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Status Delete(ref Key key)
-        {
-            if (SupportAsync) UnsafeResumeThread();
-            try
-            {
-                return fht.ContextDelete(ref key, default, FasterSession, 0, ctx);
-            }
-            finally
-            {
-                if (SupportAsync) UnsafeSuspendThread();
-            }
-
-            return status == Status.OK && this.fht.PSFManager.HasPSFs
-                ? this.fht.PSFManager.Delete(updateArgs.ChangeTracker)
-                : status;
-        }
+        public Status Delete(ref Key key) => this.Delete(ref key, default, 0);
 
         /// <summary>
         /// Async delete operation

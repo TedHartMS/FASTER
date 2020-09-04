@@ -12,9 +12,7 @@ namespace FASTER.core
     /// Input to PsfInternalReadAddress on the primary (stores user values) FasterKV to retrieve the Key and Value
     /// for a logicalAddress returned from the secondary FasterKV instances.  This class is FasterKV-provider-specific.
     /// </summary>
-    /// <typeparam name="TKey">The type of the key for user values</typeparam>
-    public unsafe struct PSFInputPrimaryReadAddress<TKey>
-        where TKey : new()
+    public unsafe struct PSFInputPrimaryReadAddress
     {
         internal PSFInputPrimaryReadAddress(long readLA)
         {

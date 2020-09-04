@@ -39,20 +39,18 @@ namespace FASTER.core
     /// </summary>
     /// <typeparam name="TKVKey">The type of the user key in the primary Faster KV</typeparam>
     /// <typeparam name="TKVValue">The type of the user value in the primary Faster KV</typeparam>
-    internal class PSFPrimaryFunctions<TKVKey, TKVValue> : StubbedFunctions<TKVKey, TKVValue, PSFInputPrimaryReadAddress<TKVKey>, PSFOutputPrimaryReadAddress<TKVKey, TKVValue>>,
-                                                         IPSFFunctions<TKVKey, TKVValue, PSFInputPrimaryReadAddress<TKVKey>, PSFOutputPrimaryReadAddress<TKVKey, TKVValue>>
-        where TKVKey : new()
-        where TKVValue : new()
+    internal class PSFPrimaryFunctions<TKVKey, TKVValue> : StubbedFunctions<TKVKey, TKVValue, PSFInputPrimaryReadAddress, PSFOutputPrimaryReadAddress<TKVKey, TKVValue>>,
+                                                         IPSFFunctions<TKVKey, TKVValue, PSFInputPrimaryReadAddress, PSFOutputPrimaryReadAddress<TKVKey, TKVValue>>
     {
-        public long GroupId(ref PSFInputPrimaryReadAddress<TKVKey> input) => throw new PSFInternalErrorException("Cannot call this accessor on the primary FKV");
+        public long GroupId(ref PSFInputPrimaryReadAddress input) => throw new PSFInternalErrorException("Cannot call this accessor on the primary FKV");
 
-        public bool IsDelete(ref PSFInputPrimaryReadAddress<TKVKey> input) => throw new PSFInternalErrorException("Cannot call this accessor on the primary FKV");
-        public bool SetDelete(ref PSFInputPrimaryReadAddress<TKVKey> input, bool value) => throw new PSFInternalErrorException("Cannot call this accessor on the primary FKV");
+        public bool IsDelete(ref PSFInputPrimaryReadAddress input) => throw new PSFInternalErrorException("Cannot call this accessor on the primary FKV");
+        public bool SetDelete(ref PSFInputPrimaryReadAddress input, bool value) => throw new PSFInternalErrorException("Cannot call this accessor on the primary FKV");
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public long ReadLogicalAddress(ref PSFInputPrimaryReadAddress<TKVKey> input) => input.ReadLogicalAddress;
+        public long ReadLogicalAddress(ref PSFInputPrimaryReadAddress input) => input.ReadLogicalAddress;
 
-        public ref TKVKey QueryKeyRef(ref PSFInputPrimaryReadAddress<TKVKey> input) => throw new PSFInternalErrorException("Cannot call this accessor on the primary FKV");
+        public ref TKVKey QueryKeyRef(ref PSFInputPrimaryReadAddress input) => throw new PSFInternalErrorException("Cannot call this accessor on the primary FKV");
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public PSFOperationStatus VisitPrimaryReadAddress(ref TKVKey key, ref TKVValue value, ref PSFOutputPrimaryReadAddress<TKVKey, TKVValue> output, bool isConcurrent)
@@ -63,11 +61,11 @@ namespace FASTER.core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public PSFOperationStatus VisitSecondaryRead(ref TKVValue value, ref PSFInputPrimaryReadAddress<TKVKey> input, ref PSFOutputPrimaryReadAddress<TKVKey, TKVValue> output,
+        public PSFOperationStatus VisitSecondaryRead(ref TKVValue value, ref PSFInputPrimaryReadAddress input, ref PSFOutputPrimaryReadAddress<TKVKey, TKVValue> output,
                                                      long physicalAddress, bool tombstone, bool isConcurrent)
             => throw new PSFInternalErrorException("Cannot call this form of Visit() on the primary FKV");  // TODO review error messages
 
-        public PSFOperationStatus VisitSecondaryRead(ref TKVKey key, ref TKVValue value, ref PSFInputPrimaryReadAddress<TKVKey> input, ref PSFOutputPrimaryReadAddress<TKVKey, TKVValue> output,
+        public PSFOperationStatus VisitSecondaryRead(ref TKVKey key, ref TKVValue value, ref PSFInputPrimaryReadAddress input, ref PSFOutputPrimaryReadAddress<TKVKey, TKVValue> output,
                                                           bool tombstone, bool isConcurrent)
             => throw new PSFInternalErrorException("Cannot call this form of Visit() on the primary FKV");  // TODO review error messages
     }
@@ -79,8 +77,8 @@ namespace FASTER.core
     /// <typeparam name="TRecordId">The type of the <see cref="PSF{TPSFKey, TRecordId}"/> value</typeparam>
     public class PSFSecondaryFunctions<TPSFKey, TRecordId> : StubbedFunctions<TPSFKey, TRecordId, PSFInputSecondary<TPSFKey>, PSFOutputSecondary<TPSFKey, TRecordId>>,
                                                              IPSFFunctions<TPSFKey, TRecordId, PSFInputSecondary<TPSFKey>, PSFOutputSecondary<TPSFKey, TRecordId>>
-        where TPSFKey : new()
-        where TRecordId : new()
+        where TPSFKey : struct
+        where TRecordId : struct
     {
         public long GroupId(ref PSFInputSecondary<TPSFKey> input) => input.GroupId;
 

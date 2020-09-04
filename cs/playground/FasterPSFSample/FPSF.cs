@@ -9,9 +9,8 @@ using System;
 namespace FasterPSFSample
 {
     class FPSF<TValue, TInput, TOutput, TFunctions, TSerializer>
-        where TValue : IOrders, new()
-        where TOutput : new()
-        where TFunctions : IFunctions<Key, TValue, TInput, TOutput, Context<TValue>>, new()
+        where TValue : IOrders
+        where TFunctions : IFunctions<Key, TValue, TInput, TOutput, Context<TValue>>
         where TSerializer : BinaryObjectSerializer<TValue>, new()
     {
         internal IFasterKV<Key, TValue> FasterKV { get; set; }

@@ -16,8 +16,6 @@ namespace FASTER.core
     ///     FasterKV instances, and the actual <typeparamref name="TKVKey"/> and <typeparamref name="TKVValue"/>
     ///     types.</remarks>
     public class FasterKVProviderData<TKVKey, TKVValue> : IDisposable
-        where TKVKey : new()
-        where TKVValue : new()
     {
         // C# doesn't allow ref fields and even if it did, if the client held the FasterKVProviderData
         // past the ref lifetime, bad things would happen when accessing the ref key/value.

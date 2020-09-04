@@ -9,18 +9,16 @@ using System.Threading.Tasks;
 namespace FASTER.core
 {
     public sealed partial class ClientSession<Key, Value, Input, Output, Context, Functions> : IClientSession, IDisposable
-        where Key : new()
-        where Value : new()
         where Functions : IFunctions<Key, Value, Input, Output, Context>
     {
         #region PSF calls for Secondary FasterKV
 
         // This value is created within the Primary FKV session.
-        Lazy<ClientSession<Key, Value, PSFInputPrimaryReadAddress<Key>, PSFOutputPrimaryReadAddress<Key, Value>, PSFContext, PSFPrimaryFunctions<Key, Value>>> psfLookupRecordIdSession;
+        Lazy<ClientSession<Key, Value, PSFInputPrimaryReadAddress, PSFOutputPrimaryReadAddress<Key, Value>, PSFContext, PSFPrimaryFunctions<Key, Value>>> psfLookupRecordIdSession;
 
         internal void CreateLazyPsfSessionWrapper() {
-            this.psfLookupRecordIdSession = new Lazy<ClientSession<Key, Value, PSFInputPrimaryReadAddress<Key>, PSFOutputPrimaryReadAddress<Key, Value>, PSFContext, PSFPrimaryFunctions<Key, Value>>>(
-                () => this.fht.NewSession<PSFInputPrimaryReadAddress<Key>, PSFOutputPrimaryReadAddress<Key, Value>, PSFContext, PSFPrimaryFunctions<Key, Value>>(
+            this.psfLookupRecordIdSession = new Lazy<ClientSession<Key, Value, PSFInputPrimaryReadAddress, PSFOutputPrimaryReadAddress<Key, Value>, PSFContext, PSFPrimaryFunctions<Key, Value>>>(
+                () => this.fht.NewSession<PSFInputPrimaryReadAddress, PSFOutputPrimaryReadAddress<Key, Value>, PSFContext, PSFPrimaryFunctions<Key, Value>>(
                                                                 new PSFPrimaryFunctions<Key, Value>()));
         }
 
@@ -30,7 +28,7 @@ namespace FASTER.core
                 this.psfLookupRecordIdSession.Value.Dispose();
         }
 
-        private ClientSession<Key, Value, PSFInputPrimaryReadAddress<Key>, PSFOutputPrimaryReadAddress<Key, Value>, PSFContext, PSFPrimaryFunctions<Key, Value>> GetPsfLookupRecordSession() 
+        private ClientSession<Key, Value, PSFInputPrimaryReadAddress, PSFOutputPrimaryReadAddress<Key, Value>, PSFContext, PSFPrimaryFunctions<Key, Value>> GetPsfLookupRecordSession() 
             => this.psfLookupRecordIdSession.Value;
 
         internal Status PsfInsert(ref Key key, ref Value value, ref Input input, ref Context context, long serialNo)
@@ -128,7 +126,7 @@ namespace FASTER.core
         {
             // Looks up logicalAddress in the primary FasterKV
             var output = new PSFOutputPrimaryReadAddress<Key, Value>(this.fht.hlog, providerDatas);
-            var input = new PSFInputPrimaryReadAddress<Key>(logicalAddress);
+            var input = new PSFInputPrimaryReadAddress(logicalAddress);
             var session = this.GetPsfLookupRecordSession();
             var context = new PSFContext { Functions = session.functions };
             return session.PsfReadAddress(ref input, ref output, ref context, this.ctx.serialNum + 1);
@@ -166,7 +164,7 @@ namespace FASTER.core
         {
             // Looks up logicalAddress in the primary FasterKV
             var output = new PSFOutputPrimaryReadAddress<Key, Value>(this.fht.hlog, providerDatas);
-            var input = new PSFInputPrimaryReadAddress<Key>(logicalAddress);
+            var input = new PSFInputPrimaryReadAddress(logicalAddress);
             var session = this.GetPsfLookupRecordSession();
             var context = new PSFContext { Functions = session.functions };
             var readAsyncResult = await session.PsfReadAddressAsync(ref input, ref output, ref context, this.ctx.serialNum + 1, querySettings);

@@ -8,8 +8,6 @@ using System.Text;
 namespace FASTER.core
 {
     public partial class FasterKV<Key, Value> : FasterBase, IFasterKV<Key, Value>
-        where Key : new()
-        where Value : new()
     {
         /// <inheritdoc/>
         public void FlushPSFLogs(bool wait) => this.PSFManager.FlushLogs(wait);

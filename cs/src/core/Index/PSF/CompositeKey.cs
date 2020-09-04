@@ -10,7 +10,6 @@ namespace FASTER.core
     /// </summary>
     /// <typeparam name="TPSFKey"></typeparam>
     public unsafe struct CompositeKey<TPSFKey>
-        where TPSFKey : new()
     {
         // This class is essentially a "reinterpret_cast<KeyPointer<TPSFKey>*>" implementation; there are no data members.
 

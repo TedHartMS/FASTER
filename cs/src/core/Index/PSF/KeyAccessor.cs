@@ -12,7 +12,6 @@ namespace FASTER.core
     /// </summary>
     /// <typeparam name="TPSFKey">The type of the Key returned by a PSF function</typeparam>
     internal unsafe class KeyAccessor<TPSFKey>
-        where TPSFKey : new()
     {
         private readonly IFasterEqualityComparer<TPSFKey> userComparer;
 

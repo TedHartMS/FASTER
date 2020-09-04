@@ -8,8 +8,6 @@ using System.Threading.Tasks;
 namespace FASTER.core
 {
     public partial class FasterKV<Key, Value> : FasterBase, IFasterKV<Key, Value>
-        where Key : new()
-        where Value : new()
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal Status ContextPsfReadKey<Input, Output, Context, FasterSession>(ref Key key, ref Input input, ref Output output, ref Context context,
