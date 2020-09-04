@@ -96,8 +96,7 @@ namespace FASTER.core
             => physicalAddress + RecordInfo.GetLength() + psfOrdinal * this.KeyPointerSize;
         #endregion Address manipulation
 
-#if DEBUG
-        public string GetString(ref CompositeKey<TPSFKey> compositeKey, int psfOrdinal = -1)
+        internal string GetString(ref CompositeKey<TPSFKey> compositeKey, int psfOrdinal = -1)
         {
             if (psfOrdinal == -1)
             {
@@ -115,8 +114,7 @@ namespace FASTER.core
             return this.GetString(ref this.GetKeyPointerRef(ref compositeKey, psfOrdinal));
         }
 
-        public string GetString(ref KeyPointer<TPSFKey> keyPointer)
+        internal string GetString(ref KeyPointer<TPSFKey> keyPointer)
             => $"{{{(keyPointer.IsNull ? "null" : keyPointer.Key.ToString())}}}";
-#endif
     }
 }
