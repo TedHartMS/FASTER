@@ -4,15 +4,16 @@
 
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace FASTER.core
 {
-    public partial class FasterKV<Key, Value> : FasterBase, IFasterKV<Key, Value>
-        where Key : new()
-        where Value : new()
+    public partial class FasterKV<Key, Value> : FasterBase,
+        IFasterKV<Key, Value>
     {
         internal readonly AllocatorBase<Key, Value> hlog;
         private readonly AllocatorBase<Key, Value> readcache;
@@ -80,7 +81,14 @@ namespace FASTER.core
             {
                 if (typeof(IFasterEqualityComparer<Key>).IsAssignableFrom(typeof(Key)))
                 {
-                    this.comparer = new Key() as IFasterEqualityComparer<Key>;
+                    if (default(Key) != null)
+                    {
+                        this.comparer = default(Key) as IFasterEqualityComparer<Key>;
+                    }
+                    else if (typeof(Key).GetConstructor(Type.EmptyTypes) != null)
+                    {
+                        this.comparer = Activator.CreateInstance(typeof(Key)) as IFasterEqualityComparer<Key>;
+                    }
                 }
                 else
                 {
@@ -97,8 +105,24 @@ namespace FASTER.core
                 throw new FasterException(
                     "Specify either CheckpointManager or CheckpointDir for CheckpointSettings, not both");
 
-            checkpointManager = checkpointSettings.CheckpointManager ??
+            bool oldCheckpointManager = false;
+
+            if (oldCheckpointManager)
+            {
+                checkpointManager = checkpointSettings.CheckpointManager ??
                                 new LocalCheckpointManager(checkpointSettings.CheckpointDir ?? "");
+            }
+            else
+            {
+                checkpointManager = checkpointSettings.CheckpointManager ??
+                    new DeviceLogCommitCheckpointManager
+                    (new LocalStorageNamedDeviceFactory(),
+                        new DefaultCheckpointNamingScheme(
+                          new DirectoryInfo(checkpointSettings.CheckpointDir ?? ".").FullName));
+            }
+
+            if (checkpointSettings.CheckpointManager == null)
+                disposeCheckpointManager = true;
 
             FoldOverSnapshot = checkpointSettings.CheckPointType == core.CheckpointType.FoldOver;
             CopyReadsToTail = logSettings.CopyReadsToTail;
@@ -186,17 +210,16 @@ namespace FASTER.core
         /// Initiate full checkpoint
         /// </summary>
         /// <param name="token">Checkpoint token</param>
-        /// <param name="targetVersion">upper limit (inclusive) of the version included</param>
         /// <returns>
         /// Whether we successfully initiated the checkpoint (initiation may
         /// fail if we are already taking a checkpoint or performing some other
-        /// operation such as growing the index).
+        /// operation such as growing the index). Use CompleteCheckpointAsync to wait completion.
         /// </returns>
-        public bool TakeFullCheckpoint(out Guid token, long targetVersion = -1)
+        public bool TakeFullCheckpoint(out Guid token)
         {
             var backend = FoldOverSnapshot ? (ISynchronizationTask)new FoldOverCheckpointTask() : new SnapshotCheckpointTask();
 
-            var result = StartStateMachine(new FullCheckpointStateMachine(backend, targetVersion));
+            var result = StartStateMachine(new FullCheckpointStateMachine(backend, -1));
             token = _hybridLogCheckpointToken;
 
             // Do not return the PSF token here. TODO: Handle failure of PSFManager.TakeFullCheckpoint
@@ -210,13 +233,12 @@ namespace FASTER.core
         /// </summary>
         /// <param name="token">Checkpoint token</param>
         /// <param name="checkpointType">Checkpoint type</param>
-        /// <param name="targetVersion">upper limit (inclusive) of the version included</param>
         /// <returns>
         /// Whether we successfully initiated the checkpoint (initiation may
         /// fail if we are already taking a checkpoint or performing some other
-        /// operation such as growing the index).
+        /// operation such as growing the index). Use CompleteCheckpointAsync to wait completion.
         /// </returns>
-        public bool TakeFullCheckpoint(out Guid token, CheckpointType checkpointType, long targetVersion = -1)
+        public bool TakeFullCheckpoint(out Guid token, CheckpointType checkpointType)
         {
             ISynchronizationTask backend;
             if (checkpointType == CheckpointType.FoldOver)
@@ -226,16 +248,42 @@ namespace FASTER.core
             else
                 throw new FasterException("Unsupported full checkpoint type");
 
-            var result = StartStateMachine(new FullCheckpointStateMachine(backend, targetVersion));
-            token = _hybridLogCheckpointToken;
+            var result = StartStateMachine(new FullCheckpointStateMachine(backend, -1));
+            if (result)
+                token = _hybridLogCheckpointToken;
+            else
+                token = default;
             return result;
         }
 
         /// <summary>
-        /// Initiate index checkpoint
+        /// Take full (index + log) checkpoint
+        /// </summary>
+        /// <param name="checkpointType">Checkpoint type</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>
+        /// (bool success, Guid token)
+        /// success: Whether we successfully initiated the checkpoint (initiation may
+        /// fail if we are already taking a checkpoint or performing some other
+        /// operation such as growing the index).
+        /// token: Token for taken checkpoint
+        /// Await task to complete checkpoint, if initiated successfully
+        /// </returns>
+        public async ValueTask<(bool success, Guid token)> TakeFullCheckpointAsync(CheckpointType checkpointType, CancellationToken cancellationToken = default)
+        {
+            var success = TakeFullCheckpoint(out Guid token, checkpointType);
+
+            if (success)
+                await CompleteCheckpointAsync(cancellationToken);
+
+            return (success, token);
+        }
+
+        /// <summary>
+        /// Initiate index-only checkpoint
         /// </summary>
         /// <param name="token">Checkpoint token</param>
-        /// <returns>Whether we could initiate the checkpoint</returns>
+        /// <returns>Whether we could initiate the checkpoint. Use CompleteCheckpointAsync to wait completion.</returns>
         public bool TakeIndexCheckpoint(out Guid token)
         {
             var result = StartStateMachine(new IndexSnapshotStateMachine());
@@ -248,16 +296,37 @@ namespace FASTER.core
         }
 
         /// <summary>
-        /// Take hybrid log checkpoint
+        /// Take index-only checkpoint
+        /// </summary>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>
+        /// (bool success, Guid token)
+        /// success: Whether we successfully initiated the checkpoint (initiation may
+        /// fail if we are already taking a checkpoint or performing some other
+        /// operation such as growing the index).
+        /// token: Token for taken checkpoint
+        /// Await task to complete checkpoint, if initiated successfully
+        /// </returns>
+        public async ValueTask<(bool success, Guid token)> TakeIndexCheckpointAsync(CancellationToken cancellationToken = default)
+        {
+            var success = TakeIndexCheckpoint(out Guid token);
+
+            if (success)
+                await CompleteCheckpointAsync(cancellationToken);
+
+            return (success, token);
+        }
+
+        /// <summary>
+        /// Initiate log-only checkpoint
         /// </summary>
         /// <param name="token">Checkpoint token</param>
-        /// <param name="targetVersion">upper limit (inclusive) of the version included</param>
-        /// <returns>Whether we could initiate the checkpoint</returns>
-        public bool TakeHybridLogCheckpoint(out Guid token, long targetVersion = -1)
+        /// <returns>Whether we could initiate the checkpoint. Use CompleteCheckpointAsync to wait completion.</returns>
+        public bool TakeHybridLogCheckpoint(out Guid token)
         {
             var backend = FoldOverSnapshot ? (ISynchronizationTask)new FoldOverCheckpointTask() : new SnapshotCheckpointTask();
 
-            var result = StartStateMachine(new HybridLogCheckpointStateMachine(backend, targetVersion));
+            var result = StartStateMachine(new HybridLogCheckpointStateMachine(backend, -1));
             token = _hybridLogCheckpointToken;
 
             // Do not return the PSF token here. TODO: Handle failure of PSFManager.TakeHybridLogCheckpoint
@@ -267,13 +336,12 @@ namespace FASTER.core
         }
 
         /// <summary>
-        /// Take incremental hybrid log checkpoint
+        /// Initiate log-only checkpoint
         /// </summary>
         /// <param name="token">Checkpoint token</param>
         /// <param name="checkpointType">Checkpoint type</param>
-        /// <param name="targetVersion">upper limit (inclusive) of the version included</param>
-        /// <returns>Whether we could initiate the checkpoint</returns>
-        public bool TakeHybridLogCheckpoint(out Guid token, CheckpointType checkpointType, long targetVersion = -1)
+        /// <returns>Whether we could initiate the checkpoint. Use CompleteCheckpointAsync to wait completion.</returns>
+        public bool TakeHybridLogCheckpoint(out Guid token, CheckpointType checkpointType)
         {
             ISynchronizationTask backend;
             if (checkpointType == CheckpointType.FoldOver)
@@ -283,13 +351,36 @@ namespace FASTER.core
             else
                 throw new FasterException("Unsupported checkpoint type");
 
-            var result = StartStateMachine(new HybridLogCheckpointStateMachine(backend, targetVersion));
+            var result = StartStateMachine(new HybridLogCheckpointStateMachine(backend, -1));
             token = _hybridLogCheckpointToken;
             return result;
         }
 
         /// <summary>
-        /// Recover from the latest checkpoints
+        /// Take log-only checkpoint
+        /// </summary>
+        /// <param name="checkpointType">Checkpoint type</param>
+        /// <param name="cancellationToken">Cancellation token</param>
+        /// <returns>
+        /// (bool success, Guid token)
+        /// success: Whether we successfully initiated the checkpoint (initiation may
+        /// fail if we are already taking a checkpoint or performing some other
+        /// operation such as growing the index).
+        /// token: Token for taken checkpoint
+        /// Await task to complete checkpoint, if initiated successfully
+        /// </returns>
+        public async ValueTask<(bool success, Guid token)> TakeHybridLogCheckpointAsync(CheckpointType checkpointType, CancellationToken cancellationToken = default)
+        {
+            var success = TakeHybridLogCheckpoint(out Guid token, checkpointType);
+
+            if (success)
+                await CompleteCheckpointAsync(cancellationToken);
+
+            return (success, token);
+        }
+
+        /// <summary>
+        /// Recover from the latest checkpoint (blocking operation)
         /// </summary>
         public void Recover()
         {
@@ -300,7 +391,7 @@ namespace FASTER.core
         }
 
         /// <summary>
-        /// Recover
+        /// Recover from specific token (blocking operation)
         /// </summary>
         /// <param name="fullCheckpointToken"></param>
         public void Recover(Guid fullCheckpointToken)
@@ -309,7 +400,7 @@ namespace FASTER.core
         }
 
         /// <summary>
-        /// Recover
+        /// Recover from specific index and log token (blocking operation)
         /// </summary>
         /// <param name="indexCheckpointToken"></param>
         /// <param name="hybridLogCheckpointToken"></param>
@@ -336,9 +427,18 @@ namespace FASTER.core
                     systemState.phase == Phase.IN_PROGRESS_GROW)
                     break;
 
-                // TODO: Do we need access to functions here?
-                // If yes then move this to either faster legacy or client session.
-                await ThreadStateMachineStep<Empty, Empty, Empty, NullFasterSession>(null, NullFasterSession.Instance, true, token);
+                List<ValueTask> valueTasks = new List<ValueTask>();
+                
+                ThreadStateMachineStep<Empty, Empty, Empty, NullFasterSession>(null, NullFasterSession.Instance, valueTasks, token);
+
+                if (valueTasks.Count == 0)
+                    break;
+
+                foreach (var task in valueTasks)
+                {
+                    if (!task.IsCompleted)
+                        await task;
+                }
             }
 
             if (this.PSFManager.HasPSFs)    // TODO: Do in parallel and handle failure of PSFManager.CompleteCheckpointAsync
@@ -451,6 +551,8 @@ namespace FASTER.core
             Free();
             hlog.Dispose();
             readcache?.Dispose();
+            if (disposeCheckpointManager)
+                checkpointManager?.Dispose();
         }
     }
 }

@@ -22,8 +22,6 @@ namespace FASTER.core
     /// <typeparam name="Context"></typeparam>
     /// <typeparam name="Functions"></typeparam>
     public sealed partial class ClientSession<Key, Value, Input, Output, Context, Functions> : IClientSession, IDisposable
-        where Key : new()
-        where Value : new()
         where Functions : IFunctions<Key, Value, Input, Output, Context>
     {
         private readonly FasterKV<Key, Value> fht;
@@ -117,6 +115,29 @@ namespace FASTER.core
         }
 
         /// <summary>
+        /// Read operation
+        /// </summary>
+        /// <param name="key"></param>
+        /// <param name="output"></param>
+        /// <param name="userContext"></param>
+        /// <param name="serialNo"></param>
+        /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public Status Read(ref Key key, ref Output output, Context userContext = default, long serialNo = 0)
+        {
+            Input input = default;
+            if (SupportAsync) UnsafeResumeThread();
+            try
+            {
+                return fht.ContextRead(ref key, ref input, ref output, userContext, FasterSession, serialNo, ctx);
+            }
+            finally
+            {
+                if (SupportAsync) UnsafeSuspendThread();
+            }
+        }
+
+        /// <summary>
         /// Async read operation, may return uncommitted result
         /// To ensure reading of committed result, complete the read and then call WaitForCommitAsync.
         /// </summary>
@@ -138,7 +159,7 @@ namespace FASTER.core
         /// <param name="serialNo"></param>
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Status Upsert(ref Key key, ref Value desiredValue, Context userContext, long serialNo)
+        public Status Upsert(ref Key key, ref Value desiredValue, Context userContext = default, long serialNo = 0)
         {
             var updateArgs = new PSFUpdateArgs<Key, Value>();
             FasterKVProviderData<Key, Value> providerData = null;
@@ -223,6 +244,26 @@ namespace FASTER.core
         }
 
         /// <summary>
+        /// RMW operation
+        /// </summary>
+        /// <param name="key"></param>
+        /// <param name="input"></param>
+        /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public Status RMW(ref Key key, ref Input input)
+        {
+            if (SupportAsync) UnsafeResumeThread();
+            try
+            {
+                return fht.ContextRMW(ref key, ref input, default, FasterSession, 0, ctx);
+            }
+            finally
+            {
+                if (SupportAsync) UnsafeSuspendThread();
+            }
+        }
+
+        /// <summary>
         /// Async RMW operation
         /// Await operation in session before issuing next one
         /// </summary>
@@ -269,6 +310,25 @@ namespace FASTER.core
             try
             {
                 status = fht.ContextDelete(ref key, userContext, this.FasterSession, serialNo, ctx, ref updateArgs);
+            }
+            finally
+            {
+                if (SupportAsync) UnsafeSuspendThread();
+            }
+        }
+
+        /// <summary>
+        /// Delete operation
+        /// </summary>
+        /// <param name="key"></param>
+        /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public Status Delete(ref Key key)
+        {
+            if (SupportAsync) UnsafeResumeThread();
+            try
+            {
+                return fht.ContextDelete(ref key, default, FasterSession, 0, ctx);
             }
             finally
             {
@@ -476,7 +536,7 @@ namespace FASTER.core
 
         void IClientSession.AtomicSwitch(int version)
         {
-            fht.AtomicSwitch(ctx, ctx.prevCtx, version);
+            fht.AtomicSwitch(ctx, ctx.prevCtx, version, fht._hybridLogCheckpoint.info.checkpointTokens);
         }
 
         /// <summary>
