@@ -307,7 +307,7 @@ namespace FASTER.core
                                         out physicalAddress);
                 }
 
-                if (logicalAddress >= hlog.ReadOnlyAddress && this.PSFManager.HasPSFs && !hlog.GetInfo(physicalAddress).Tombstone)
+                if (this.PSFManager.HasPSFs && logicalAddress >= hlog.ReadOnlyAddress && !hlog.GetInfo(physicalAddress).Tombstone)
                 {
                     // Save the PreUpdate values.
                     psfArgs.ChangeTracker = this.PSFManager.CreateChangeTracker();
@@ -523,14 +523,7 @@ namespace FASTER.core
             }
             #endregion
 
-            if (status == OperationStatus.RETRY_NOW)
-            {
-                return InternalUpsert(ref key, ref value, ref userContext, ref pendingContext, fasterSession, sessionCtx, lsn, ref psfArgs);
-            }
-            else
-            {
-                return status;
-            }
+            return status;
         }
 
         #endregion
@@ -622,7 +615,7 @@ namespace FASTER.core
                                             out physicalAddress);
                 }
 
-                if (logicalAddress >= hlog.ReadOnlyAddress && this.PSFManager.HasPSFs && !hlog.GetInfo(physicalAddress).Tombstone)
+                if (this.PSFManager.HasPSFs && logicalAddress >= hlog.ReadOnlyAddress && !hlog.GetInfo(physicalAddress).Tombstone)
                 {
                     // Get the PreUpdate values (or the secondary FKV position in the IPUCache).
                     psfArgs.ChangeTracker = this.PSFManager.CreateChangeTracker();
@@ -677,7 +670,8 @@ namespace FASTER.core
                                 {
                                     // Set to release exclusive latch (default)
                                     latchOperation = LatchOperation.Exclusive;
-                                    goto CreateNewRecord; // Create a (v+1) record
+                                    if (logicalAddress >= hlog.HeadAddress)
+                                        goto CreateNewRecord; // Create a (v+1) record
                                 }
                                 else
                                 {
@@ -693,7 +687,8 @@ namespace FASTER.core
                             {
                                 if (HashBucket.NoSharedLatches(bucket))
                                 {
-                                    goto CreateNewRecord; // Create a (v+1) record
+                                    if (logicalAddress >= hlog.HeadAddress)
+                                        goto CreateNewRecord; // Create a (v+1) record
                                 }
                                 else
                                 {
@@ -707,7 +702,8 @@ namespace FASTER.core
                         {
                             if (GetLatestRecordVersion(ref entry, sessionCtx.version) < sessionCtx.version)
                             {
-                                goto CreateNewRecord; // Create a (v+1) record
+                                if (logicalAddress >= hlog.HeadAddress)
+                                    goto CreateNewRecord; // Create a (v+1) record
                             }
                             break; // Normal Processing
                         }
@@ -786,7 +782,7 @@ namespace FASTER.core
 
         #endregion
 
-            #region Create new record
+        #region Create new record
         CreateNewRecord:
             {
                 recordSize = (logicalAddress < hlog.BeginAddress) ?
@@ -871,9 +867,9 @@ namespace FASTER.core
                     goto LatchRelease;
                 }
             }
-            #endregion
+        #endregion
 
-            #region Create failure context
+        #region Create failure context
         CreateFailureContext:
             {
                 pendingContext.type = OperationType.RMW;
@@ -908,14 +904,7 @@ namespace FASTER.core
             }
             #endregion
 
-            if (status == OperationStatus.RETRY_NOW)
-            {
-                return InternalRMW(ref key, ref input, ref userContext, ref pendingContext, fasterSession, sessionCtx, lsn, ref psfArgs);
-            }
-            else
-            {
-                return status;
-            }
+            return status;
         }
 
         #endregion
@@ -1149,7 +1138,7 @@ namespace FASTER.core
         // All other regions: Create a record in the mutable region
         #endregion
 
-            #region Create new record in the mutable region
+        #region Create new record in the mutable region
         CreateNewRecord:
             {
                 var value = default(Value);
@@ -1195,9 +1184,9 @@ namespace FASTER.core
                     goto LatchRelease;
                 }
             }
-            #endregion
+        #endregion
 
-            #region Create pending context
+        #region Create pending context
         CreatePendingContext:
             {
                 pendingContext.type = OperationType.DELETE;
@@ -1211,9 +1200,9 @@ namespace FASTER.core
                 psfArgs.ChangeTracker = null;
                 pendingContext.psfUpdateArgs = psfArgs;
             }
-            #endregion
+        #endregion
 
-            #region Latch release
+        #region Latch release
         LatchRelease:
             {
                 switch (latchOperation)
@@ -1230,14 +1219,7 @@ namespace FASTER.core
             }
             #endregion
 
-            if (status == OperationStatus.RETRY_NOW)
-            {
-                return InternalDelete(ref key, ref userContext, ref pendingContext, fasterSession, sessionCtx, lsn, ref psfArgs);
-            }
-            else
-            {
-                return status;
-            }
+            return status;
         }
 
         #endregion
@@ -1632,8 +1614,12 @@ namespace FASTER.core
         #endregion
 
         Retry:
-            return InternalRMW(ref pendingContext.key.Get(), ref pendingContext.input, ref pendingContext.userContext, ref pendingContext, 
-                               fasterSession, sessionCtx, pendingContext.serialNum, ref pendingContext.psfUpdateArgs);
+            OperationStatus internalStatus;
+            do
+                internalStatus = InternalRMW(ref pendingContext.key.Get(), ref pendingContext.input, ref pendingContext.userContext, ref pendingContext, 
+                                             fasterSession, opCtx, pendingContext.serialNum, ref pendingContext.psfUpdateArgs);
+            while (internalStatus == OperationStatus.RETRY_NOW);
+            return internalStatus;
         }
 
         #endregion
@@ -1680,58 +1666,61 @@ namespace FASTER.core
 
                 #region Retry as (v+1) Operation
                 var internalStatus = default(OperationStatus);
-                switch (pendingContext.type)
+                do
                 {
-                    case OperationType.READ:
-                        internalStatus = InternalRead(ref pendingContext.key.Get(),
-                                                      ref pendingContext.input,
-                                                      ref pendingContext.output,
-                                                      ref pendingContext.userContext,
-                                                      ref pendingContext, fasterSession, currentCtx, pendingContext.serialNum);
-                        break;
-                    case OperationType.PSF_READ_KEY:
-                        internalStatus = PsfInternalReadKey(ref pendingContext.key.Get(),
-                                                      ref pendingContext.input,
-                                                      ref pendingContext.output,
-                                                      ref pendingContext.userContext,
-                                                      ref pendingContext, fasterSession, currentCtx, pendingContext.serialNum);
-                        break;
-                    case OperationType.PSF_READ_ADDRESS:
-                        internalStatus = PsfInternalReadAddress(ref pendingContext.input,
-                                                      ref pendingContext.output,
-                                                      ref pendingContext.userContext,
-                                                      ref pendingContext, fasterSession, currentCtx, pendingContext.serialNum);
-                        break;
-                    case OperationType.UPSERT:
-                        internalStatus = InternalUpsert(ref pendingContext.key.Get(),
-                                                        ref pendingContext.value.Get(),
-                                                        ref pendingContext.userContext,
-                                                        ref pendingContext, fasterSession, currentCtx, pendingContext.serialNum,
-                                                        ref pendingContext.psfUpdateArgs);
-                        break;
-                    case OperationType.PSF_INSERT:
-                        internalStatus = PsfInternalInsert(ref pendingContext.key.Get(),
-                                                        ref pendingContext.value.Get(),
-                                                        ref pendingContext.input,
-                                                        ref pendingContext.userContext,
-                                                        ref pendingContext, fasterSession, currentCtx, pendingContext.serialNum);
-                        break;
-                    case OperationType.DELETE:
-                        internalStatus = InternalDelete(ref pendingContext.key.Get(),
-                                                        ref pendingContext.userContext,
-                                                        ref pendingContext, fasterSession, currentCtx, pendingContext.serialNum,
-                                                        ref pendingContext.psfUpdateArgs);
-                        break;
-                    case OperationType.RMW:
-                        internalStatus = InternalRMW(ref pendingContext.key.Get(),
-                                                     ref pendingContext.input,
-                                                     ref pendingContext.userContext,
-                                                     ref pendingContext, fasterSession, currentCtx, pendingContext.serialNum,
-                                                     ref pendingContext.psfUpdateArgs);
-                        break;
-                }
+                    switch (pendingContext.type)
+                    {
+                        case OperationType.READ:
+                            internalStatus = InternalRead(ref pendingContext.key.Get(),
+                                                          ref pendingContext.input,
+                                                          ref pendingContext.output,
+                                                          ref pendingContext.userContext,
+                                                          ref pendingContext, fasterSession, currentCtx, pendingContext.serialNum);
+                            break;
+                        case OperationType.PSF_READ_KEY:
+                            internalStatus = PsfInternalReadKey(ref pendingContext.key.Get(),
+                                                          ref pendingContext.input,
+                                                          ref pendingContext.output,
+                                                          ref pendingContext.userContext,
+                                                          ref pendingContext, fasterSession, currentCtx, pendingContext.serialNum);
+                            break;
+                        case OperationType.PSF_READ_ADDRESS:
+                            internalStatus = PsfInternalReadAddress(ref pendingContext.input,
+                                                          ref pendingContext.output,
+                                                          ref pendingContext.userContext,
+                                                          ref pendingContext, fasterSession, currentCtx, pendingContext.serialNum);
+                            break;
+                        case OperationType.UPSERT:
+                            internalStatus = InternalUpsert(ref pendingContext.key.Get(),
+                                                            ref pendingContext.value.Get(),
+                                                            ref pendingContext.userContext,
+                                                            ref pendingContext, fasterSession, currentCtx, pendingContext.serialNum,
+                                                            ref pendingContext.psfUpdateArgs);
+                            break;
+                        case OperationType.PSF_INSERT:
+                            internalStatus = PsfInternalInsert(ref pendingContext.key.Get(),
+                                                            ref pendingContext.value.Get(),
+                                                            ref pendingContext.input,
+                                                            ref pendingContext.userContext,
+                                                            ref pendingContext, fasterSession, currentCtx, pendingContext.serialNum);
+                            break;
+                        case OperationType.DELETE:
+                            internalStatus = InternalDelete(ref pendingContext.key.Get(),
+                                                            ref pendingContext.userContext,
+                                                            ref pendingContext, fasterSession, currentCtx, pendingContext.serialNum,
+                                                            ref pendingContext.psfUpdateArgs);
+                            break;
+                        case OperationType.RMW:
+                            internalStatus = InternalRMW(ref pendingContext.key.Get(),
+                                                         ref pendingContext.input,
+                                                         ref pendingContext.userContext,
+                                                         ref pendingContext, fasterSession, currentCtx, pendingContext.serialNum,
+                                                         ref pendingContext.psfUpdateArgs);
+                            break;
+                    }
 
-                Debug.Assert(internalStatus != OperationStatus.CPR_SHIFT_DETECTED);
+                    Debug.Assert(internalStatus != OperationStatus.CPR_SHIFT_DETECTED);
+                } while (internalStatus == OperationStatus.RETRY_NOW);
                 status = internalStatus;
                 #endregion
             }
@@ -1782,8 +1771,7 @@ namespace FASTER.core
             Debug.Assert(currentCtx.version == version);
             Debug.Assert(currentCtx.phase == Phase.PREPARE);
             InternalRefresh(currentCtx, fasterSession);
-            Debug.Assert(currentCtx.version == version + 1);
-            Debug.Assert(currentCtx.phase == Phase.IN_PROGRESS);
+            Debug.Assert(currentCtx.version > version);
 
             pendingContext.version = currentCtx.version;
         }
@@ -1896,10 +1884,13 @@ namespace FASTER.core
                 {
                     return true;
                 }
-
-                foundLogicalAddress = hlog.GetInfo(foundPhysicalAddress).PreviousAddress;
-                //This makes testing REALLY slow
-                //Debug.WriteLine("Tracing back");
+                else
+                {
+                    foundLogicalAddress = hlog.GetInfo(foundPhysicalAddress).PreviousAddress;
+                    //This makes testing REALLY slow
+                    //Debug.WriteLine("Tracing back");
+                    continue;
+                }
             }
             foundPhysicalAddress = Constants.kInvalidAddress;
             return false;
@@ -2109,12 +2100,11 @@ namespace FASTER.core
 
             while (true)
             {
-                if (!readcache.GetInfo(physicalAddress).Invalid)
+                if (!readcache.GetInfo(physicalAddress).Invalid && comparer.Equals(ref key, ref readcache.GetKey(physicalAddress)))
                 {
-                    if (comparer.Equals(ref key, ref readcache.GetKey(physicalAddress)))
+                    if ((logicalAddress & ~Constants.kReadCacheBitMask) >= readcache.SafeReadOnlyAddress)
                     {
-                        if ((logicalAddress & ~Constants.kReadCacheBitMask) >= readcache.SafeReadOnlyAddress)
-                            return true;
+                        return true; 
                     }
 
                     Debug.Assert((logicalAddress & ~Constants.kReadCacheBitMask) >= readcache.SafeHeadAddress);

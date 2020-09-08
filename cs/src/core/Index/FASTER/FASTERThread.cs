@@ -216,34 +216,44 @@ namespace FASTER.core
             ref Key key = ref pendingContext.key.Get();
             ref Value value = ref pendingContext.value.Get();
 
-            // Issue retry command
-            switch (pendingContext.type)
-            {
-                case OperationType.RMW:
-                    internalStatus = InternalRMW(ref key, ref pendingContext.input, ref pendingContext.userContext,
-                                                 ref pendingContext, fasterSession, currentCtx, pendingContext.serialNum,
-                                                 ref pendingContext.psfUpdateArgs);
-                    break;
-                case OperationType.UPSERT:
-                    internalStatus = InternalUpsert(ref key, ref value, ref pendingContext.userContext, ref pendingContext, fasterSession,
-                                                    currentCtx, pendingContext.serialNum, ref pendingContext.psfUpdateArgs);
-                    break;
-                case OperationType.PSF_INSERT:
-                    internalStatus = PsfInternalInsert(ref key, ref value, ref pendingContext.input, ref pendingContext.userContext,
-                                                       ref pendingContext, fasterSession, currentCtx, pendingContext.serialNum);
-                    break;
-                case OperationType.DELETE:
-                    internalStatus = InternalDelete(ref key, ref pendingContext.userContext, ref pendingContext, fasterSession, currentCtx,
-                                                    pendingContext.serialNum, ref pendingContext.psfUpdateArgs);
-                    break;
-                case OperationType.PSF_READ_KEY:
-                case OperationType.READ:
-                    throw new FasterException("Reads go through the Pending route, not Retry, so this cannot happen!");
-            }
+            do
+            { 
+                // Issue retry command
+                switch (pendingContext.type)
+                {
+                    case OperationType.RMW:
+                        internalStatus = InternalRMW(ref key, ref pendingContext.input, ref pendingContext.userContext,
+                                                     ref pendingContext, fasterSession, currentCtx, pendingContext.serialNum,
+                                                     ref pendingContext.psfUpdateArgs);
+                        break;
+                    case OperationType.UPSERT:
+                        internalStatus = InternalUpsert(ref key, ref value, ref pendingContext.userContext, ref pendingContext, fasterSession,
+                                                        currentCtx, pendingContext.serialNum, ref pendingContext.psfUpdateArgs);
+                        break;
+                    case OperationType.PSF_INSERT:
+                        internalStatus = PsfInternalInsert(ref key, ref value, ref pendingContext.input, ref pendingContext.userContext,
+                                                           ref pendingContext, fasterSession, currentCtx, pendingContext.serialNum);
+                        break;
+                    case OperationType.DELETE:
+                        internalStatus = InternalDelete(ref key, ref pendingContext.userContext, ref pendingContext, fasterSession, currentCtx,
+                                                        pendingContext.serialNum, ref pendingContext.psfUpdateArgs);
+                        break;
+                    case OperationType.PSF_READ_KEY:
+                    case OperationType.READ:
+                        throw new FasterException("Reads go through the Pending route, not Retry, so this cannot happen!");
+                }
+            } while (internalStatus == OperationStatus.RETRY_NOW);
 
-            var status = internalStatus == OperationStatus.SUCCESS || internalStatus == OperationStatus.NOTFOUND
-                ? (Status)internalStatus
-                : HandleOperationStatus(opCtx, currentCtx, pendingContext, fasterSession, internalStatus);
+            Status status;
+            // Handle operation status
+            if (internalStatus == OperationStatus.SUCCESS || internalStatus == OperationStatus.NOTFOUND)
+            {
+                status = (Status)internalStatus;
+            }
+            else
+            {
+                status = HandleOperationStatus(opCtx, currentCtx, pendingContext, fasterSession, internalStatus);
+            }
 
             if (status == Status.OK && this.PSFManager.HasPSFs)
             {
@@ -291,7 +301,7 @@ namespace FASTER.core
                         break;
                     case OperationType.UPSERT:
                         fasterSession.UpsertCompletionCallback(ref key,
-                                                 ref value,
+                                                 ref pendingContext.value.Get(),
                                                  pendingContext.userContext);
                         break;
                     case OperationType.DELETE:
@@ -380,9 +390,18 @@ namespace FASTER.core
 
                 request.Dispose();
 
-                Status status = internalStatus == OperationStatus.SUCCESS || internalStatus == OperationStatus.NOTFOUND
-                    ? (Status)internalStatus
-                    : HandleOperationStatus(opCtx, currentCtx, pendingContext, fasterSession, internalStatus);
+                Debug.Assert(internalStatus != OperationStatus.RETRY_NOW);
+
+                Status status;
+                // Handle operation status
+                if (internalStatus == OperationStatus.SUCCESS || internalStatus == OperationStatus.NOTFOUND)
+                {
+                    status = (Status)internalStatus;
+                }
+                else
+                {
+                    status = HandleOperationStatus(opCtx, currentCtx, pendingContext, fasterSession, internalStatus);
+                }
 
                 // This is set in InternalContinuePendingRead for PSF_READ_ADDRESS, so don't retrieve it until after that.
                 ref Key key = ref pendingContext.key.Get();

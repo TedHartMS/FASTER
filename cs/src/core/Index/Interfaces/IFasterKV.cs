@@ -341,7 +341,7 @@ namespace FASTER.core
         /// </summary>
         /// <param name="wait">Synchronous wait for operation to complete</param>
         /// <returns>When wait is false, this tells whether the full eviction was successfully registered with FASTER</returns>
-        public bool FlushAndEvictPSFLogs(bool wait);
+        public void FlushAndEvictPSFLogs(bool wait);
 
         /// <summary>
         /// Delete PSF logs entirely from memory. Cannot allocate on the log

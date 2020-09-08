@@ -883,16 +883,12 @@ namespace FASTER.core
         /// </summary>
         /// <param name="wait">Synchronous wait for operation to complete</param>
         /// <returns>When wait is false, this tells whether the full eviction was successfully registered with FASTER</returns>
-        public bool FlushAndEvictLogs(bool wait)
+        public void FlushAndEvictLogs(bool wait)
         {
             foreach (var group in this.psfGroups.Values)
             {
-                if (!group.FlushAndEvictLog(wait))
-                {
-                    // TODO handle error on FlushAndEvictLogs
-                }
+                group.FlushAndEvictLog(wait);
             }
-            return true;
         }
 
         /// <summary>

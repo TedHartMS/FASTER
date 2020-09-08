@@ -11,7 +11,7 @@ namespace FasterPSFSample
         public override void Deserialize(out BlittableOrders obj) 
             => throw new NotImplementedException("NoSerializer should not be instantiated");
 
-        public override void Serialize(in BlittableOrders obj) 
+        public override void Serialize(ref BlittableOrders obj) 
             => throw new NotImplementedException("NoSerializer should not be instantiated");
     }
 }

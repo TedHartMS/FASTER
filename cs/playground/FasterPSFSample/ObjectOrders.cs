@@ -36,7 +36,7 @@ namespace FasterPSFSample
                     obj.values[ii] = reader.ReadInt32();
             }
 
-            public override void Serialize(in ObjectOrders obj)
+            public override void Serialize(ref ObjectOrders obj)
             {
                 for (var ii = 0; ii < obj.values.Length; ++ii)
                     writer.Write(obj.values[ii]);

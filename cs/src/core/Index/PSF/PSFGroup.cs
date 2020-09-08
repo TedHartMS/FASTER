@@ -106,7 +106,7 @@ namespace FASTER.core
                 $"***WARNING*** Creating default FASTER key equality comparer based on potentially slow {nameof(EqualityComparer<TPSFKey>)}." +
                 $" To avoid this, provide a comparer in {nameof(PSFRegistrationSettings<TPSFKey>)}.{nameof(PSFRegistrationSettings<TPSFKey>.KeyComparer)}," +
                 $" or make {typeof(TPSFKey).Name} implement the interface {nameof(IFasterEqualityComparer<TPSFKey>)}");
-            return FasterEqualityComparer<TPSFKey>.Default;
+            return FasterEqualityComparer.Get<TPSFKey>();
         }
 
         /// <summary>
@@ -438,7 +438,7 @@ namespace FASTER.core
         public void FlushLog(bool wait) => this.fht.Log.Flush(wait);
 
         /// <inheritdoc/>
-        public bool FlushAndEvictLog(bool wait) => this.fht.Log.FlushAndEvict(wait);
+        public void FlushAndEvictLog(bool wait) => this.fht.Log.FlushAndEvict(wait);
 
         /// <inheritdoc/>
         public void DisposeLogFromMemory() => this.fht.Log.DisposeFromMemory();
