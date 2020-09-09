@@ -251,6 +251,106 @@ namespace FASTER.core
 
         #endregion
 
+        #region PSF Registration
+        /// <summary>
+        /// Register a <see cref="PSF{TPSFKey, TRecordId}"/> with a simple definition.
+        /// </summary>
+        /// <example>
+        /// static TPSFKey? sizePsfFunc(ref TKVKey key, ref TKVValue value) => new TPSFKey(value.size);
+        /// var sizePsfDef = new FasterKVPSFDefinition{TKVKey, TKVValue, TPSFKey}("sizePSF", sizePsfFunc);
+        /// var sizePsf = fht.RegisterPSF(psfRegistrationSettings, sizePsfDef);
+        /// </example>
+        /// <typeparam name="TPSFKey">The type of the key value returned from the <see cref="PSF{TPSFKey, TRecordId}"/></typeparam>
+        /// <param name="registrationSettings">Registration settings for the secondary FasterKV instances, etc.</param>
+        /// <param name="def">A FasterKV-specific form of a PSF definition</param>
+        /// <returns>A FasterKV-specific PSF implementation whose TRecordId is long(</returns>
+        IPSF RegisterPSF<TPSFKey>(PSFRegistrationSettings<TPSFKey> registrationSettings,
+                FasterKVPSFDefinition<Key, Value, TPSFKey> def)
+            where TPSFKey : struct;
+
+        /// <summary>
+        /// Register a <see cref="PSF{TPSFKey, TRecordId}"/> with a simple definition.
+        /// </summary>
+        /// <example>
+        /// static TPSFKey? sizePsfFunc(ref TKVKey key, ref TKVValue value) => new TPSFKey(value.size);
+        /// var sizePsfDef = new FasterKVPSFDefinition{TKVKey, TKVValue, TPSFKey}("sizePSF", sizePsfFunc);
+        /// var sizePsf = fht.RegisterPSF(psfRegistrationSettings, new [] { sizePsfDef });
+        /// </example>
+        /// <typeparam name="TPSFKey">The type of the key value returned from the <see cref="PSF{TPSFKey, TRecordId}"/></typeparam>
+        /// <param name="registrationSettings">Registration settings for the secondary FasterKV instances, etc.</param>
+        /// <param name="defs">An array of FasterKV-specific forms of PSF definitions</param>
+        /// <returns>A FasterKV-specific PSF implementation whose TRecordId is long(</returns>
+        IPSF[] RegisterPSF<TPSFKey>(PSFRegistrationSettings<TPSFKey> registrationSettings,
+                                    params FasterKVPSFDefinition<Key, Value, TPSFKey>[] defs)
+            where TPSFKey : struct;
+
+        /// <summary>
+        /// Register a <see cref="PSF{TPSFKey, TRecordId}"/> with a simple definition.
+        /// </summary>
+        /// <example>
+        /// var sizePsf = fht.RegisterPSF(psfRegistrationSettings, "sizePsf", (k, v) => new TPSFKey(v.size));
+        /// </example>
+        /// <typeparam name="TPSFKey">The type of the key value returned from the <see cref="PSF{TPSFKey, TRecordId}"/></typeparam>
+        /// <param name="registrationSettings">Registration settings for the secondary FasterKV instances, etc.</param>
+        /// <param name="psfName">The name of the PSF; must be unique across all PSFGroups in this FasterKV instance</param>
+        /// <param name="psfFunc">A Func implementing the PSF, it will be wrapped in a delegate</param>
+        /// <returns>A FasterKV-specific <see cref="PSF{TPSFKey, TRecordId}"/> implementation whose TRecordId is long</returns>
+        IPSF RegisterPSF<TPSFKey>(PSFRegistrationSettings<TPSFKey> registrationSettings,
+                                  string psfName, Func<Key, Value, TPSFKey?> psfFunc)
+            where TPSFKey : struct;
+
+        /// <summary>
+        /// Register multiple <see cref="PSF{TPSFKey, TRecordId}"/> with no registration settings.
+        /// </summary>
+        /// <example>
+        /// var sizePsf = fht.RegisterPSF(psfRegistrationSettings,
+        ///                               ("sizePsf", (k, v) => new TPSFKey(v.size)),
+        ///                               ("colorPsf", (k, v) => new TPSFKey(v.color)));
+        /// </example>
+        /// <typeparam name="TPSFKey">The type of the key value returned from the <see cref="PSF{TPSFKey, TRecordId}"/></typeparam>
+        /// <param name="registrationSettings">Registration settings for the secondary FasterKV instances, etc.</param>
+        /// <param name="psfFuncs">One or more tuples containing a PSF name and implementing Func; the name must be 
+        /// unique across all PSFGroups in this FasterKV instance, and the Func will be wrapped in a delegate</param>
+        /// <remarks>"params" won't allow the optional fromAddress and keyComparer, so an overload is provided
+        /// to specify those</remarks>
+        IPSF[] RegisterPSF<TPSFKey>(PSFRegistrationSettings<TPSFKey> registrationSettings,
+                params (string, Func<Key, Value, TPSFKey?>)[] psfFuncs)
+            where TPSFKey : struct;
+
+        /// <summary>
+        /// Returns the names of registered <see cref="PSF{TPSFKey, TRecordId}"/>s for use in recovery.
+        /// TODO: Supplement or replace this with an app version string.
+        /// </summary>
+        /// <returns>An array of string arrays; each outer array corresponds to a 
+        ///     <see cref="PSFGroup{TProviderData, TPSFKey, TRecordId}"/></returns>
+        string[][] GetRegisteredPSFNames();
+
+        #endregion PSF Registration
+
+        #region PSF Logs
+        // TODO: better interface to PSF logs
+
+        /// <summary>
+        /// Flush PSF logs until current tail (records are still retained in memory)
+        /// </summary>
+        /// <param name="wait">Synchronous wait for operation to complete</param>
+        void FlushPSFLogs(bool wait);
+
+        /// <summary>
+        /// Flush PSF logs and evict all records from memory
+        /// </summary>
+        /// <param name="wait">Synchronous wait for operation to complete</param>
+        /// <returns>When wait is false, this tells whether the full eviction was successfully registered with FASTER</returns>
+        public void FlushAndEvictPSFLogs(bool wait);
+
+        /// <summary>
+        /// Delete PSF logs entirely from memory. Cannot allocate on the log
+        /// after this point. This is a synchronous operation.
+        /// </summary>
+        public void DisposePSFLogsFromMemory();
+
+        #endregion PSF Logs
+
         #region Growth and Recovery
 
         /// <summary>

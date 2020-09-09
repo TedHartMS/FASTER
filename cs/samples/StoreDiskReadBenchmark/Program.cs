@@ -10,6 +10,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using FASTER.core;
 
+#pragma warning disable CS0162 // Unreachable code detected
+
 namespace StoreDiskReadBenchmark
 {
     public class Program

@@ -214,23 +214,33 @@ namespace FASTER.core
         {
             var internalStatus = default(OperationStatus);
             ref Key key = ref pendingContext.key.Get();
+            ref Value value = ref pendingContext.value.Get();
 
             do
-            {
+            { 
                 // Issue retry command
                 switch (pendingContext.type)
                 {
                     case OperationType.RMW:
-                        internalStatus = InternalRMW(ref key, ref pendingContext.input, ref pendingContext.userContext, ref pendingContext, fasterSession, currentCtx, pendingContext.serialNum);
+                        internalStatus = InternalRMW(ref key, ref pendingContext.input, ref pendingContext.userContext,
+                                                     ref pendingContext, fasterSession, currentCtx, pendingContext.serialNum,
+                                                     ref pendingContext.psfUpdateArgs);
                         break;
                     case OperationType.UPSERT:
-                        internalStatus = InternalUpsert(ref key, ref pendingContext.value.Get(), ref pendingContext.userContext, ref pendingContext, fasterSession, currentCtx, pendingContext.serialNum);
+                        internalStatus = InternalUpsert(ref key, ref value, ref pendingContext.userContext, ref pendingContext, fasterSession,
+                                                        currentCtx, pendingContext.serialNum, ref pendingContext.psfUpdateArgs);
+                        break;
+                    case OperationType.PSF_INSERT:
+                        internalStatus = PsfInternalInsert(ref key, ref value, ref pendingContext.input, ref pendingContext.userContext,
+                                                           ref pendingContext, fasterSession, currentCtx, pendingContext.serialNum);
                         break;
                     case OperationType.DELETE:
-                        internalStatus = InternalDelete(ref key, ref pendingContext.userContext, ref pendingContext, fasterSession, currentCtx, pendingContext.serialNum);
+                        internalStatus = InternalDelete(ref key, ref pendingContext.userContext, ref pendingContext, fasterSession, currentCtx,
+                                                        pendingContext.serialNum, ref pendingContext.psfUpdateArgs);
                         break;
+                    case OperationType.PSF_READ_KEY:
                     case OperationType.READ:
-                        throw new FasterException("Cannot happen!");
+                        throw new FasterException("Reads go through the Pending route, not Retry, so this cannot happen!");
                 }
             } while (internalStatus == OperationStatus.RETRY_NOW);
 
@@ -243,6 +253,37 @@ namespace FASTER.core
             else
             {
                 status = HandleOperationStatus(opCtx, currentCtx, pendingContext, fasterSession, internalStatus);
+            }
+
+            if (status == Status.OK && this.PSFManager.HasPSFs)
+            {
+                switch (pendingContext.type)
+                {
+                    case OperationType.UPSERT:
+                        // Successful Upsert must have its PSFs executed and their keys stored.
+                        status = this.PSFManager.Upsert(new FasterKVProviderData<Key, Value>(this.hlog, ref key, ref value),
+                                                       pendingContext.psfUpdateArgs.LogicalAddress,
+                                                       pendingContext.psfUpdateArgs.ChangeTracker);
+                        break;
+                    case OperationType.PSF_INSERT:
+                        var functions = fasterSession as IPSFFunctions<Key, Value, Input, Output>;
+                        var updateOp = pendingContext.psfUpdateArgs.ChangeTracker.UpdateOp;
+                        if (functions.IsDelete(ref pendingContext.input) && (updateOp == UpdateOperation.IPU || updateOp == UpdateOperation.RCU))
+                        {
+                            // RCU Insert of a tombstoned old record is followed by Insert of the new record.
+                            if (pendingContext.psfUpdateArgs.ChangeTracker.FindGroup(functions.GroupId(ref pendingContext.input), out var ordinal))
+                            {
+                                ref GroupCompositeKeyPair groupKeysPair = ref pendingContext.psfUpdateArgs.ChangeTracker.GetGroupRef(ordinal);
+                                GetAfterRecordId(pendingContext.psfUpdateArgs.ChangeTracker, ref value);
+                                var pcontext = default(PendingContext<Input, Output, Context>);
+                                PsfRcuInsert(groupKeysPair.After, ref value, ref pendingContext.input, ref pendingContext.userContext,
+                                             ref pcontext, fasterSession, currentCtx, pendingContext.serialNum + 1);
+                            }
+                        }
+                        break;
+                    default:
+                        break;
+                }
             }
 
             // If done, callback user code.
@@ -270,7 +311,6 @@ namespace FASTER.core
                     default:
                         throw new FasterException("Operation type not allowed for retry");
                 }
-
             }
         }
         #endregion
@@ -331,20 +371,21 @@ namespace FASTER.core
         {
             if (opCtx.ioPendingRequests.TryGetValue(request.id, out var pendingContext))
             {
-                ref Key key = ref pendingContext.key.Get();
-
                 // Remove from pending dictionary
                 opCtx.ioPendingRequests.Remove(request.id);
 
                 OperationStatus internalStatus;
                 // Issue the continue command
-                if (pendingContext.type == OperationType.READ)
+                if (pendingContext.type == OperationType.READ ||
+                    pendingContext.type == OperationType.PSF_READ_KEY ||
+                    pendingContext.type == OperationType.PSF_READ_ADDRESS)
                 {
                     internalStatus = InternalContinuePendingRead(opCtx, request, ref pendingContext, fasterSession, currentCtx);
                 }
                 else
                 {
-                    internalStatus = InternalContinuePendingRMW(opCtx, request, ref pendingContext, fasterSession, currentCtx);
+                    Debug.Assert(pendingContext.type == OperationType.RMW);
+                    internalStatus = InternalContinuePendingRMW(opCtx, request, ref pendingContext, fasterSession, currentCtx); ;
                 }
 
                 request.Dispose();
@@ -362,6 +403,9 @@ namespace FASTER.core
                     status = HandleOperationStatus(opCtx, currentCtx, pendingContext, fasterSession, internalStatus);
                 }
 
+                // This is set in InternalContinuePendingRead for PSF_READ_ADDRESS, so don't retrieve it until after that.
+                ref Key key = ref pendingContext.key.Get();
+
                 // If done, callback user code
                 if (status == Status.OK || status == Status.NOTFOUND)
                 {
@@ -376,7 +420,7 @@ namespace FASTER.core
                                                          pendingContext.userContext,
                                                          status);
                     }
-                    else
+                    else if (pendingContext.type == OperationType.RMW)
                     {
                         fasterSession.RMWCompletionCallback(ref key,
                                                         ref pendingContext.input,
@@ -398,8 +442,7 @@ namespace FASTER.core
         {
             (Status, Output) s = default;
 
-            ref Key key = ref pendingContext.key.Get();
-
+            // PSFs may read by address rather than key, and for the Primary FKV will not have pendingContext.key; this call will fill it in.
             OperationStatus internalStatus = InternalContinuePendingRead(opCtx, request, ref pendingContext, fasterSession, currentCtx);
 
             request.Dispose();
@@ -414,6 +457,8 @@ namespace FASTER.core
             {
                 throw new Exception($"Unexpected {nameof(OperationStatus)} while reading => {internalStatus}");
             }
+
+            ref Key key = ref pendingContext.key.Get();
 
             if (pendingContext.heldLatch == LatchOperation.Shared)
                 ReleaseSharedLatch(key);

@@ -21,7 +21,7 @@ namespace FASTER.core
     /// <typeparam name="Output"></typeparam>
     /// <typeparam name="Context"></typeparam>
     /// <typeparam name="Functions"></typeparam>
-    public sealed class ClientSession<Key, Value, Input, Output, Context, Functions> : IClientSession, IDisposable
+    public sealed partial class ClientSession<Key, Value, Input, Output, Context, Functions> : IClientSession, IDisposable
         where Functions : IFunctions<Key, Value, Input, Output, Context>
     {
         private readonly FasterKV<Key, Value> fht;
@@ -64,6 +64,8 @@ namespace FASTER.core
                     Debug.WriteLine("Warning: Session param of variableLengthStruct provided for non-varlen allocator");
             }
 
+            this.CreateLazyPsfSessionWrapper();
+
             // Session runs on a single thread
             if (!supportAsync)
                 UnsafeResumeThread();
@@ -80,10 +82,13 @@ namespace FASTER.core
         public void Dispose()
         {
             CompletePending(true);
+            fht.DisposeClientSession(ID);
 
             // Session runs on a single thread
             if (!SupportAsync)
                 UnsafeSuspendThread();
+
+            DisposeLazyPsfSessionWrapper();
         }
 
         /// <summary>
@@ -142,10 +147,8 @@ namespace FASTER.core
         /// <param name="token"></param>
         /// <returns>ReadAsyncResult - call CompleteRead on the return value to complete the read operation</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public ValueTask<FasterKV<Key, Value>.ReadAsyncResult<Input, Output, Context, Functions>> ReadAsync(ref Key key, ref Input input, Context context = default, CancellationToken token = default)
-        {
-            return fht.ReadAsync(this, ref key, ref input, context, token);
-        }
+        public ValueTask<FasterKV<Key, Value>.ReadAsyncResult<Input, Output, Context, Functions>> ReadAsync(ref Key key, ref Input input, Context context = default, CancellationToken token = default) 
+            => fht.ReadAsync(this, ref key, ref input, context, token);
 
         /// <summary>
         /// Upsert operation
@@ -158,15 +161,29 @@ namespace FASTER.core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Status Upsert(ref Key key, ref Value desiredValue, Context userContext = default, long serialNo = 0)
         {
+            var updateArgs = new PSFUpdateArgs<Key, Value>();
+            FasterKVProviderData<Key, Value> providerData = null;
+            Status status;
+
             if (SupportAsync) UnsafeResumeThread();
             try
             {
-                return fht.ContextUpsert(ref key, ref desiredValue, userContext, FasterSession, serialNo, ctx);
+                status = fht.ContextUpsert(ref key, ref desiredValue, userContext, this.FasterSession, serialNo, ctx, ref updateArgs);
+                if (status == Status.OK && this.fht.PSFManager.HasPSFs)
+                {
+                    providerData = updateArgs.ChangeTracker is null
+                                        ? new FasterKVProviderData<Key, Value>(this.fht.hlog, ref key, ref desiredValue)
+                                        : updateArgs.ChangeTracker.AfterData;
+                }
             }
             finally
             {
                 if (SupportAsync) UnsafeSuspendThread();
             }
+
+            return providerData is null
+                ? status
+                : this.fht.PSFManager.Upsert(providerData, updateArgs.LogicalAddress, updateArgs.ChangeTracker);
         }
 
         /// <summary>
@@ -208,15 +225,22 @@ namespace FASTER.core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Status RMW(ref Key key, ref Input input, Context userContext, long serialNo)
         {
+            var updateArgs = new PSFUpdateArgs<Key, Value>();
+            Status status;
+
             if (SupportAsync) UnsafeResumeThread();
             try
             {
-                return fht.ContextRMW(ref key, ref input, userContext, FasterSession, serialNo, ctx);
+                status = fht.ContextRMW(ref key, ref input, userContext, this.FasterSession, serialNo, ctx, ref updateArgs);
             }
             finally
             {
                 if (SupportAsync) UnsafeSuspendThread();
             }
+
+            return (status == Status.OK || status == Status.NOTFOUND) && this.fht.PSFManager.HasPSFs
+                ? this.fht.PSFManager.Update(updateArgs.ChangeTracker)
+                : status;
         }
 
         /// <summary>
@@ -226,18 +250,7 @@ namespace FASTER.core
         /// <param name="input"></param>
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Status RMW(ref Key key, ref Input input)
-        {
-            if (SupportAsync) UnsafeResumeThread();
-            try
-            {
-                return fht.ContextRMW(ref key, ref input, default, FasterSession, 0, ctx);
-            }
-            finally
-            {
-                if (SupportAsync) UnsafeSuspendThread();
-            }
-        }
+        public Status RMW(ref Key key, ref Input input) => this.RMW(ref key, ref input, default, 0);
 
         /// <summary>
         /// Async RMW operation
@@ -279,15 +292,22 @@ namespace FASTER.core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Status Delete(ref Key key, Context userContext, long serialNo)
         {
+            var updateArgs = new PSFUpdateArgs<Key, Value>();
+            Status status;
+
             if (SupportAsync) UnsafeResumeThread();
             try
             {
-                return fht.ContextDelete(ref key, userContext, FasterSession, serialNo, ctx);
+                status = fht.ContextDelete(ref key, userContext, this.FasterSession, serialNo, ctx, ref updateArgs);
             }
             finally
             {
                 if (SupportAsync) UnsafeSuspendThread();
             }
+
+            return status == Status.OK && this.fht.PSFManager.HasPSFs
+                ? this.fht.PSFManager.Delete(updateArgs.ChangeTracker)
+                : status;
         }
 
         /// <summary>
@@ -296,18 +316,7 @@ namespace FASTER.core
         /// <param name="key"></param>
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Status Delete(ref Key key)
-        {
-            if (SupportAsync) UnsafeResumeThread();
-            try
-            {
-                return fht.ContextDelete(ref key, default, FasterSession, 0, ctx);
-            }
-            finally
-            {
-                if (SupportAsync) UnsafeSuspendThread();
-            }
-        }
+        public Status Delete(ref Key key) => this.Delete(ref key, default, 0);
 
         /// <summary>
         /// Async delete operation

@@ -201,6 +201,8 @@ namespace FASTER.core
             systemState = default;
             systemState.phase = Phase.REST;
             systemState.version = 1;
+
+            this.InitializePSFManager();
         }
 
         /// <summary>
@@ -214,14 +216,14 @@ namespace FASTER.core
         /// </returns>
         public bool TakeFullCheckpoint(out Guid token)
         {
-            ISynchronizationTask backend;
-            if (FoldOverSnapshot)
-                backend = new FoldOverCheckpointTask();
-            else
-                backend = new SnapshotCheckpointTask();
+            var backend = FoldOverSnapshot ? (ISynchronizationTask)new FoldOverCheckpointTask() : new SnapshotCheckpointTask();
 
             var result = StartStateMachine(new FullCheckpointStateMachine(backend, -1));
             token = _hybridLogCheckpointToken;
+
+            // Do not return the PSF token here. TODO: Handle failure of PSFManager.TakeFullCheckpoint
+            if (result && this.PSFManager.HasPSFs)
+                result &= this.PSFManager.TakeFullCheckpoint();
             return result;
         }
 
@@ -285,6 +287,10 @@ namespace FASTER.core
         {
             var result = StartStateMachine(new IndexSnapshotStateMachine());
             token = _indexCheckpointToken;
+
+            // Do not return the PSF token here. TODO: Handle failure of PSFManager.TakeIndexCheckpoint
+            if (result && this.PSFManager.HasPSFs)
+                result &= this.PSFManager.TakeIndexCheckpoint();
             return result;
         }
 
@@ -317,14 +323,14 @@ namespace FASTER.core
         /// <returns>Whether we could initiate the checkpoint. Use CompleteCheckpointAsync to wait completion.</returns>
         public bool TakeHybridLogCheckpoint(out Guid token)
         {
-            ISynchronizationTask backend;
-            if (FoldOverSnapshot)
-                backend = new FoldOverCheckpointTask();
-            else
-                backend = new SnapshotCheckpointTask();
+            var backend = FoldOverSnapshot ? (ISynchronizationTask)new FoldOverCheckpointTask() : new SnapshotCheckpointTask();
 
             var result = StartStateMachine(new HybridLogCheckpointStateMachine(backend, -1));
             token = _hybridLogCheckpointToken;
+
+            // Do not return the PSF token here. TODO: Handle failure of PSFManager.TakeHybridLogCheckpoint
+            if (result && this.PSFManager.HasPSFs)
+                result &= this.PSFManager.TakeHybridLogCheckpoint();
             return result;
         }
 
@@ -378,6 +384,9 @@ namespace FASTER.core
         public void Recover()
         {
             InternalRecoverFromLatestCheckpoints();
+
+            if (this.PSFManager.HasPSFs)    // TODO: Handle failure of PSFManager.Recovery
+                this.PSFManager.Recover();
         }
 
         /// <summary>
@@ -415,7 +424,7 @@ namespace FASTER.core
                 var systemState = this.systemState;
                 if (systemState.phase == Phase.REST || systemState.phase == Phase.PREPARE_GROW ||
                     systemState.phase == Phase.IN_PROGRESS_GROW)
-                    return;
+                    break;
 
                 List<ValueTask> valueTasks = new List<ValueTask>();
                 
@@ -430,6 +439,9 @@ namespace FASTER.core
                         await task;
                 }
             }
+
+            if (this.PSFManager.HasPSFs)    // TODO: Do in parallel and handle failure of PSFManager.CompleteCheckpointAsync
+                await this.PSFManager.CompleteCheckpointAsync();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -457,18 +469,17 @@ namespace FASTER.core
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal Status ContextUpsert<Input, Output, Context, FasterSession>(ref Key key, ref Value value, Context context, FasterSession fasterSession, long serialNo,
-            FasterExecutionContext<Input, Output, Context> sessionCtx)
+            FasterExecutionContext<Input, Output, Context> sessionCtx, ref PSFUpdateArgs<Key, Value> psfUpdateArgs)
             where FasterSession : IFasterSession<Key, Value, Input, Output, Context>
         {
             var pcontext = default(PendingContext<Input, Output, Context>);
             OperationStatus internalStatus;
 
             do
-                internalStatus = InternalUpsert(ref key, ref value, ref context, ref pcontext, fasterSession, sessionCtx, serialNo);
+                internalStatus = InternalUpsert(ref key, ref value, ref context, ref pcontext, fasterSession, sessionCtx, serialNo, ref psfUpdateArgs);
             while (internalStatus == OperationStatus.RETRY_NOW);
 
             Status status;
-
             if (internalStatus == OperationStatus.SUCCESS || internalStatus == OperationStatus.NOTFOUND)
             {
                 status = (Status)internalStatus;
@@ -484,14 +495,14 @@ namespace FASTER.core
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal Status ContextRMW<Input, Output, Context, FasterSession>(ref Key key, ref Input input, Context context, FasterSession fasterSession, long serialNo,
-            FasterExecutionContext<Input, Output, Context> sessionCtx)
+            FasterExecutionContext<Input, Output, Context> sessionCtx, ref PSFUpdateArgs<Key, Value> psfUpdateArgs)
             where FasterSession : IFasterSession<Key, Value, Input, Output, Context>
         {
             var pcontext = default(PendingContext<Input, Output, Context>);
             OperationStatus internalStatus;
 
             do
-                internalStatus = InternalRMW(ref key, ref input, ref context, ref pcontext, fasterSession, sessionCtx, serialNo);
+                internalStatus = InternalRMW(ref key, ref input, ref context, ref pcontext, fasterSession, sessionCtx, serialNo, ref psfUpdateArgs);
             while (internalStatus == OperationStatus.RETRY_NOW);
 
             Status status;
@@ -514,14 +525,15 @@ namespace FASTER.core
             Context context, 
             FasterSession fasterSession, 
             long serialNo, 
-            FasterExecutionContext<Input, Output, Context> sessionCtx)
+            FasterExecutionContext<Input, Output, Context> sessionCtx,
+            ref PSFUpdateArgs<Key, Value> psfUpdateArgs)
             where FasterSession : IFasterSession<Key, Value, Input, Output, Context>
         {
             var pcontext = default(PendingContext<Input, Output, Context>);
             OperationStatus internalStatus;
 
             do
-                internalStatus = InternalDelete(ref key, ref context, ref pcontext, fasterSession, sessionCtx, serialNo);
+                internalStatus = InternalDelete(ref key, ref context, ref pcontext, fasterSession, sessionCtx, serialNo, ref psfUpdateArgs);
             while (internalStatus == OperationStatus.RETRY_NOW);
 
             Status status;

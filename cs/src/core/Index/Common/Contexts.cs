@@ -18,7 +18,10 @@ namespace FASTER.core
         RMW,
         UPSERT,
         INSERT,
-        DELETE
+        DELETE,
+        PSF_READ_KEY,
+        PSF_READ_ADDRESS,
+        PSF_INSERT
     }
 
     internal enum OperationStatus
@@ -83,6 +86,8 @@ namespace FASTER.core
             internal long serialNum;
             internal HashBucketEntry entry;
             internal LatchOperation heldLatch;
+            internal PSFReadArgs<Key, Value> psfReadArgs;
+            internal PSFUpdateArgs<Key, Value> psfUpdateArgs;
 
             public void Dispose()
             {
