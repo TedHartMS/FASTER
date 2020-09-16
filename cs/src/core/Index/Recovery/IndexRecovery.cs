@@ -20,13 +20,16 @@ namespace FASTER.core
     public unsafe partial class FasterBase
     {
         internal ICheckpointManager checkpointManager;
+        internal bool disposeCheckpointManager;
 
         // Derived class exposed API
         internal void RecoverFuzzyIndex(IndexCheckpointInfo info)
         {
             var token = info.info.token;
             var ht_version = resizeInfo.version;
-            Debug.Assert(state[ht_version].size == info.info.table_size);
+
+            if (state[ht_version].size != info.info.table_size)
+                throw new FasterException($"Incompatible hash table size during recovery; allocated {state[ht_version].size} buckets, recovering {info.info.table_size} buckets");
 
             // Create devices to read from using Async API
             info.main_ht_device = checkpointManager.GetIndexDevice(token);
@@ -44,7 +47,7 @@ namespace FASTER.core
             IsFuzzyIndexRecoveryComplete(true);
 
             // close index checkpoint files appropriately
-            info.main_ht_device.Close();
+            info.main_ht_device.Dispose();
 
             // Delete all tentative entries!
             DeleteTentativeEntries();
@@ -65,8 +68,10 @@ namespace FASTER.core
             return completed1 && completed2;
         }
 
-        //Main Index Recovery Functions
-        private CountdownEvent mainIndexRecoveryEvent;
+        /// <summary>
+        /// Main Index Recovery Functions
+        /// </summary>
+        protected CountdownEvent mainIndexRecoveryEvent;
 
         private void BeginMainIndexRecovery(
                                 int version,
@@ -90,7 +95,7 @@ namespace FASTER.core
             for (int index = 0; index < numChunks; index++)
             {
                 long chunkStartBucket = (long)start + (index * chunkSize);
-                HashIndexPageAsyncReadResult result = default(HashIndexPageAsyncReadResult);
+                HashIndexPageAsyncReadResult result = default;
                 result.chunkIndex = index;
                 device.ReadAsync(numBytesRead, (IntPtr)chunkStartBucket, chunkSize, AsyncPageReadCallback, result);
                 numBytesRead += chunkSize;
@@ -110,19 +115,18 @@ namespace FASTER.core
             return completed;
         }
 
-        private unsafe void AsyncPageReadCallback(uint errorCode, uint numBytes, NativeOverlapped* overlap)
+        private unsafe void AsyncPageReadCallback(uint errorCode, uint numBytes, object overlap)
         {
             if (errorCode != 0)
             {
-                Trace.TraceError("OverlappedStream GetQueuedCompletionStatus error: {0}", errorCode);
+                Trace.TraceError("AsyncPageReadCallback error: {0}", errorCode);
             }
             mainIndexRecoveryEvent.Signal();
-            Overlapped.Free(overlap);
         }
 
         internal void DeleteTentativeEntries()
         {
-            HashBucketEntry entry = default(HashBucketEntry);
+            HashBucketEntry entry = default;
 
             int version = resizeInfo.version;
             var table_size_ = state[version].size;

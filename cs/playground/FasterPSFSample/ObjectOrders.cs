@@ -28,9 +28,9 @@ namespace FasterPSFSample
 
         public class Serializer : BinaryObjectSerializer<ObjectOrders>
         {
-            public override void Deserialize(ref ObjectOrders obj)
+            public override void Deserialize(out ObjectOrders obj)
             {
-                obj.values = new int[numValues];
+                obj = new ObjectOrders { values = new int[numValues] };
                 for (var ii = 0; ii < obj.values.Length; ++ii)
                     obj.values[ii] = reader.ReadInt32();
             }

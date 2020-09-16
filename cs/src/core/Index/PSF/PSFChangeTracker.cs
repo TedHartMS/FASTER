@@ -19,7 +19,7 @@ namespace FASTER.core
     }
 
     public unsafe class PSFChangeTracker<TProviderData, TRecordId> : IDisposable
-        where TRecordId : new()
+        // TODO where TRecordId : new()
     {
         #region Data API
         internal TProviderData BeforeData { get; private set; }

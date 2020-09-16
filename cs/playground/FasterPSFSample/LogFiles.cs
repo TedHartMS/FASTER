@@ -44,17 +44,17 @@ namespace FasterPSFSample
         {
             if (!(this.log is null))
             {
-                this.log.Close();
+                this.log.Dispose();
                 this.log = null;
             }
             if (!(this.objLog is null))
             {
-                this.objLog.Close();
+                this.objLog.Dispose();
                 this.objLog = null;
             }
 
             foreach (var psfDevice in this.PSFDevices)
-                psfDevice.Close();
+                psfDevice.Dispose();
             this.PSFDevices = null;
         }
     }

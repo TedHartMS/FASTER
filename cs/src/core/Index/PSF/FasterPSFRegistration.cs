@@ -10,8 +10,6 @@ namespace FASTER.core
 {
     // PSF-related functions for FasterKV
     public partial class FasterKV<Key, Value> : FasterBase, IFasterKV<Key, Value>
-        where Key : new()
-        where Value : new()
     {
         internal PSFManager<FasterKVProviderData<Key, Value>, long> PSFManager { get; private set; }
 

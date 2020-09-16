@@ -7,8 +7,6 @@ namespace FASTER.core
     /// Structure passed to and set by Upsert and RMW in the Primary FKV; specific to the FasterKV client.
     /// </summary>
     internal struct PSFUpdateArgs<Key, Value>
-        where Key : new()
-        where Value : new()
     {
         /// <summary>
         /// Set to the inserted or updated logical address, which is the RecordId for the FasterKV client

@@ -15,8 +15,6 @@ namespace FASTER.core
     // PSF-related internal function implementations for FasterKV; these correspond to the similarly-named
     // functions in FasterImpl.cs.
     public unsafe partial class FasterKV<Key, Value> : FasterBase, IFasterKV<Key, Value>
-        where Key : new()
-        where Value : new()
     {
         internal IKeyAccessor<Key> PsfKeyAccessor => this.hlog.PsfKeyAccessor;
 

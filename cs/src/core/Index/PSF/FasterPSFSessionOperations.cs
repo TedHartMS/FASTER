@@ -9,8 +9,6 @@ using System.Threading.Tasks;
 namespace FASTER.core
 {
     public sealed partial class ClientSession<Key, Value, Input, Output, Context, Functions> : IClientSession, IDisposable
-        where Key : new()
-        where Value : new()
         where Functions : IFunctions<Key, Value, Input, Output, Context>
     {
         #region PSF calls for Secondary FasterKV

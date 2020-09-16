@@ -13,8 +13,6 @@ namespace FASTER.core
     /// <typeparam name="TPSFKey">The type of the key returned by the Predicate and store in the secondary
     ///     (PSF-implementing) FasterKV instances</typeparam>
     public class FasterKVPSFDefinition<TKVKey, TKVValue, TPSFKey> : IPSFDefinition<FasterKVProviderData<TKVKey, TKVValue>, TPSFKey>
-        where TKVKey : new()
-        where TKVValue : new()
         where TPSFKey : struct
     {
         /// <summary>

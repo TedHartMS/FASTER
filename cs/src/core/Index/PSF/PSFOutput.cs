@@ -30,8 +30,6 @@ namespace FASTER.core
     /// <typeparam name="TKVKey">The type of the key for user values</typeparam>
     /// <typeparam name="TKVValue">The type of the user values</typeparam>
     public unsafe class PSFOutputPrimaryReadAddress<TKVKey, TKVValue> : IPSFOutput<TKVKey, TKVValue>
-        where TKVKey : new()
-        where TKVValue : new()
     {
         private readonly AllocatorBase<TKVKey, TKVValue> allocator;
 

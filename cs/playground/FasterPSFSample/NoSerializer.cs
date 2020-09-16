@@ -8,7 +8,7 @@ namespace FasterPSFSample
 {
     public class NoSerializer : BinaryObjectSerializer<BlittableOrders>
     {
-        public override void Deserialize(ref BlittableOrders obj) 
+        public override void Deserialize(out BlittableOrders obj) 
             => throw new NotImplementedException("NoSerializer should not be instantiated");
 
         public override void Serialize(ref BlittableOrders obj) 

@@ -11,8 +11,6 @@ using System.Threading.Tasks;
 namespace FASTER.core
 {
     public partial class FasterKV<Key, Value> : FasterBase, IFasterKV<Key, Value>
-        where Key : new()
-        where Value : new()
     {
         internal CommitPoint InternalContinue<Input, Output, Context>(string guid, out FasterExecutionContext<Input, Output, Context> ctx)
         {
@@ -27,7 +25,7 @@ namespace FASTER.core
                     var currentState = SystemState.Copy(ref systemState);
                     if (currentState.phase == Phase.REST)
                     {
-                        var intermediateState = SystemState.Make(Phase.INTERMEDIATE, currentState.version);
+                        var intermediateState = SystemState.MakeIntermediate(currentState);
                         if (MakeTransition(currentState, intermediateState))
                         {
                             // No one can change from REST phase
@@ -77,11 +75,7 @@ namespace FASTER.core
                 return;
             }
 
-            // await is never invoked when calling the function with async = false
-#pragma warning disable 4014
-            var task = ThreadStateMachineStep(ctx, fasterSession, false);
-            Debug.Assert(task.IsCompleted);
-#pragma warning restore 4014
+            ThreadStateMachineStep(ctx, fasterSession, default);
         }
 
         internal void InitContext<Input, Output, Context>(FasterExecutionContext<Input, Output, Context> ctx, string token, long lsn = -1)
@@ -171,7 +165,6 @@ namespace FASTER.core
 
                 InternalCompletePendingRequests(ctx, ctx, fasterSession);
                 InternalCompleteRetryRequests(ctx, ctx, fasterSession);
-                InternalRefresh(ctx, fasterSession);
 
                 done &= (ctx.HasNoPendingRequests);
 
@@ -179,6 +172,8 @@ namespace FASTER.core
                 {
                     return true;
                 }
+
+                InternalRefresh(ctx, fasterSession);
 
                 if (wait)
                 {
@@ -203,13 +198,11 @@ namespace FASTER.core
 
             if (count == 0) return;
 
-            fasterSession.UnsafeResumeThread();
             for (int i = 0; i < count; i++)
             {
                 var pendingContext = opCtx.retryRequests.Dequeue();
                 InternalCompleteRetryRequest(opCtx, currentCtx, pendingContext, fasterSession);
             }
-            fasterSession.UnsafeSuspendThread();
         }
 
         internal void InternalCompleteRetryRequest<Input, Output, Context, FasterSession>(
@@ -223,30 +216,33 @@ namespace FASTER.core
             ref Key key = ref pendingContext.key.Get();
             ref Value value = ref pendingContext.value.Get();
 
-            // Issue retry command
-            switch (pendingContext.type)
+            do
             {
-                case OperationType.RMW:
-                    internalStatus = InternalRMW(ref key, ref pendingContext.input, ref pendingContext.userContext,
-                                                 ref pendingContext, fasterSession, currentCtx, pendingContext.serialNum,
-                                                 ref pendingContext.psfUpdateArgs);
-                    break;
-                case OperationType.UPSERT:
-                    internalStatus = InternalUpsert(ref key, ref value, ref pendingContext.userContext, ref pendingContext, fasterSession,
-                                                    currentCtx, pendingContext.serialNum, ref pendingContext.psfUpdateArgs);
-                    break;
-                case OperationType.PSF_INSERT:
-                    internalStatus = PsfInternalInsert(ref key, ref value, ref pendingContext.input,
-                                                       ref pendingContext, fasterSession, currentCtx, pendingContext.serialNum);
-                    break;
-                case OperationType.DELETE:
-                    internalStatus = InternalDelete(ref key, ref pendingContext.userContext, ref pendingContext, fasterSession, currentCtx,
-                                                    pendingContext.serialNum, ref pendingContext.psfUpdateArgs);
-                    break;
-                case OperationType.PSF_READ_KEY:
-                case OperationType.READ:
-                    throw new FasterException("Reads go through the Pending route, not Retry, so this cannot happen!");
-            }
+                // Issue retry command
+                switch (pendingContext.type)
+                {
+                    case OperationType.RMW:
+                        internalStatus = InternalRMW(ref key, ref pendingContext.input, ref pendingContext.userContext,
+                                                     ref pendingContext, fasterSession, currentCtx, pendingContext.serialNum,
+                                                     ref pendingContext.psfUpdateArgs);
+                        break;
+                    case OperationType.UPSERT:
+                        internalStatus = InternalUpsert(ref key, ref value, ref pendingContext.userContext, ref pendingContext, fasterSession,
+                                                        currentCtx, pendingContext.serialNum, ref pendingContext.psfUpdateArgs);
+                        break;
+                    case OperationType.PSF_INSERT:
+                        internalStatus = PsfInternalInsert(ref key, ref value, ref pendingContext.input,
+                                                           ref pendingContext, fasterSession, currentCtx, pendingContext.serialNum);
+                        break;
+                    case OperationType.DELETE:
+                        internalStatus = InternalDelete(ref key, ref pendingContext.userContext, ref pendingContext, fasterSession, currentCtx,
+                                                        pendingContext.serialNum, ref pendingContext.psfUpdateArgs);
+                        break;
+                    case OperationType.PSF_READ_KEY:
+                    case OperationType.READ:
+                        throw new FasterException("Reads go through the Pending route, not Retry, so this cannot happen!");
+                }
+            } while (internalStatus == OperationStatus.RETRY_NOW);
 
             var status = internalStatus == OperationStatus.SUCCESS || internalStatus == OperationStatus.NOTFOUND
                 ? (Status)internalStatus
@@ -298,7 +294,7 @@ namespace FASTER.core
                         break;
                     case OperationType.UPSERT:
                         fasterSession.UpsertCompletionCallback(ref key,
-                                                 ref value,
+                                                 ref pendingContext.value.Get(),
                                                  pendingContext.userContext);
                         break;
                     case OperationType.DELETE:
@@ -387,13 +383,21 @@ namespace FASTER.core
 
                 request.Dispose();
 
-                Status status = internalStatus == OperationStatus.SUCCESS || internalStatus == OperationStatus.NOTFOUND
-                    ? (Status)internalStatus
-                    : HandleOperationStatus(opCtx, currentCtx, pendingContext, fasterSession, internalStatus);
+                Debug.Assert(internalStatus != OperationStatus.RETRY_NOW);
+
+                Status status;
+                // Handle operation status
+                if (internalStatus == OperationStatus.SUCCESS || internalStatus == OperationStatus.NOTFOUND)
+                {
+                    status = (Status)internalStatus;
+                }
+                else
+                {
+                    status = HandleOperationStatus(opCtx, currentCtx, pendingContext, fasterSession, internalStatus);
+                }
 
                 // This is set in InternalContinuePendingRead for PSF_READ_ADDRESS, so don't retrieve it until after that.
                 ref Key key = ref pendingContext.key.Get();
-
                 // If done, callback user code
                 if (status == Status.OK || status == Status.NOTFOUND)
                 {
