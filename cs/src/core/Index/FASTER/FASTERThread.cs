@@ -244,9 +244,16 @@ namespace FASTER.core
                 }
             } while (internalStatus == OperationStatus.RETRY_NOW);
 
-            var status = internalStatus == OperationStatus.SUCCESS || internalStatus == OperationStatus.NOTFOUND
-                ? (Status)internalStatus
-                : HandleOperationStatus(opCtx, currentCtx, pendingContext, fasterSession, internalStatus);
+            Status status;
+            // Handle operation status
+            if (internalStatus == OperationStatus.SUCCESS || internalStatus == OperationStatus.NOTFOUND)
+            {
+                status = (Status)internalStatus;
+            }
+            else
+            {
+                status = HandleOperationStatus(opCtx, currentCtx, ref pendingContext, fasterSession, internalStatus, false, out _);
+            }
 
             if (status == Status.OK && this.PSFManager.HasPSFs)
             {
@@ -366,78 +373,41 @@ namespace FASTER.core
             {
                 // Remove from pending dictionary
                 opCtx.ioPendingRequests.Remove(request.id);
-
-                OperationStatus internalStatus;
-                // Issue the continue command
-                if (pendingContext.type == OperationType.READ ||
-                    pendingContext.type == OperationType.PSF_READ_KEY ||
-                    pendingContext.type == OperationType.PSF_READ_ADDRESS)
-                {
-                    internalStatus = InternalContinuePendingRead(opCtx, request, ref pendingContext, fasterSession, currentCtx);
-                }
-                else
-                {
-                    Debug.Assert(pendingContext.type == OperationType.RMW);
-                    internalStatus = InternalContinuePendingRMW(opCtx, request, ref pendingContext, fasterSession, currentCtx); ;
-                }
-
-                request.Dispose();
-
-                Debug.Assert(internalStatus != OperationStatus.RETRY_NOW);
-
-                Status status;
-                // Handle operation status
-                if (internalStatus == OperationStatus.SUCCESS || internalStatus == OperationStatus.NOTFOUND)
-                {
-                    status = (Status)internalStatus;
-                }
-                else
-                {
-                    status = HandleOperationStatus(opCtx, currentCtx, pendingContext, fasterSession, internalStatus);
-                }
-
-                // This is set in InternalContinuePendingRead for PSF_READ_ADDRESS, so don't retrieve it until after that.
-                ref Key key = ref pendingContext.key.Get();
-                // If done, callback user code
-                if (status == Status.OK || status == Status.NOTFOUND)
-                {
-                    if (pendingContext.heldLatch == LatchOperation.Shared)
-                        ReleaseSharedLatch(key);
-
-                    if (pendingContext.type == OperationType.READ)
-                    {
-                        fasterSession.ReadCompletionCallback(ref key,
-                                                         ref pendingContext.input,
-                                                         ref pendingContext.output,
-                                                         pendingContext.userContext,
-                                                         status);
-                    }
-                    else if (pendingContext.type == OperationType.RMW)
-                    {
-                        fasterSession.RMWCompletionCallback(ref key,
-                                                        ref pendingContext.input,
-                                                        pendingContext.userContext,
-                                                        status);
-                    }
-                }
+                InternalCompletePendingRequestFromContext(opCtx, currentCtx, fasterSession, request, ref pendingContext, false, out _);
                 pendingContext.Dispose();
             }
         }
 
-        internal (Status, Output) InternalCompletePendingReadRequest<Input, Output, Context, FasterSession>(
-            FasterExecutionContext<Input, Output, Context> opCtx, 
-            FasterExecutionContext<Input, Output, Context> currentCtx, 
-            FasterSession fasterSession, 
-            AsyncIOContext<Key, Value> request, 
-            PendingContext<Input, Output, Context> pendingContext)
+        /// <summary>
+        /// Caller is expected to dispose pendingContext after this method completes
+        /// </summary>
+        internal Status InternalCompletePendingRequestFromContext<Input, Output, Context, FasterSession>(
+            FasterExecutionContext<Input, Output, Context> opCtx,
+            FasterExecutionContext<Input, Output, Context> currentCtx,
+            FasterSession fasterSession,
+            AsyncIOContext<Key, Value> request,
+            ref PendingContext<Input, Output, Context> pendingContext, bool asyncOp, out AsyncIOContext<Key, Value> newRequest)
             where FasterSession : IFasterSession<Key, Value, Input, Output, Context>
         {
-            (Status, Output) s = default;
+            newRequest = default;
+            OperationStatus internalStatus;
 
-            // PSFs may read by address rather than key, and for the Primary FKV will not have pendingContext.key; this call will fill it in.
-            OperationStatus internalStatus = InternalContinuePendingRead(opCtx, request, ref pendingContext, fasterSession, currentCtx);
+            // Issue the continue command
+            if (pendingContext.type == OperationType.READ ||
+                pendingContext.type == OperationType.PSF_READ_KEY ||
+                pendingContext.type == OperationType.PSF_READ_ADDRESS)
+            {
+                internalStatus = InternalContinuePendingRead(opCtx, request, ref pendingContext, fasterSession, currentCtx);
+            }
+            else
+            {
+                Debug.Assert(pendingContext.type == OperationType.RMW);
+                internalStatus = InternalContinuePendingRMW(opCtx, request, ref pendingContext, fasterSession, currentCtx);
+            }
 
             request.Dispose();
+
+            Debug.Assert(internalStatus != OperationStatus.RETRY_NOW);
 
             Status status;
             // Handle operation status
@@ -447,25 +417,32 @@ namespace FASTER.core
             }
             else
             {
-                throw new Exception($"Unexpected {nameof(OperationStatus)} while reading => {internalStatus}");
+                status = HandleOperationStatus(opCtx, currentCtx, ref pendingContext, fasterSession, internalStatus, asyncOp, out newRequest);
             }
 
-            ref Key key = ref pendingContext.key.Get();
+            // If done, callback user code
+            if (status == Status.OK || status == Status.NOTFOUND)
+            {
+                if (pendingContext.heldLatch == LatchOperation.Shared)
+                    ReleaseSharedLatch(key);
 
-            if (pendingContext.heldLatch == LatchOperation.Shared)
-                ReleaseSharedLatch(key);
-
-            fasterSession.ReadCompletionCallback(ref key,
-                                             ref pendingContext.input,
-                                             ref pendingContext.output,
-                                             pendingContext.userContext,
-                                             status);
-
-            s.Item1 = status;
-            s.Item2 = pendingContext.output;
-            pendingContext.Dispose();
-
-            return s;
+                if (pendingContext.type == OperationType.READ)
+                {
+                    fasterSession.ReadCompletionCallback(ref key,
+                                                     ref pendingContext.input,
+                                                     ref pendingContext.output,
+                                                     pendingContext.userContext,
+                                                     status);
+                }
+                else
+                {
+                    fasterSession.RMWCompletionCallback(ref key,
+                                                    ref pendingContext.input,
+                                                    pendingContext.userContext,
+                                                    status);
+                }
+            }
+            return status;
         }
         #endregion
     }

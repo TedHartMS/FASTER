@@ -143,7 +143,7 @@ namespace FASTER.test.recovery.sumstore.recover_continue
             for (var key = 0; key < numOps; key++)
             {
                 inputArg.adId.adId = key;
-                var status = fht.Read(ref inputArg.adId, ref inputArg, ref outputArg, Empty.Default, key);
+                var status = fht.Read(ref inputArg.adId, ref inputArg, ref outputArg, Empty.Default, fht.SerialNo);
 
                 if (status == Status.PENDING)
                     fht.CompletePending(true);
@@ -232,6 +232,8 @@ namespace FASTER.test.recovery.sumstore.recover_continue
             Interlocked.Add(ref value.numClicks, input.numClicks.numClicks);
             return true;
         }
+
+        public bool NeedCopyUpdate(ref AdId key, ref AdInput input, ref NumClicks oldValue) => true;
 
         public void CopyUpdater(ref AdId key, ref AdInput input, ref NumClicks oldValue, ref NumClicks newValue)
         {

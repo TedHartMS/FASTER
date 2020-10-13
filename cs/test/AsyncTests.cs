@@ -94,7 +94,7 @@ namespace FASTER.test.async
 
                 for (int key = 0; key < numOps; key++)
                 {
-                    var status = s3.Read(ref inputArray[key], ref inputArg, ref output, Empty.Default, 0);
+                    var status = s3.Read(ref inputArray[key], ref inputArg, ref output, Empty.Default, s3.SerialNo);
 
                     if (status == Status.PENDING)
                         s3.CompletePending(true);
@@ -170,6 +170,8 @@ namespace FASTER.test.async
             Interlocked.Add(ref value.numClicks, input.numClicks.numClicks);
             return true;
         }
+
+        public bool NeedCopyUpdate(ref AdId key, ref AdInput input, ref NumClicks oldValue) => true;
 
         public void CopyUpdater(ref AdId key, ref AdInput input, ref NumClicks oldValue, ref NumClicks newValue)
         {

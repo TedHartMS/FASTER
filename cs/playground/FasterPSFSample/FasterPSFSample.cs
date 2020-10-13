@@ -30,8 +30,6 @@ namespace FasterPSFSample
 
         private static int nextId = 1000000000;
 
-        internal static int serialNo;
-
         static async Task Main(string[] argv)
         {
             if (!ParseArgs(argv))
@@ -60,9 +58,9 @@ namespace FasterPSFSample
                 await RunReads(fpsf);
                 var ok = await QueryPSFsWithoutBoolOps(fpsf)
                         && await QueryPSFsWithBoolOps(fpsf)
-                        && await UpdateSizeByUpsert(fpsf)
+                        && UpdateSizeByUpsert(fpsf)
                         && await UpdateColorByRMW(fpsf)
-                        && await UpdateCountByUpsert(fpsf)
+                        && UpdateCountByUpsert(fpsf)
                         && await Delete(fpsf);
                 Console.WriteLine("--------------------------------------------------------");
                 Console.WriteLine($"Completed run: UseObjects {useObjectValue}, MultiGroup {useMultiGroups}, Async {useAsync}");
@@ -165,10 +163,8 @@ namespace FasterPSFSample
                 // Both Upsert and RMW do an insert when the key is not found.
                 if ((ii & 1) == 0)
                 {
-                    if (useAsync)
-                        await session.UpsertAsync(ref key, ref value, context);
-                    else
-                        session.Upsert(ref key, ref value, context, serialNo);
+                    // Note: there is no UpsertAsync().
+                    session.Upsert(ref key, ref value, context);
                 }
                 else
                 {
@@ -176,10 +172,9 @@ namespace FasterPSFSample
                     if (useAsync)
                         await session.RMWAsync(ref key, ref input, context);
                     else
-                        session.RMW(ref key, ref input, context, serialNo);
+                        session.RMW(ref key, ref input, context);
                 }
             }
-            ++serialNo;
 
             initialSkippedLastBinCount = lastBinKeys.Count();
             Console.WriteLine($"Upserted {UpsertCount} elements");
@@ -217,17 +212,16 @@ namespace FasterPSFSample
                 var status = Status.OK;
                 if (useAsync)
                 {
-                    (status, output) = (await session.ReadAsync(ref key, ref input, context)).CompleteRead();
+                    (status, output) = (await session.ReadAsync(ref key, ref input, context)).Complete();
                 }
                 else
                 {
-                    session.Read(ref key, ref input, ref output, context, serialNo);
+                    session.Read(ref key, ref input, ref output, context);
                 }
 
                 if (status == Status.OK && output.Value.MemberTuple != key.MemberTuple)
                     throw new Exception($"Error: Value does not match key in {nameof(RunReads)}");
             }
-            ++serialNo;
 
             session.CompletePending(true);
             Console.WriteLine($"Read {readCount} elements with {++statusPending} Pending");
@@ -452,7 +446,7 @@ namespace FasterPSFSample
                                 : $"{indent4}{tag} {name} Failed: expected ({expectedCount}) != actual ({actualCount})");
         }
 
-        internal async static Task<bool> UpdateSizeByUpsert<TValue, TInput, TOutput, TFunctions, TSerializer>(FPSF<TValue, TInput, TOutput, TFunctions, TSerializer> fpsf)
+        internal static bool UpdateSizeByUpsert<TValue, TInput, TOutput, TFunctions, TSerializer>(FPSF<TValue, TInput, TOutput, TFunctions, TSerializer> fpsf)
             where TValue : IOrders, new()
             where TInput : IInput<TValue>, new()
             where TOutput : IOutput<TValue>, new()
@@ -491,15 +485,11 @@ namespace FasterPSFSample
                     Count = providerData.GetValue().Count
                 };
 
-                // Reuse the same key
-                if (useAsync)
-                    await session.UpsertAsync(ref providerData.GetKey(), ref newValue, context);
-                else
-                    session.Upsert(ref providerData.GetKey(), ref newValue, context, serialNo);
+                // Reuse the same key. Note: there is no UpsertAsync().
+                session.Upsert(ref providerData.GetKey(), ref newValue, context);
 
                 RemoveIfSkippedLastBinKey(ref providerData.GetKey());
             }
-            ++serialNo;
 
             xxlDatas = GetSizeDatas(Constants.Size.XXLarge);
             mediumDatas = GetSizeDatas(Constants.Size.Medium);
@@ -541,11 +531,10 @@ namespace FasterPSFSample
                 if (useAsync)
                     await session.RMWAsync(ref providerData.GetKey(), ref input, context);
                 else
-                    session.RMW(ref providerData.GetKey(), ref input, context, serialNo);
+                    session.RMW(ref providerData.GetKey(), ref input, context);
 
                 RemoveIfSkippedLastBinKey(ref providerData.GetKey());
             }
-            ++serialNo;
 
             purpleDatas = GetColorDatas(Color.Purple);
             blueDatas = GetColorDatas(Color.Blue);
@@ -555,7 +544,7 @@ namespace FasterPSFSample
             return ok;
         }
 
-        internal async static Task<bool> UpdateCountByUpsert<TValue, TInput, TOutput, TFunctions, TSerializer>(FPSF<TValue, TInput, TOutput, TFunctions, TSerializer> fpsf)
+        internal static bool UpdateCountByUpsert<TValue, TInput, TOutput, TFunctions, TSerializer>(FPSF<TValue, TInput, TOutput, TFunctions, TSerializer> fpsf)
             where TValue : IOrders, new()
             where TInput : IInput<TValue>, new()
             where TOutput : IOutput<TValue>, new()
@@ -600,13 +589,9 @@ namespace FasterPSFSample
                 };
                 Debug.Assert(CountBinKey.GetBin(newValue.Count, out tempBin) && tempBin == CountBinKey.LastBin);
 
-                // Reuse the same key
-                if (useAsync)
-                    await session.UpsertAsync(ref providerData.GetKey(), ref newValue, context);
-                else
-                    session.Upsert(ref providerData.GetKey(), ref newValue, context, serialNo);
+                // Reuse the same key. Note: there is no UpsertAsync().
+                session.Upsert(ref providerData.GetKey(), ref newValue, context);
             }
-            ++serialNo;
 
             expectedLastBinCount += bin7Datas.Length;
             lastBinDatas = GetCountDatas(CountBinKey.LastBin);
@@ -647,13 +632,9 @@ namespace FasterPSFSample
             var context = new Context<TValue>();
             foreach (var providerData in redDatas)
             {
-                // This will call Functions<>.InPlaceUpdater.
-                if (useAsync)
-                    await session.DeleteAsync(ref providerData.GetKey(), context);
-                else
-                    session.Delete(ref providerData.GetKey(), context, serialNo);
+                // This will call Functions<>.InPlaceUpdater. Note: there is no DeleteAsync().
+                session.Delete(ref providerData.GetKey(), context);
             }
-            ++serialNo;
             Console.WriteLine();
 
             redDatas = await GetColorDatas(Color.Red);
