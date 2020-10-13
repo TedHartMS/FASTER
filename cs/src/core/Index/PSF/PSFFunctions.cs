@@ -45,6 +45,8 @@ namespace FASTER.core
         #endregion Reads
 
         #region RMWs
+        public bool NeedCopyUpdate(ref CompositeKey<TPSFKey> _, ref PSFInputSecondary<TPSFKey> input, ref TRecordId value) => true;
+
         public void CopyUpdater(ref CompositeKey<TPSFKey> _, ref PSFInputSecondary<TPSFKey> input, ref TRecordId oldValue, ref TRecordId newValue)
             => throw new PSFInternalErrorException("RMW should not be done on PSF-implementing FasterKVs");
 

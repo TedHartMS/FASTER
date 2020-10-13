@@ -420,6 +420,9 @@ namespace FASTER.core
                 status = HandleOperationStatus(opCtx, currentCtx, ref pendingContext, fasterSession, internalStatus, asyncOp, out newRequest);
             }
 
+            // This is set in InternalContinuePendingRead for PSF_READ_ADDRESS, so don't retrieve it until after that.
+            ref Key key = ref pendingContext.key.Get();
+
             // If done, callback user code
             if (status == Status.OK || status == Status.NOTFOUND)
             {

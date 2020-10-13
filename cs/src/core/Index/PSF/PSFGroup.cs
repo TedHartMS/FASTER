@@ -420,7 +420,7 @@ namespace FASTER.core
                 var readAsyncResult = await session.PsfReadKeyAsync(ref input.QueryKeyRef, ref readArgs, session.ctx.serialNum + 1, querySettings);
                 if (querySettings.IsCanceled)
                     yield break;
-                var (status, _) = readAsyncResult.CompleteRead();
+                var (status, _) = readAsyncResult.Complete();
                 if (status != Status.OK)    // TODOerr: check other status
                     yield break;
 
@@ -435,7 +435,7 @@ namespace FASTER.core
                     readAsyncResult = await session.PsfReadAddressAsync(ref readArgs, session.ctx.serialNum + 1, querySettings);
                     if (querySettings.IsCanceled)
                         yield break;
-                    (status, _) = readAsyncResult.CompleteRead();
+                    (status, _) = readAsyncResult.Complete();
                     if (status != Status.OK)    // TODOerr: check other status
                         yield break;
 

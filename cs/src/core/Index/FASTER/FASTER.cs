@@ -220,7 +220,11 @@ namespace FASTER.core
         /// </returns>
         public bool TakeFullCheckpoint(out Guid token)
         {
-            var backend = FoldOverSnapshot ? (ISynchronizationTask)new FoldOverCheckpointTask() : new SnapshotCheckpointTask();
+            ISynchronizationTask backend;
+            if (FoldOverSnapshot)
+                backend = new FoldOverCheckpointTask();
+            else 
+                backend = new SnapshotCheckpointTask();
 
             var result = StartStateMachine(new FullCheckpointStateMachine(backend, -1));
             token = _hybridLogCheckpointToken;
@@ -328,7 +332,11 @@ namespace FASTER.core
         /// <returns>Whether we could initiate the checkpoint. Use CompleteCheckpointAsync to wait completion.</returns>
         public bool TakeHybridLogCheckpoint(out Guid token)
         {
-            var backend = FoldOverSnapshot ? (ISynchronizationTask)new FoldOverCheckpointTask() : new SnapshotCheckpointTask();
+            ISynchronizationTask backend;
+            if (FoldOverSnapshot)
+                backend = new FoldOverCheckpointTask();
+            else
+                backend = new SnapshotCheckpointTask();
 
             var result = StartStateMachine(new HybridLogCheckpointStateMachine(backend, -1));
             token = _hybridLogCheckpointToken;
@@ -391,6 +399,9 @@ namespace FASTER.core
         public void Recover(int numPagesToPreload = -1, bool undoFutureVersions = true)
         {
             InternalRecoverFromLatestCheckpoints(numPagesToPreload, undoFutureVersions);
+
+            if (this.PSFManager.HasPSFs)    // TODO Separate Tasks?
+                this.PSFManager.Recover();
         }
 
         /// <summary>

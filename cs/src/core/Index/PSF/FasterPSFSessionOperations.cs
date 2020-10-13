@@ -108,7 +108,7 @@ namespace FASTER.core
             // Looks up logicalAddress in the primary FasterKV
             var primaryOutput = new PSFOutputPrimaryReadAddress<Key, Value>(this.fht.hlog, providerDatas);
             var psfArgs = new PSFReadArgs<Key, Value>(new PSFInputPrimaryReadAddress<Key>(logicalAddress), primaryOutput);
-            return this.PsfReadAddress(ref psfArgs, this.ctx.serialNum + 1);
+            return this.PsfReadAddress(ref psfArgs, this.ctx.serialNum);
         }
 
         internal IEnumerable<FasterKVProviderData<Key, Value>> ReturnProviderDatas(IEnumerable<long> logicalAddresses)
@@ -141,10 +141,10 @@ namespace FASTER.core
             // Looks up logicalAddress in the primary FasterKV
             var primaryOutput = new PSFOutputPrimaryReadAddress<Key, Value>(this.fht.hlog, providerDatas);
             var psfArgs = new PSFReadArgs<Key, Value>(new PSFInputPrimaryReadAddress<Key>(logicalAddress), primaryOutput);
-            var readAsyncResult = await this.PsfReadAddressAsync(ref psfArgs, this.ctx.serialNum + 1, querySettings);
+            var readAsyncResult = await this.PsfReadAddressAsync(ref psfArgs, this.ctx.serialNum, querySettings);
             if (querySettings.IsCanceled)
                 return null;
-            var (status, _) = readAsyncResult.CompleteRead();
+            var (status, _) = readAsyncResult.Complete();
             if (status != Status.OK)    // TODOerr: check other status
                 return null;
             return providerDatas.TryDequeue(out var providerData) ? providerData : null;

@@ -2,6 +2,7 @@
 // Licensed under the MIT license.
 
 using System;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 
@@ -18,7 +19,7 @@ namespace FASTER.core
             var internalStatus = this.PsfInternalReadKey(ref key, ref psfArgs, ref pcontext, fasterSession, sessionCtx, serialNo);
             var status = internalStatus == OperationStatus.SUCCESS || internalStatus == OperationStatus.NOTFOUND
                 ? (Status)internalStatus
-                : HandleOperationStatus(sessionCtx, sessionCtx, pcontext, fasterSession, internalStatus);
+                : HandleOperationStatus(sessionCtx, sessionCtx, ref pcontext, fasterSession, internalStatus, asyncOp: false, out _);
 
             sessionCtx.serialNum = serialNo;
             return status;
@@ -43,7 +44,7 @@ namespace FASTER.core
             var internalStatus = this.PsfInternalReadAddress(ref psfArgs, ref pcontext, fasterSession, sessionCtx, serialNo);
             var status = internalStatus == OperationStatus.SUCCESS || internalStatus == OperationStatus.NOTFOUND
                 ? (Status)internalStatus
-                : HandleOperationStatus(sessionCtx, sessionCtx, pcontext, fasterSession, internalStatus);
+                : HandleOperationStatus(sessionCtx, sessionCtx, ref pcontext, fasterSession, internalStatus, asyncOp: false, out _);
 
             sessionCtx.serialNum = serialNo;
             return status;
@@ -67,13 +68,12 @@ namespace FASTER.core
             where Functions : IFunctions<Key, Value, Input, Output, Context>
         {
             var pcontext = default(PendingContext<Input, Output, Context>);
+            var diskRequest = default(AsyncIOContext<Key, Value>);
             var output = default(Output);
-            var nextSerialNum = clientSession.ctx.serialNum + 1;
 
             if (clientSession.SupportAsync) clientSession.UnsafeResumeThread();
             try
             {
-            TryReadAgain:
                 var internalStatus = isKey
                     ? this.PsfInternalReadKey(ref key, ref psfArgs, ref pcontext, clientSession.FasterSession, sessionCtx, serialNo)
                     : this.PsfInternalReadAddress(ref psfArgs, ref pcontext, clientSession.FasterSession, sessionCtx, serialNo);
@@ -82,26 +82,22 @@ namespace FASTER.core
                     return new ValueTask<ReadAsyncResult<Input, Output, Context, Functions>>(new ReadAsyncResult<Input, Output, Context, Functions>((Status)internalStatus, output));
                 }
 
-                if (internalStatus == OperationStatus.CPR_SHIFT_DETECTED)
+                else
                 {
-                    SynchronizeEpoch(clientSession.ctx, clientSession.ctx, ref pcontext, clientSession.FasterSession);
-                    goto TryReadAgain;
+                    var status = HandleOperationStatus(clientSession.ctx, clientSession.ctx, ref pcontext, clientSession.FasterSession, internalStatus, true, out diskRequest);
+
+                    if (status != Status.PENDING)
+                        return new ValueTask<ReadAsyncResult<Input, Output, Context, Functions>>(new ReadAsyncResult<Input, Output, Context, Functions>(status, output));
                 }
             }
             finally
             {
-                clientSession.ctx.serialNum = nextSerialNum;
+                Debug.Assert(serialNo >= clientSession.ctx.serialNum, "Operation serial numbers must be non-decreasing");
+                clientSession.ctx.serialNum = serialNo;
                 if (clientSession.SupportAsync) clientSession.UnsafeSuspendThread();
             }
 
-            try
-            { 
-                return SlowReadAsync(this, clientSession, pcontext, querySettings.CancellationToken);
-            }
-            catch (OperationCanceledException) when (!querySettings.ThrowOnCancellation)
-            {
-                return default;
-            }
+            return SlowReadAsync(this, clientSession, pcontext, diskRequest, querySettings.CancellationToken);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -115,7 +111,7 @@ namespace FASTER.core
                                                       ref pcontext, fasterSession, sessionCtx, serialNo);
             var status = internalStatus == OperationStatus.SUCCESS || internalStatus == OperationStatus.NOTFOUND
                 ? (Status)internalStatus
-                : HandleOperationStatus(sessionCtx, sessionCtx, pcontext, fasterSession, internalStatus);
+                : HandleOperationStatus(sessionCtx, sessionCtx, ref pcontext, fasterSession, internalStatus, asyncOp: false, out _);
 
             sessionCtx.serialNum = serialNo;
             return status;
@@ -139,7 +135,7 @@ namespace FASTER.core
                                                         ref pcontext, fasterSession, sessionCtx, serialNo);
             Status status = internalStatus == OperationStatus.SUCCESS || internalStatus == OperationStatus.NOTFOUND
                 ? (Status)internalStatus
-                : HandleOperationStatus(sessionCtx, sessionCtx, pcontext, fasterSession, internalStatus);
+                : HandleOperationStatus(sessionCtx, sessionCtx, ref pcontext, fasterSession, internalStatus, asyncOp: false, out _);
 
             sessionCtx.serialNum = serialNo;
 
@@ -163,7 +159,7 @@ namespace FASTER.core
                                                         ref pcontext, fasterSession, sessionCtx, serialNo);
             return internalStatus == OperationStatus.SUCCESS || internalStatus == OperationStatus.NOTFOUND
                 ? (Status)internalStatus
-                : HandleOperationStatus(sessionCtx, sessionCtx, pcontext, fasterSession, internalStatus);
+                : HandleOperationStatus(sessionCtx, sessionCtx, ref pcontext, fasterSession, internalStatus, asyncOp: false, out _);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -180,7 +176,7 @@ namespace FASTER.core
             var internalStatus = this.PsfInternalInsert(ref key, ref value, ref input, ref pcontext, fasterSession, sessionCtx, serialNo);
             Status status = internalStatus == OperationStatus.SUCCESS || internalStatus == OperationStatus.NOTFOUND
                 ? (Status)internalStatus
-                : HandleOperationStatus(sessionCtx, sessionCtx, pcontext, fasterSession, internalStatus);
+                : HandleOperationStatus(sessionCtx, sessionCtx, ref pcontext, fasterSession, internalStatus, asyncOp: false, out _);
 
             sessionCtx.serialNum = serialNo;
             return status;

@@ -409,15 +409,18 @@ namespace FASTER.core
             if (clientSession.SupportAsync) clientSession.UnsafeResumeThread();
             try
             {
+                var updateArgs = new PSFUpdateArgs<Key, Value>();
                 OperationStatus internalStatus;
 
                 do
-                    internalStatus = InternalRMW(ref key, ref input, ref context, ref pcontext, clientSession.FasterSession, clientSession.ctx, serialNo);
+                    internalStatus = InternalRMW(ref key, ref input, ref context, ref pcontext, clientSession.FasterSession, clientSession.ctx, serialNo, ref updateArgs);
                 while (internalStatus == OperationStatus.RETRY_NOW || internalStatus == OperationStatus.RETRY_LATER);
 
                 
                 if (internalStatus == OperationStatus.SUCCESS || internalStatus == OperationStatus.NOTFOUND)
                 {
+                    if (this.PSFManager.HasPSFs)
+                        this.PSFManager.Update(updateArgs.ChangeTracker);
                     return new ValueTask<RmwAsyncResult<Input, Output, Context, Functions>>(new RmwAsyncResult<Input, Output, Context, Functions>((Status)internalStatus, default));
                 }
                 else

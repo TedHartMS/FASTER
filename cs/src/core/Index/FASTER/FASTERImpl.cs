@@ -1859,10 +1859,14 @@ namespace FASTER.core
                 {
                     return true;
                 }
+                else
+                {
 
-                foundLogicalAddress = hlog.GetInfo(foundPhysicalAddress).PreviousAddress;
-                //This makes testing REALLY slow
-                //Debug.WriteLine("Tracing back");
+                    foundLogicalAddress = hlog.GetInfo(foundPhysicalAddress).PreviousAddress;
+                    //This makes testing REALLY slow
+                    //Debug.WriteLine("Tracing back");
+                    continue;
+                }
             }
             foundPhysicalAddress = Constants.kInvalidAddress;
             return false;
@@ -2072,12 +2076,11 @@ namespace FASTER.core
 
             while (true)
             {
-                if (!readcache.GetInfo(physicalAddress).Invalid)
+                if (!readcache.GetInfo(physicalAddress).Invalid && comparer.Equals(ref key, ref readcache.GetKey(physicalAddress)))
                 {
-                    if (comparer.Equals(ref key, ref readcache.GetKey(physicalAddress)))
+                    if ((logicalAddress & ~Constants.kReadCacheBitMask) >= readcache.SafeReadOnlyAddress)
                     {
-                        if ((logicalAddress & ~Constants.kReadCacheBitMask) >= readcache.SafeReadOnlyAddress)
-                            return true;
+                        return true;
                     }
 
                     Debug.Assert((logicalAddress & ~Constants.kReadCacheBitMask) >= readcache.SafeHeadAddress);
@@ -2089,7 +2092,6 @@ namespace FASTER.core
                 entry.word = logicalAddress;
                 if (!entry.ReadCache) break;
                 physicalAddress = readcache.GetPhysicalAddress(logicalAddress & ~Constants.kReadCacheBitMask);
-                // TODO: Update latestRecordVersion?
             }
             physicalAddress = 0;
             return false;

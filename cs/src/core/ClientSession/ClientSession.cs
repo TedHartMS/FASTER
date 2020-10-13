@@ -385,7 +385,7 @@ namespace FASTER.core
             if (SupportAsync) UnsafeResumeThread();
             try
             {
-                return fht.ContextDelete(ref key, userContext, FasterSession, serialNo, ctx, ref updateArgs);
+                status = fht.ContextDelete(ref key, userContext, FasterSession, serialNo, ctx, ref updateArgs);
             }
             finally
             {
