@@ -71,7 +71,7 @@ The total in-memory footprint of FASTER is controlled by the following parameter
 words, the size of the log is 2^B bytes, for a parameter setting of B. Note that if the log points to class key or value 
 objects, this size only includes the 8-byte reference to the object. The older part of the log is spilled to storage.
 
-Read more about managing memory in FASTER in the [tuning](fasterkv-tuning) guide.
+Read more about managing memory in FASTER in the [tuning](/docs/fasterkv-tuning) guide.
 
 ### Callback Functions
 
