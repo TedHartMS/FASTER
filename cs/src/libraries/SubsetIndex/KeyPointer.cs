@@ -50,7 +50,7 @@ namespace FASTER.libraries.SubsetIndex
         // in any TPKey chain for it). Also used in ChangeTracker to determine whether to set kUnlinkOldBit.
         private const byte kIsNullBit = 0x01;
 
-        // For Update and insert, the TPKey has changed; add this record to the new TPKey chain.
+        // The record is marked deleted (but we don't tombstone).
         private const byte kIsDeletedBit = 0x02;
 
         // If Key size is > 4, then reinterpret the Key as an offset to the actual key. (TODOperf not implemented)

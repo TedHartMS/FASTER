@@ -37,11 +37,11 @@ namespace SubsetIndexSample
                 Console.WriteLine($"    {ObjValuesArg}: Use objects instead of blittable Value; default is {useObjectValues}");
                 Console.WriteLine($"    {MultiGroupArg}: Put each Predicate in a separate group; default is {useMultiGroups}");
                 Console.WriteLine($"    {AsyncArg}: Use Async operations on FasterKV; default is {useAsync}");
-                Console.WriteLine($"    {FlushArg}: FlushAndEvict before each operation on FasterKV; default is {useAsync}");
+                Console.WriteLine($"    {FlushArg}: FlushAndEvict before each operation on FasterKV; default is {flushAndEvict}");
                 Console.WriteLine($"    {KeysArg}: Number of keys for initial insert; default is {keyCount}");
                 Console.WriteLine($"    {ReadCacheArg}: Copy reads from disk to the ReadCache (primary FasterKV only); default is {useReadCache}");
                 Console.WriteLine($"    {ReadsToTailArg}: Copy reads from disk to the tail of the log (primary FasterKV only); default is {useReadCache}");
-                Console.WriteLine($"    {VerboseArg}: Verbose output (show each result set evaluation); default is {useAsync}");
+                Console.WriteLine($"    {VerboseArg}: Verbose output (show each result set evaluation); default is {verbose}");
                 Console.WriteLine($"    {HelpArg}, /?, or -?: Show this message");
                 Console.WriteLine();
                 if (!string.IsNullOrEmpty(message))

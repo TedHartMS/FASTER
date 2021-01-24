@@ -73,7 +73,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BasicPredicate", "samples\S
 EndProject
 Project("{D954291E-2A0B-460D-934E-DC6B0785DB48}") = "Common", "samples\SubsetIndex\Common\Common.shproj", "{EFA19CAD-A5F1-4778-A135-D92B09EAC5FD}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SingleGroup", "samples\SubsetIndex\TwoPredicateSingleGroup\SingleGroup.csproj", "{218274CE-0E74-4ADC-8DCE-F746CD48D914}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SingleGroup", "samples\SubsetIndex\SingleGroup\SingleGroup.csproj", "{218274CE-0E74-4ADC-8DCE-F746CD48D914}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MultiGroupAsync", "samples\SubsetIndex\MultiGroupAsync\MultiGroupAsync.csproj", "{B4EB3967-67B1-43FC-8025-BBE9AF5EC287}"
 EndProject

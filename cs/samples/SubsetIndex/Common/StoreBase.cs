@@ -59,6 +59,8 @@ namespace SubsetIndexSampleCommon
                     ++statusPending;
             }
 
+            session.CompletePending(true);
+
             Console.WriteLine($"Inserted {Constants.KeyCount:N0} elements; {statusPending:N0} pending");
         }
 

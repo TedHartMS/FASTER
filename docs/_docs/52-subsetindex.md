@@ -82,9 +82,9 @@ For the SubsetIndex examples, an easy way to see the differences from a non-Subs
 Following are the SubsetIndex-specific examples.
 - The[ __`BasicPredicate`__](https://github.com/TedHartMS/FASTER/tree/PSF-dll/cs/samples/SubsetIndex/BasicPredicate) Sample App: This illustrates the simplest form of defining and querying a single Predicate, with the Predicate using a lambda that simply returns a property of the object rather than defining a key struct.
 
-- The [__`TwoPredicateSingleGroup`__](https://github.com/TedHartMS/FASTER/tree/PSF-dll/cs/samples/SubsetIndex/TwoPredicateSingleGroup) Sample App: This illustrates defining two Predicates in a single group, using a key struct that knows which property of the value it should use as the secondary key. It uses the synchronous `Query` method to illustrate simple boolean AND/OR operations.
+- The [__`SingleGroup`__](https://github.com/TedHartMS/FASTER/tree/PSF-dll/cs/samples/SubsetIndex/SingleGroup) Sample App: This illustrates defining two Predicates in a single group, using a key struct that knows which property of the value it should use as the secondary key. It uses the synchronous `Query` method and illustrates simple boolean AND/OR operations.
 
-- The [__`MultiGroupAsync`__](https://github.com/TedHartMS/FASTER/tree/PSF-dll/cs/samples/SubsetIndex/MultiGroupAsync) Sample App: This illustrates defining two Predicates each in their own group, using two separate key structs, each dedicated to a single property of the value to be used as the secondary key. It uses the asynchronous `Query` method to illustrate simple boolean AND/OR operations. It also illustrates `QueryAsync`.
+- The [__`MultiGroupAsync`__](https://github.com/TedHartMS/FASTER/tree/PSF-dll/cs/samples/SubsetIndex/MultiGroupAsync) Sample App: This illustrates defining two Predicates each in their own group, using two separate key structs, each dedicated to a single property of the value to be used as the secondary key. It uses the asynchronous `QueryAsync` method and illustrates simple boolean AND/OR operations.
 
 - The [__`SubsetIndex`__](https://github.com/TedHartMS/FASTER/tree/PSF-dll/cs/playground/SubsetIndex) Playground App: This app demonstrates much more comprehensive (and complex) registration and querying of the SubsetIndex, using all overloads of the `Query` API.
 
