@@ -78,6 +78,19 @@ namespace FASTER.core
         public bool IsTombstone(long logicalAddress) => GetRecordInfo(logicalAddress).Tombstone;
 
         /// <summary>
+        /// Set the record at the given logical address to deleted
+        /// </summary>
+        /// <param name="logicalAddress">The address to examine</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void SetRecordDeleted(long logicalAddress)
+        {
+            ref RecordInfo recordInfo = ref GetRecordInfo(logicalAddress);
+            recordInfo.Tombstone = true;
+            if (this.fkv.hlog.ValueHasObjects())
+                this.fkv.hlog.GetValue(this.fkv.hlog.GetPhysicalAddress(logicalAddress)) = default;
+        }
+
+        /// <summary>
         /// Returns the version number of the record at the given logical address
         /// </summary>
         /// <param name="logicalAddress">The address to examine</param>
@@ -93,6 +106,19 @@ namespace FASTER.core
         {
             Debug.Assert(logicalAddress >= this.fkv.Log.ReadOnlyAddress);
             GetRecordInfo(logicalAddress).SpinLock();
+        }
+
+        /// <summary>
+        /// Locks the RecordInfo at address, and returns that RecordInfo reference (which can be used for unlocking).
+        /// </summary>
+        /// <param name="logicalAddress">The address to examine</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public ref RecordInfo SpinLockRecordInfo(long logicalAddress)
+        {
+            Debug.Assert(logicalAddress >= this.fkv.Log.ReadOnlyAddress);
+            ref RecordInfo recordInfo = ref GetRecordInfo(logicalAddress);
+            recordInfo.SpinLock();
+            return ref recordInfo;
         }
 
         /// <summary>

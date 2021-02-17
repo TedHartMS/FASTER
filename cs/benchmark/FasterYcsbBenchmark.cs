@@ -82,7 +82,7 @@ namespace FASTER.benchmark
 
         volatile bool done = false;
 
-        public FASTER_YcsbBenchmark(int threadCount_, int numaStyle_, string distribution_, int readPercent_, int backupOptions_)
+        public FASTER_YcsbBenchmark(int threadCount_, int numaStyle_, string distribution_, int readPercent_, int backupOptions_, int indexType_)
         {
             // Pin loading thread if it is not used for checkpointing
             if (kPeriodicCheckpointMilliseconds <= 0)
@@ -110,13 +110,26 @@ namespace FASTER.benchmark
 
             var path = "D:\\data\\FasterYcsbBenchmark\\";
             device = Devices.CreateLogDevice(path + "hlog", preallocateFile: true);
+            var secondaryIndexType = (SecondaryIndexType)indexType_;
 
             if (kSmallMemoryLog)
                 store = new FasterKV<Key, Value>
-                    (kMaxKey / 2, new LogSettings { LogDevice = device, PreallocateLog = true, PageSizeBits = 22, SegmentSizeBits = 26, MemorySizeBits = 26 }, new CheckpointSettings { CheckPointType = CheckpointType.FoldOver, CheckpointDir = path });
+                    (kMaxKey / 2, new LogSettings { LogDevice = device, PreallocateLog = true, PageSizeBits = 22, SegmentSizeBits = 26, MemorySizeBits = 26 },
+                    new CheckpointSettings { CheckPointType = CheckpointType.FoldOver, CheckpointDir = path },
+                    supportsMutableIndexes: secondaryIndexType != SecondaryIndexType.None);
             else
                 store = new FasterKV<Key, Value>
-                    (kMaxKey / 2, new LogSettings { LogDevice = device, PreallocateLog = true }, new CheckpointSettings { CheckPointType = CheckpointType.FoldOver, CheckpointDir = path });
+                    (kMaxKey / 2, new LogSettings { LogDevice = device, PreallocateLog = true },
+                    new CheckpointSettings { CheckPointType = CheckpointType.FoldOver, CheckpointDir = path },
+                    supportsMutableIndexes: secondaryIndexType != SecondaryIndexType.None);
+
+            if (secondaryIndexType != SecondaryIndexType.None)
+            {
+                if (secondaryIndexType.HasFlag(SecondaryIndexType.Key))
+                    store.SecondaryIndexBroker.AddIndex(new NullKeyIndex<Key>());
+                if (secondaryIndexType.HasFlag(SecondaryIndexType.Value))
+                    store.SecondaryIndexBroker.AddIndex(new NullValueIndex<Value>());
+            }
         }
 
         private void RunYcsb(int thread_idx)
@@ -295,7 +308,7 @@ namespace FASTER.benchmark
             long startTailAddress = store.Log.TailAddress;
             Console.WriteLine("Start tail address = " + startTailAddress);
 
-            if (!storeWasRecovered && this.backupMode.HasFlag(BackupMode.Backukp) && kPeriodicCheckpointMilliseconds <= 0)
+            if (!storeWasRecovered && this.backupMode.HasFlag(BackupMode.Backup) && kPeriodicCheckpointMilliseconds <= 0)
             {
                 Console.WriteLine("Checkpointing FasterKV for fast restart");
                 store.TakeFullCheckpoint(out _);

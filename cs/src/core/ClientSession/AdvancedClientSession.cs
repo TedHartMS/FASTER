@@ -737,15 +737,54 @@ namespace FASTER.core
 
             public bool ConcurrentWriter(ref Key key, ref Value src, ref Value dst, long address)
             {
-                return _clientSession.functions.ConcurrentWriter(ref key, ref src, ref dst, address);
+                if (!_clientSession.fht.SupportsMutableIndexes)
+                    return _clientSession.functions.ConcurrentWriter(ref key, ref src, ref dst, address);
+
+                ref RecordInfo recordInfo = ref _clientSession.fht.RecordAccessor.SpinLockRecordInfo(address);
+                try
+                {
+                    if (!recordInfo.Tombstone && _clientSession.functions.ConcurrentWriter(ref key, ref src, ref dst, address))
+                    {
+                        // KeyIndexes do not need notification of in-place updates because the key does not change.
+                        if (_clientSession.fht.SecondaryIndexBroker.MutableValueIndexCount > 0)
+                            _clientSession.fht.SecondaryIndexBroker.Upsert(ref dst, address);
+                        return true;
+                    }
+                }
+                finally
+                {
+                    recordInfo.Unlock();
+                }
+                return false;
+            }
+
+            public bool ConcurrentDeleter(ref Key key, ref Value value, long address)
+            {
+                if (!_clientSession.fht.SupportsMutableIndexes)
+                    return _clientSession.functions.ConcurrentDeleter(ref key, ref value, address);
+
+                ref RecordInfo recordInfo = ref _clientSession.fht.RecordAccessor.SpinLockRecordInfo(address);
+                try
+                {
+                    if (_clientSession.fht.SecondaryIndexBroker.MutableKeyIndexCount > 0)
+                        _clientSession.fht.SecondaryIndexBroker.Delete(ref key);
+                    if (_clientSession.fht.SecondaryIndexBroker.MutableValueIndexCount > 0)
+                        _clientSession.fht.SecondaryIndexBroker.Delete(ref value, address);
+                    return _clientSession.functions.ConcurrentDeleter(ref key, ref value, address);
+                }
+                finally
+                {
+                    recordInfo.Unlock();
+                }
+                return true;
             }
 
             public bool NeedCopyUpdate(ref Key key, ref Input input, ref Value oldValue)
                 => _clientSession.functions.NeedCopyUpdate(ref key, ref input, ref oldValue);
 
-            public void CopyUpdater(ref Key key, ref Input input, ref Value oldValue, ref Value newValue, long oldAddress, long newAddress)
+            public void CopyUpdater(ref Key key, ref Input input, ref Value oldValue, ref Value newValue, long address)
             {
-                _clientSession.functions.CopyUpdater(ref key, ref input, ref oldValue, ref newValue, oldAddress, newAddress);
+                _clientSession.functions.CopyUpdater(ref key, ref input, ref oldValue, ref newValue, address);
             }
 
             public void DeleteCompletionCallback(ref Key key, Context ctx)
@@ -770,7 +809,25 @@ namespace FASTER.core
 
             public bool InPlaceUpdater(ref Key key, ref Input input, ref Value value, long address)
             {
-                return _clientSession.functions.InPlaceUpdater(ref key, ref input, ref value, address);
+                if (!_clientSession.fht.SupportsMutableIndexes)
+                    return _clientSession.functions.InPlaceUpdater(ref key, ref input, ref value, address);
+
+                ref RecordInfo recordInfo = ref _clientSession.fht.RecordAccessor.SpinLockRecordInfo(address);
+                try
+                {
+                    if (!recordInfo.Tombstone && _clientSession.functions.InPlaceUpdater(ref key, ref input, ref value, address))
+                    {
+                        // KeyIndexes do not need notification of in-place updates because the key does not change.
+                        if (_clientSession.fht.SecondaryIndexBroker.MutableValueIndexCount > 0)
+                            _clientSession.fht.SecondaryIndexBroker.Upsert(ref value, address);
+                        return true;
+                    }
+                }
+                finally
+                {
+                    recordInfo.Unlock();
+                }
+                return false;
             }
 
             public void ReadCompletionCallback(ref Key key, ref Input input, ref Output output, Context ctx, Status status, RecordInfo recordInfo)

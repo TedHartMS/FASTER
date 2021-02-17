@@ -300,7 +300,7 @@ namespace FASTER.benchmark
             long startTailAddress = store.Log.TailAddress;
             Console.WriteLine("Start tail address = " + startTailAddress);
 
-            if (!storeWasRecovered && this.backupMode.HasFlag(BackupMode.Backukp) && kPeriodicCheckpointMilliseconds <= 0)
+            if (!storeWasRecovered && this.backupMode.HasFlag(BackupMode.Backup) && kPeriodicCheckpointMilliseconds <= 0)
             {
                 Console.WriteLine("Checkpointing FasterKV for fast restart");
                 store.TakeFullCheckpoint(out _);

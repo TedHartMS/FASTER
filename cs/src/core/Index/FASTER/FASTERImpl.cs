@@ -463,6 +463,8 @@ namespace FASTER.core
 
                 if (foundEntry.word == entry.word)
                 {
+                    pendingContext.logicalAddress = newLogicalAddress;
+                    pendingContext.IsNewRecord = true;
                     status = OperationStatus.SUCCESS;
                     goto LatchRelease;
                 }
@@ -790,7 +792,7 @@ namespace FASTER.core
                     {
                         fasterSession.CopyUpdater(ref key, ref input,
                                                 ref hlog.GetValue(physicalAddress),
-                                                ref hlog.GetValue(newPhysicalAddress, newPhysicalAddress + actualSize), logicalAddress, newLogicalAddress);
+                                                ref hlog.GetValue(newPhysicalAddress, newPhysicalAddress + actualSize), newLogicalAddress);
                         status = OperationStatus.SUCCESS;
                     }
                 }
@@ -815,6 +817,8 @@ namespace FASTER.core
 
                 if (foundEntry.word == entry.word)
                 {
+                    pendingContext.logicalAddress = newLogicalAddress;
+                    pendingContext.IsNewRecord = true;
                     goto LatchRelease;
                 }
                 else
@@ -1025,15 +1029,8 @@ namespace FASTER.core
             // Mutable Region: Update the record in-place
             if (logicalAddress >= hlog.ReadOnlyAddress)
             {
-                // Apply tombstone bit to the record
-                hlog.GetInfo(physicalAddress).Tombstone = true;
-
-                if (WriteDefaultOnDelete)
-                {
-                    // Write default value. Ignore return value; the record is already marked
-                    Value v = default;
-                    fasterSession.ConcurrentWriter(ref hlog.GetKey(physicalAddress), ref v, ref hlog.GetValue(physicalAddress), logicalAddress);
-                }
+                if (!fasterSession.ConcurrentDeleter(ref hlog.GetKey(physicalAddress), ref hlog.GetValue(physicalAddress), logicalAddress))
+                    SetRecordDeleted(ref hlog.GetInfo(physicalAddress), ref hlog.GetValue(physicalAddress));
 
                 // Try to update hash chain and completely elide record only if previous address points to invalid address
                 if (entry.Address == logicalAddress && hlog.GetInfo(physicalAddress).PreviousAddress < hlog.BeginAddress)
@@ -1130,9 +1127,16 @@ namespace FASTER.core
             return status;
         }
 
-#endregion
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void SetRecordDeleted(ref RecordInfo recordInfo, ref Value value)
+        {
+            recordInfo.Tombstone = true;
+            if (hlog.ValueHasObjects())
+                value = default;
+        }
+        #endregion
 
-#region ContainsKeyInMemory
+        #region ContainsKeyInMemory
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal Status InternalContainsKeyInMemory<Input, Output, Context, FasterSession>(
@@ -1483,7 +1487,7 @@ namespace FASTER.core
                     fasterSession.CopyUpdater(ref key,
                                           ref pendingContext.input.Get(),
                                           ref hlog.GetContextRecordValue(ref request),
-                                          ref hlog.GetValue(newPhysicalAddress, newPhysicalAddress + actualSize), request.logicalAddress, newLogicalAddress);
+                                          ref hlog.GetValue(newPhysicalAddress, newPhysicalAddress + actualSize), newLogicalAddress);
                     status = OperationStatus.SUCCESS;
                 }
 

@@ -922,7 +922,7 @@ namespace FASTER.core
         /// <returns></returns>
         public override bool KeyHasObjects()
         {
-            return SerializerSettings.keySerializer != null;
+            return SerializerSettings?.keySerializer != null;
         }
 
         /// <summary>
@@ -931,7 +931,7 @@ namespace FASTER.core
         /// <returns></returns>
         public override bool ValueHasObjects()
         {
-            return SerializerSettings.valueSerializer != null;
+            return SerializerSettings?.valueSerializer != null;
         }
         #endregion
 

@@ -89,6 +89,7 @@ namespace FASTER.core
             internal const byte kSkipReadCache = 0x01;
             internal const byte kNoKey = 0x02;
             internal const byte kSkipCopyReadsToTail = 0x04;
+            internal const byte kIsNewRecord = 0x08;
 
             internal static byte GetOperationFlags(ReadFlags readFlags, bool noKey = false)
             {
@@ -117,6 +118,12 @@ namespace FASTER.core
             {
                 get => (operationFlags & kSkipCopyReadsToTail) != 0;
                 set => operationFlags = value ? (byte)(operationFlags | kSkipCopyReadsToTail) : (byte)(operationFlags & ~kSkipCopyReadsToTail);
+            }
+
+            internal bool IsNewRecord
+            {
+                get => (operationFlags & kIsNewRecord) != 0;
+                set => operationFlags = value ? (byte)(operationFlags | kIsNewRecord) : (byte)(operationFlags & ~kIsNewRecord);
             }
 
             public void Dispose()

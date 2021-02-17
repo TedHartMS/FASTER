@@ -28,6 +28,14 @@ namespace FASTER.benchmark
                         "\n    3 = Both (Recover FasterKV if the Checkpoint is available, else populate FasterKV from data and Checkpoint it so it can be Restored in a subsequent run)")]
         public int Backup { get; set; }
 
+        [Option('i', "index", Required = false, Default = 0,
+             HelpText = "Secondary index type(s); these implement a no-op index to test the overhead on FasterKV operations:" +
+                        "\n    0 = None (default)" +
+                        "\n    1 = Key-based index" +
+                        "\n    2 = Value-based index" +
+                        "\n    3 = Both index types")]
+        public int SecondaryIndexType { get; set; }
+
         [Option('r', "read_percent", Required = false, Default = 50,
          HelpText = "Percentage of reads (-1 for 100% read-modify-write")]
         public int ReadPercent { get; set; }
@@ -44,7 +52,13 @@ namespace FASTER.benchmark
 
     [Flags] enum BackupMode : int
     {
-        None, Restore, Backukp, Both
+        None, Restore, Backup, Both
+    };
+
+    [Flags]
+    enum SecondaryIndexType : int
+    {
+        None, Key, Value, Both
     };
 
     public class Program
@@ -62,7 +76,7 @@ namespace FASTER.benchmark
 
             if (b == BenchmarkType.Ycsb)
             {
-                var test = new FASTER_YcsbBenchmark(options.ThreadCount, options.NumaStyle, options.Distribution, options.ReadPercent, options.Backup);
+                var test = new FASTER_YcsbBenchmark(options.ThreadCount, options.NumaStyle, options.Distribution, options.ReadPercent, options.Backup, options.SecondaryIndexType);
                 test.Run();
             }
             else if (b == BenchmarkType.SpanByte)

@@ -88,8 +88,10 @@ namespace FASTER.core
 
         public virtual void InitialUpdater(ref Key key, ref Input input, ref Value value, long address) { }
         public virtual bool NeedCopyUpdate(ref Key key, ref Input input, ref Value oldValue) => true;
-        public virtual void CopyUpdater(ref Key key, ref Input input, ref Value oldValue, ref Value newValue, long oldAddress, long newAddress) { }
+        public virtual void CopyUpdater(ref Key key, ref Input input, ref Value oldValue, ref Value newValue, long address) { }
         public virtual bool InPlaceUpdater(ref Key key, ref Input input, ref Value value, long address) { return true; }
+
+        public virtual bool ConcurrentDeleter(ref Key key, ref Value value, long address) { return false; }
 
         public virtual void ReadCompletionCallback(ref Key key, ref Input input, ref Output output, Context ctx, Status status, RecordInfo recordInfo) { }
         public virtual void RMWCompletionCallback(ref Key key, ref Input input, Context ctx, Status status) { }
@@ -117,7 +119,7 @@ namespace FASTER.core
         public override void SingleWriter(ref Key key, ref Value src, ref Value dst, long address) => dst = src;
 
         public override void InitialUpdater(ref Key key, ref Value input, ref Value value, long address) => value = input;
-        public override void CopyUpdater(ref Key key, ref Value input, ref Value oldValue, ref Value newValue, long oldAddress, long newAddress) => newValue = merger(input, oldValue);
+        public override void CopyUpdater(ref Key key, ref Value input, ref Value oldValue, ref Value newValue, long address) => newValue = merger(input, oldValue);
         public override bool InPlaceUpdater(ref Key key, ref Value input, ref Value value, long address) { value = merger(input, value); return true; }
 
         public override void ReadCompletionCallback(ref Key key, ref Value input, ref Value output, Context ctx, Status status, RecordInfo recordInfo) { }

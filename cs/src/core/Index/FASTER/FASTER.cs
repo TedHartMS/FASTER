@@ -37,7 +37,6 @@ namespace FASTER.core
         private readonly CopyReadsToTail CopyReadsToTail;
         private readonly bool FoldOverSnapshot;
         internal readonly int sectorSize;
-        private readonly bool WriteDefaultOnDelete;
         internal bool RelaxedCPR;
 
         /// <summary>
@@ -86,6 +85,17 @@ namespace FASTER.core
         internal ConcurrentDictionary<string, CommitPoint> _recoveredSessions;
 
         /// <summary>
+        /// This FASTER instance support indexes that receive updates immediately on relevant FASTER operations,
+        /// when they are done in the mutable region.
+        /// </summary>
+        public readonly bool SupportsMutableIndexes;
+
+        /// <summary>
+        /// Manages secondary indexes for this FASTER instance.
+        /// </summary>
+        public SecondaryIndexBroker<Key, Value> SecondaryIndexBroker { get; } = new SecondaryIndexBroker<Key, Value>();
+
+        /// <summary>
         /// Create FASTER instance
         /// </summary>
         /// <param name="size">Size of core index (#cache lines)</param>
@@ -94,10 +104,11 @@ namespace FASTER.core
         /// <param name="serializerSettings">Serializer settings</param>
         /// <param name="comparer">FASTER equality comparer for key</param>
         /// <param name="variableLengthStructSettings"></param>
+        /// <param name="supportsMutableIndexes">If true, this FASTER instance supports mutable indexes</param>
         public FasterKV(long size, LogSettings logSettings,
             CheckpointSettings checkpointSettings = null, SerializerSettings<Key, Value> serializerSettings = null,
             IFasterEqualityComparer<Key> comparer = null,
-            VariableLengthStructSettings<Key, Value> variableLengthStructSettings = null)
+            VariableLengthStructSettings<Key, Value> variableLengthStructSettings = null, bool supportsMutableIndexes = false)
         {
             if (comparer != null)
                 this.comparer = comparer;
@@ -162,8 +173,6 @@ namespace FASTER.core
             if ((!Utility.IsBlittable<Key>() && variableLengthStructSettings?.keyLength == null) ||
                 (!Utility.IsBlittable<Value>() && variableLengthStructSettings?.valueLength == null))
             {
-                WriteDefaultOnDelete = true;
-
                 hlog = new GenericAllocator<Key, Value>(logSettings, serializerSettings, this.comparer, null, epoch);
                 Log = new LogAccessor<Key, Value>(this, hlog);
                 if (UseReadCache)
@@ -221,6 +230,8 @@ namespace FASTER.core
                     ReadCache = new LogAccessor<Key, Value>(this, readcache);
                 }
             }
+
+            this.SupportsMutableIndexes = supportsMutableIndexes;
 
             hlog.Initialize();
 
@@ -591,6 +602,18 @@ namespace FASTER.core
             if (internalStatus == OperationStatus.SUCCESS || internalStatus == OperationStatus.NOTFOUND)
             {
                 status = (Status)internalStatus;
+                if (this.SupportsMutableIndexes && pcontext.IsNewRecord)
+                {
+                    ref RecordInfo recordInfo = ref this.RecordAccessor.SpinLockRecordInfo(pcontext.logicalAddress);
+                    if (!recordInfo.Invalid && !recordInfo.Tombstone)
+                    {
+                        if (this.SecondaryIndexBroker.MutableKeyIndexCount > 0)
+                            this.SecondaryIndexBroker.Insert(ref key);
+                        if (this.SecondaryIndexBroker.MutableValueIndexCount > 0)
+                            this.SecondaryIndexBroker.Insert(ref value, pcontext.logicalAddress);
+                    }
+                    recordInfo.Unlock();
+                }
             }
             else
             {
@@ -618,6 +641,18 @@ namespace FASTER.core
             if (internalStatus == OperationStatus.SUCCESS || internalStatus == OperationStatus.NOTFOUND)
             {
                 status = (Status)internalStatus;
+                if (this.SupportsMutableIndexes && pcontext.IsNewRecord)
+                {
+                    ref RecordInfo recordInfo = ref this.RecordAccessor.SpinLockRecordInfo(pcontext.logicalAddress);
+                    if (!recordInfo.Invalid && !recordInfo.Tombstone)
+                    {
+                        if (this.SecondaryIndexBroker.MutableKeyIndexCount > 0)
+                            this.SecondaryIndexBroker.Insert(ref key);
+                        if (this.SecondaryIndexBroker.MutableValueIndexCount > 0)
+                            this.SecondaryIndexBroker.Insert(ref this.hlog.GetValue(this.hlog.GetPhysicalAddress(pcontext.logicalAddress)), pcontext.logicalAddress);
+                    }
+                    recordInfo.Unlock();
+                }
             }
             else
             {

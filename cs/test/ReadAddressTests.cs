@@ -91,10 +91,10 @@ namespace FASTER.test.readaddress
                 base.InitialUpdater(ref key, ref input, ref value, address);
             }
 
-            public override void CopyUpdater(ref Key key, ref Value input, ref Value oldValue, ref Value newValue, long oldAddress, long newAddress)
+            public override void CopyUpdater(ref Key key, ref Value input, ref Value oldValue, ref Value newValue, long newAddress)
             {
                 this.lastWriteAddress = newAddress;
-                base.CopyUpdater(ref key, ref input, ref oldValue, ref newValue, oldAddress, newAddress);
+                base.CopyUpdater(ref key, ref input, ref oldValue, ref newValue, newAddress);
             }
 
             // Track the recordInfo for its PreviousAddress.
