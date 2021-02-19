@@ -181,6 +181,12 @@ namespace FASTER.test
         public void CopyUpdater(ref Key key, ref Input input, ref VLValue oldValue, ref VLValue newValue)
         {
         }
+
+#if !NETSTANDARD2_1
+        public void Lock(ref RecordInfo recordInfo, ref Key key, ref VLValue value) { }
+
+        public void Unlock(ref RecordInfo recordInfo, ref Key key, ref VLValue value) { }
+#endif
     }
 
     public class VLFunctions2 : IFunctions<VLValue, VLValue, Input, int[], Empty>
@@ -252,5 +258,11 @@ namespace FASTER.test
         public void CopyUpdater(ref VLValue key, ref Input input, ref VLValue oldValue, ref VLValue newValue)
         {
         }
+
+#if !NETSTANDARD2_1
+        public void Lock(ref RecordInfo recordInfo, ref VLValue key, ref VLValue value) { }
+
+        public void Unlock(ref RecordInfo recordInfo, ref VLValue key, ref VLValue value) { }
+#endif
     }
 }

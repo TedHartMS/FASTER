@@ -144,5 +144,39 @@ namespace FASTER.core
         /// <param name="address">The logical address of the record being copied to; can be used as a RecordId by indexing or passed to <see cref="RecordAccessor{Key, Value}"/></param>
         /// <returns>True if handled by the Functions implementation, else false</returns>
         public bool ConcurrentDeleter(ref Key key, ref Value value, long address);
+
+        /// <summary>
+        /// User-provided lock call, defaulting to no-op. A default exclusive implementation is available via <see cref="RecordInfo.SpinLock()"/>.
+        /// See also <see cref="IntExclusiveLocker"/> to use two bits of an existing int value.
+        /// </summary>
+        /// <param name="recordInfo">The header for the current record</param>
+        /// <param name="key">The key for the current record</param>
+        /// <param name="value">The value for the current record</param>
+        /// <remarks>
+        /// This is called only for records guaranteed to be in the mutable range.
+        /// </remarks>
+        void Lock(ref RecordInfo recordInfo, ref Key key, ref Value value)
+#if NETSTANDARD2_1
+            {}
+#else
+            ;
+#endif
+
+        /// <summary>
+        /// User-provided unlock call, defaulting to no-op. A default exclusive implementation is available via <see cref="RecordInfo.Unlock()"/>.
+        /// See also <see cref="IntExclusiveLocker"/> to use two bits of an existing int value.
+        /// </summary>
+        /// <param name="recordInfo">The header for the current record</param>
+        /// <param name="key">The key for the current record</param>
+        /// <param name="value">The value for the current record</param>
+        /// <remarks>
+        /// This is called only for records guaranteed to be in the mutable range.
+        /// </remarks>
+        void Unlock(ref RecordInfo recordInfo, ref Key key, ref Value value)
+#if NETSTANDARD2_1
+            {}
+#else
+            ;
+#endif
     }
 }

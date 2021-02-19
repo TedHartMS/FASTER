@@ -258,5 +258,11 @@ namespace FASTER.test.recovery.objects
         public void RMWCompletionCallback(ref MyKey key, ref MyInput input, MyContext ctx, Status status) { }
         public void DeleteCompletionCallback(ref MyKey key, MyContext ctx) { }
         public void CheckpointCompletionCallback(string sessionId, CommitPoint commitPoint) { }
+
+#if !NETSTANDARD2_1
+        public void Lock(ref RecordInfo recordInfo, ref MyKey key, ref MyValue value) { }
+
+        public void Unlock(ref RecordInfo recordInfo, ref MyKey key, ref MyValue value) { }
+#endif
     }
 }

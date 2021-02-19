@@ -745,36 +745,39 @@ namespace FASTER.core
                 _clientSession.functions.ConcurrentReader(ref key, ref input, ref value, ref dst);
             }
 
-            public bool ConcurrentWriter(ref Key key, ref Value src, ref Value dst, long address)
-            {
-                if (!_clientSession.fht.SupportsMutableIndexes)
-                    return _clientSession.functions.ConcurrentWriter(ref key, ref src, ref dst);
+            public bool ConcurrentWriter(ref Key key, ref Value src, ref Value dst, long address) 
+                => !_clientSession.fht.SupportsMutableIndexes || _clientSession.fht.SecondaryIndexBroker.MutableValueIndexCount == 0
+                    ? _clientSession.functions.ConcurrentWriter(ref key, ref src, ref dst)
+                    : ConcurrentWriterSI(ref key, ref src, ref dst, address);
 
-                ref RecordInfo recordInfo = ref _clientSession.fht.RecordAccessor.SpinLockRecordInfo(address);
+            private bool ConcurrentWriterSI(ref Key key, ref Value src, ref Value dst, long address)
+            {
+                ref RecordInfo recordInfo = ref this.Lock(address, ref key, ref dst);
                 try
                 {
                     if (!recordInfo.Tombstone && _clientSession.functions.ConcurrentWriter(ref key, ref src, ref dst))
                     {
                         // KeyIndexes do not need notification of in-place updates because the key does not change.
-                        if (_clientSession.fht.SecondaryIndexBroker.MutableValueIndexCount > 0)
-                            _clientSession.fht.SecondaryIndexBroker.Upsert(ref dst, address);
+                        _clientSession.fht.SecondaryIndexBroker.Upsert(ref dst, address);
                         return true;
                     }
                 }
                 finally
                 {
-                    recordInfo.Unlock();
+                    this.Unlock(ref recordInfo, ref key, ref dst);
                 }
                 return false;
             }
 
             public bool ConcurrentDeleter(ref Key key, ref Value value, long address)
-            {
                 // Non-Advanced IFunctions has no ConcurrentDeleter
-                if (!_clientSession.fht.SupportsMutableIndexes)
-                    return false;
+                => !_clientSession.fht.SupportsMutableIndexes || _clientSession.fht.SecondaryIndexBroker.Count == 0
+                        ? false
+                        : ConcurrentDeleterSI(ref key, ref value, address);
 
-                ref RecordInfo recordInfo = ref _clientSession.fht.RecordAccessor.SpinLockRecordInfo(address);
+            private bool ConcurrentDeleterSI(ref Key key, ref Value value, long address)
+            {
+                ref RecordInfo recordInfo = ref this.Lock(address, ref key, ref value);
                 try
                 {
                     if (_clientSession.fht.SecondaryIndexBroker.MutableKeyIndexCount > 0)
@@ -785,7 +788,7 @@ namespace FASTER.core
                 }
                 finally
                 {
-                    recordInfo.Unlock();
+                    this.Unlock(ref recordInfo, ref key, ref value);
                 }
                 return true;
             }
@@ -818,25 +821,26 @@ namespace FASTER.core
                 _clientSession.functions.InitialUpdater(ref key, ref input, ref value);
             }
 
-            public bool InPlaceUpdater(ref Key key, ref Input input, ref Value value, long address)
-            {
-                if (!_clientSession.fht.SupportsMutableIndexes)
-                    return _clientSession.functions.InPlaceUpdater(ref key, ref input, ref value);
+            public bool InPlaceUpdater(ref Key key, ref Input input, ref Value value, long address) 
+                => !_clientSession.fht.SupportsMutableIndexes || _clientSession.fht.SecondaryIndexBroker.MutableValueIndexCount == 0
+                    ? _clientSession.functions.InPlaceUpdater(ref key, ref input, ref value)
+                    : InPlaceUpdaterSI(ref key, ref input, ref value, address);
 
-                ref RecordInfo recordInfo = ref _clientSession.fht.RecordAccessor.SpinLockRecordInfo(address);
+            private bool InPlaceUpdaterSI(ref Key key, ref Input input, ref Value value, long address)
+            {
+                ref RecordInfo recordInfo = ref this.Lock(address, ref key, ref value);
                 try
                 {
                     if (!recordInfo.Tombstone && _clientSession.functions.InPlaceUpdater(ref key, ref input, ref value))
                     {
                         // KeyIndexes do not need notification of in-place updates because the key does not change.
-                        if (_clientSession.fht.SecondaryIndexBroker.MutableValueIndexCount > 0)
-                            _clientSession.fht.SecondaryIndexBroker.Upsert(ref value, address);
+                        _clientSession.fht.SecondaryIndexBroker.Upsert(ref value, address);
                         return true;
                     }
                 }
                 finally
                 {
-                    recordInfo.Unlock();
+                    this.Unlock(ref recordInfo, ref key, ref value);
                 }
                 return false;
             }
@@ -883,6 +887,20 @@ namespace FASTER.core
 
                 return new VarLenHeapContainer<Input>(ref input, _clientSession.inputVariableLengthStruct, _clientSession.fht.hlog.bufferPool);
             }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            private ref RecordInfo Lock(long address, ref Key key, ref Value value)
+            {
+                ref RecordInfo recordInfo = ref _clientSession.fht.RecordAccessor.GetRecordInfo(address);
+                _clientSession.functions.Lock(ref recordInfo, ref key, ref value);
+                return ref recordInfo;
+            }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public void Lock(ref RecordInfo recordInfo, ref Key key, ref Value value) => _clientSession.functions.Lock(ref recordInfo, ref key, ref value);
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public void Unlock(ref RecordInfo recordInfo, ref Key key, ref Value value) => _clientSession.functions.Unlock(ref recordInfo, ref key, ref value);
         }
     }
 }

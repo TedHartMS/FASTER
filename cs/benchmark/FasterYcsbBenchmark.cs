@@ -34,7 +34,7 @@ namespace FASTER.benchmark
         const int kPeriodicCheckpointMilliseconds = 0;
 #else
         const bool kDumpDistribution = false;
-        const bool kUseSmallData = false;
+        const bool kUseSmallData = true; // false;
         const bool kUseSyntheticData = false;
         const bool kSmallMemoryLog = false;
         const bool kAffinitizedSession = true;

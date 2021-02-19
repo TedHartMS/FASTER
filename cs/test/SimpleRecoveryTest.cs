@@ -324,6 +324,12 @@ namespace FASTER.test.recovery.sumstore.simple
         {
             newValue.numClicks += oldValue.numClicks + input.numClicks.numClicks;
         }
+
+#if !NETSTANDARD2_1
+        public void Lock(ref RecordInfo recordInfo, ref AdId key, ref NumClicks value) { }
+
+        public void Unlock(ref RecordInfo recordInfo, ref AdId key, ref NumClicks value) { }
+#endif
     }
 }
  

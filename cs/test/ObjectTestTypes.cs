@@ -143,6 +143,12 @@ namespace FASTER.test
         {
             dst = src;
         }
+
+#if !NETSTANDARD2_1
+        public void Lock(ref RecordInfo recordInfo, ref MyKey key, ref MyValue value) { }
+
+        public void Unlock(ref RecordInfo recordInfo, ref MyKey key, ref MyValue value) { }
+#endif
     }
 
     public class MyFunctionsDelete : IFunctions<MyKey, MyValue, MyInput, MyOutput, int>
@@ -224,6 +230,12 @@ namespace FASTER.test
         {
             dst = src;
         }
+
+#if !NETSTANDARD2_1
+        public void Lock(ref RecordInfo recordInfo, ref MyKey key, ref MyValue value) { }
+
+        public void Unlock(ref RecordInfo recordInfo, ref MyKey key, ref MyValue value) { }
+#endif
     }
 
     public class MixedFunctions : IFunctions<int, MyValue, MyInput, MyOutput, Empty>
@@ -286,6 +298,12 @@ namespace FASTER.test
         {
             dst = src;
         }
+
+#if !NETSTANDARD2_1
+        public void Lock(ref RecordInfo recordInfo, ref int key, ref MyValue value) { }
+
+        public void Unlock(ref RecordInfo recordInfo, ref int key, ref MyValue value) { }
+#endif
     }
 
     public class MyLargeValue
@@ -391,5 +409,11 @@ namespace FASTER.test
         {
             dst = src;
         }
+
+#if !NETSTANDARD2_1
+        public void Lock(ref RecordInfo recordInfo, ref MyKey key, ref MyLargeValue value) { }
+
+        public void Unlock(ref RecordInfo recordInfo, ref MyKey key, ref MyLargeValue value) { }
+#endif
     }
 }

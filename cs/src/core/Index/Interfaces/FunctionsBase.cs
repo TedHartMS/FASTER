@@ -33,6 +33,11 @@ namespace FASTER.core
         public virtual void UpsertCompletionCallback(ref Key key, ref Value value, Context ctx) { }
         public virtual void DeleteCompletionCallback(ref Key key, Context ctx) { }
         public virtual void CheckpointCompletionCallback(string sessionId, CommitPoint commitPoint) { }
+
+#if !NETSTANDARD2_1
+        public virtual void Lock(ref RecordInfo recordInfo, ref Key key, ref Value value) { }
+        public virtual void Unlock(ref RecordInfo recordInfo, ref Key key, ref Value value) { }
+#endif
     }
 
     /// <summary>
@@ -98,6 +103,11 @@ namespace FASTER.core
         public virtual void UpsertCompletionCallback(ref Key key, ref Value value, Context ctx) { }
         public virtual void DeleteCompletionCallback(ref Key key, Context ctx) { }
         public virtual void CheckpointCompletionCallback(string sessionId, CommitPoint commitPoint) { }
+
+#if !NETSTANDARD2_1
+        public virtual void Lock(ref RecordInfo recordInfo, ref Key key, ref Value value) { }
+        public virtual void Unlock(ref RecordInfo recordInfo, ref Key key, ref Value value) { }
+#endif
     }
 
     /// <summary>

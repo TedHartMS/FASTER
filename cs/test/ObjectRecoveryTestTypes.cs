@@ -139,5 +139,11 @@ namespace FASTER.test.recovery.objectstore
         {
             newValue = new NumClicks { numClicks = oldValue.numClicks + input.numClicks.numClicks };
         }
+
+#if !NETSTANDARD2_1
+        public void Lock(ref RecordInfo recordInfo, ref AdId key, ref NumClicks value) { }
+
+        public void Unlock(ref RecordInfo recordInfo, ref AdId key, ref NumClicks value) { }
+#endif
     }
 }

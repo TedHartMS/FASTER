@@ -32,13 +32,6 @@ namespace FASTER.core
                 throw new FasterException("Address is not in the in-memory portion of the log");
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private unsafe ref RecordInfo GetRecordInfo(long logicalAddress)
-        {
-            VerifyIsInMemoryAddress(logicalAddress);
-            return ref this.fkv.hlog.GetInfo(this.fkv.hlog.GetPhysicalAddress(logicalAddress));
-        }
-
         /// <summary>
         /// Indicates whether the address is within the FasterKV HybridLog
         /// </summary>
@@ -48,6 +41,18 @@ namespace FASTER.core
             => this.fkv.UseReadCache && ((logicalAddress & Constants.kReadCacheBitMask) != 0);
 
         #region public interface
+
+        /// <summary>
+        /// Gets the record header for the address
+        /// </summary>
+        /// <param name="logicalAddress">The address to get the record header for</param>
+        /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public ref RecordInfo GetRecordInfo(long logicalAddress)
+        {
+            VerifyIsInMemoryAddress(logicalAddress);
+            return ref this.fkv.hlog.GetInfo(this.fkv.hlog.GetPhysicalAddress(logicalAddress));
+        }
 
         /// <summary>
         /// Indicates whether the address is within the FasterKV HybridLog logical address space (does not verify alignment)

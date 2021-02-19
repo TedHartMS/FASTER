@@ -122,6 +122,12 @@ namespace FASTER.test
             newValue.vfield1 = oldValue.vfield1 + input.ifield1;
             newValue.vfield2 = oldValue.vfield2 + input.ifield2;
         }
+
+#if !NETSTANDARD2_1
+        public void Lock(ref RecordInfo recordInfo, ref KeyStruct key, ref ValueStruct value) { }
+
+        public void Unlock(ref RecordInfo recordInfo, ref KeyStruct key, ref ValueStruct value) { }
+#endif
     }
 
     public class FunctionsCompaction : IFunctions<KeyStruct, ValueStruct, InputStruct, OutputStruct, int>
@@ -201,6 +207,12 @@ namespace FASTER.test
             newValue.vfield1 = oldValue.vfield1 + input.ifield1;
             newValue.vfield2 = oldValue.vfield2 + input.ifield2;
         }
+
+#if !NETSTANDARD2_1
+        public void Lock(ref RecordInfo recordInfo, ref KeyStruct key, ref ValueStruct value) { }
+
+        public void Unlock(ref RecordInfo recordInfo, ref KeyStruct key, ref ValueStruct value) { }
+#endif
     }
 
     public class FunctionsCopyOnWrite : IFunctions<KeyStruct, ValueStruct, InputStruct, OutputStruct, Empty>
@@ -278,5 +290,11 @@ namespace FASTER.test
             newValue.vfield1 = oldValue.vfield1 + input.ifield1;
             newValue.vfield2 = oldValue.vfield2 + input.ifield2;
         }
+
+#if !NETSTANDARD2_1
+        public void Lock(ref RecordInfo recordInfo, ref KeyStruct key, ref ValueStruct value) { }
+
+        public void Unlock(ref RecordInfo recordInfo, ref KeyStruct key, ref ValueStruct value) { }
+#endif
     }
 }

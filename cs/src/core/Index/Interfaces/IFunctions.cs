@@ -125,6 +125,40 @@ namespace FASTER.core
         /// <param name="src">The value to be copied to <paramref name="dst"/></param>
         /// <param name="dst">The location where <paramref name="src"/> is to be copied; because this method is called only for in-place updates, there is a previous value there.</param>
         bool ConcurrentWriter(ref Key key, ref Value src, ref Value dst);
+
+        /// <summary>
+        /// User-provided lock call, defaulting to no-op. A default exclusive implementation is available via <see cref="RecordInfo.SpinLock()"/>.
+        /// See also <see cref="IntExclusiveLocker"/> to use two bits of an existing int value.
+        /// </summary>
+        /// <param name="recordInfo">The header for the current record</param>
+        /// <param name="key">The key for the current record</param>
+        /// <param name="value">The value for the current record</param>
+        /// <remarks>
+        /// This is called only for records guaranteed to be in the mutable range.
+        /// </remarks>
+        void Lock(ref RecordInfo recordInfo, ref Key key, ref Value value)
+#if NETSTANDARD2_1
+            {}
+#else
+            ;
+#endif
+
+        /// <summary>
+        /// User-provided unlock call, defaulting to no-op. A default exclusive implementation is available via <see cref="RecordInfo.Unlock()"/>.
+        /// See also <see cref="IntExclusiveLocker"/> to use two bits of an existing int value.
+        /// </summary>
+        /// <param name="recordInfo">The header for the current record</param>
+        /// <param name="key">The key for the current record</param>
+        /// <param name="value">The value for the current record</param>
+        /// <remarks>
+        /// This is called only for records guaranteed to be in the mutable range.
+        /// </remarks>
+        void Unlock(ref RecordInfo recordInfo, ref Key key, ref Value value)
+#if NETSTANDARD2_1
+            {}
+#else
+            ;
+#endif
     }
 
     /// <summary>

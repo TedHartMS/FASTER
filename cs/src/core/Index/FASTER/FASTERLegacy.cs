@@ -412,6 +412,10 @@ namespace FASTER.core
             {
                 return new StandardHeapContainer<Input>(ref input);
             }
+
+            public void Lock(ref RecordInfo recordInfo, ref Key key, ref Value value) { }
+
+            public void Unlock(ref RecordInfo recordInfo, ref Key key, ref Value value) { }
         }
     }
 
