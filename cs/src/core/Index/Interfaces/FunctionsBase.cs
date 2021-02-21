@@ -35,6 +35,7 @@ namespace FASTER.core
         public virtual void CheckpointCompletionCallback(string sessionId, CommitPoint commitPoint) { }
 
 #if !NETSTANDARD2_1
+        public bool SupportsLocks => false;
         public virtual void Lock(ref RecordInfo recordInfo, ref Key key, ref Value value) { }
         public virtual void Unlock(ref RecordInfo recordInfo, ref Key key, ref Value value) { }
 #endif
@@ -104,10 +105,9 @@ namespace FASTER.core
         public virtual void DeleteCompletionCallback(ref Key key, Context ctx) { }
         public virtual void CheckpointCompletionCallback(string sessionId, CommitPoint commitPoint) { }
 
-#if !NETSTANDARD2_1
+        public bool SupportsLocks => false;
         public virtual void Lock(ref RecordInfo recordInfo, ref Key key, ref Value value) { }
         public virtual void Unlock(ref RecordInfo recordInfo, ref Key key, ref Value value) { }
-#endif
     }
 
     /// <summary>

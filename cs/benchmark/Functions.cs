@@ -81,6 +81,8 @@ namespace FASTER.benchmark
             newValue.value = input.value + oldValue.value;
         }
 
+        public bool SupportsLocks => false;
+
         public void Lock(ref RecordInfo recordInfo, ref Key key, ref Value value) { }
 
         public void Unlock(ref RecordInfo recordInfo, ref Key key, ref Value value) { }

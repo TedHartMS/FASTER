@@ -146,6 +146,16 @@ namespace FASTER.core
         public bool ConcurrentDeleter(ref Key key, ref Value value, long address);
 
         /// <summary>
+        /// Whether this Functions implementation actually locks in <see cref="Lock(ref RecordInfo, ref Key, ref Value)"/> and <see cref="Unlock(ref RecordInfo, ref Key, ref Value)"/>
+        /// </summary>
+        bool SupportsLocks
+#if NETSTANDARD2_1
+            => false;
+#else
+            { get; }
+#endif
+
+        /// <summary>
         /// User-provided lock call, defaulting to no-op. A default exclusive implementation is available via <see cref="RecordInfo.SpinLock()"/>.
         /// See also <see cref="IntExclusiveLocker"/> to use two bits of an existing int value.
         /// </summary>

@@ -145,8 +145,8 @@ namespace FASTER.test
         }
 
 #if !NETSTANDARD2_1
+        public bool SupportsLocks => false;
         public void Lock(ref RecordInfo recordInfo, ref MyKey key, ref MyValue value) { }
-
         public void Unlock(ref RecordInfo recordInfo, ref MyKey key, ref MyValue value) { }
 #endif
     }
@@ -232,8 +232,8 @@ namespace FASTER.test
         }
 
 #if !NETSTANDARD2_1
+        public bool SupportsLocks => false;
         public void Lock(ref RecordInfo recordInfo, ref MyKey key, ref MyValue value) { }
-
         public void Unlock(ref RecordInfo recordInfo, ref MyKey key, ref MyValue value) { }
 #endif
     }
@@ -300,8 +300,8 @@ namespace FASTER.test
         }
 
 #if !NETSTANDARD2_1
+        public bool SupportsLocks => false;
         public void Lock(ref RecordInfo recordInfo, ref int key, ref MyValue value) { }
-
         public void Unlock(ref RecordInfo recordInfo, ref int key, ref MyValue value) { }
 #endif
     }
@@ -411,8 +411,8 @@ namespace FASTER.test
         }
 
 #if !NETSTANDARD2_1
+        public bool SupportsLocks => false;
         public void Lock(ref RecordInfo recordInfo, ref MyKey key, ref MyLargeValue value) { }
-
         public void Unlock(ref RecordInfo recordInfo, ref MyKey key, ref MyLargeValue value) { }
 #endif
     }

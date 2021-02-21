@@ -745,6 +745,7 @@ namespace FASTER.core
                 _clientSession.functions.ConcurrentReader(ref key, ref input, ref value, ref dst);
             }
 
+#if false // internal no-lock
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public bool ConcurrentWriter(ref Key key, ref Value src, ref Value dst, long address)
             {
@@ -757,14 +758,14 @@ namespace FASTER.core
                 }
                 return false;
             }
+#endif
 
-#if false // outer -- experimental
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public bool ConcurrentWriter(ref Key key, ref Value src, ref Value dst, long address)
             {
-                return address > 0 // surrogate for: _clientSession.recordLocker is null
-                    ? ConcurrentWriterNoLock(ref key, ref src, ref dst, address)
-                    : ConcurrentWriterLock(ref key, ref src, ref dst, address);
+                return _clientSession.functions.SupportsLocks
+                    ? ConcurrentWriterLock(ref key, ref src, ref dst, address)
+                    : ConcurrentWriterNoLock(ref key, ref src, ref dst, address);
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -782,12 +783,12 @@ namespace FASTER.core
 
             private bool ConcurrentWriterLock(ref Key key, ref Value src, ref Value dst, long address)
             {
-                RecordInfo recordInfo = default;
+                RecordInfo recordInfo = default;  // TODO: Get a real recordInfo here
                 this.Lock(ref recordInfo, ref key, ref dst);
                 try
                 {
                     // KeyIndexes do not need notification of in-place updates because the key does not change.
-                    if (_clientSession.functions.ConcurrentWriter(ref key, ref src, ref dst))
+                    if (!recordInfo.Tombstone && _clientSession.functions.ConcurrentWriter(ref key, ref src, ref dst))
                     {
                         if (_clientSession.fht.SupportsMutableIndexes && _clientSession.fht.SecondaryIndexBroker.MutableValueIndexCount > 0)
                             _clientSession.fht.SecondaryIndexBroker.Upsert(ref dst, address);
@@ -801,6 +802,7 @@ namespace FASTER.core
                 return false;
             }
 
+#if false // outer -- experimental
             private bool ConcurrentWriterSI(ref RecordInfo recordInfo, ref Key key, ref Value src, ref Value dst, long address)
             {
 #if true
@@ -959,6 +961,8 @@ namespace FASTER.core
                 _clientSession.functions.Lock(ref recordInfo, ref key, ref value);
                 return ref recordInfo;
             }
+
+            public bool SupportsLocks => _clientSession.functions.SupportsLocks;
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void Lock(ref RecordInfo recordInfo, ref Key key, ref Value value) => _clientSession.functions.Lock(ref recordInfo, ref key, ref value);

@@ -31,6 +31,7 @@ namespace FASTER.core
         public void SingleWriter(ref Key key, ref Value src, ref Value dst) { _functions.Copy(ref src, ref dst, _allocator.ValueLength); }
         public void UpsertCompletionCallback(ref Key key, ref Value value, Empty ctx) { }
         public void DeleteCompletionCallback(ref Key key, Empty ctx) { }
+        public bool SupportsLocks => false;
         public void Lock(ref RecordInfo recordInfo, ref Key key, ref Value value) { }
         public void Unlock(ref RecordInfo recordInfo, ref Key key, ref Value value) { }
     }
@@ -58,6 +59,7 @@ namespace FASTER.core
         public void SingleWriter(ref Key key, ref Value src, ref Value dst) { _functions.Copy(ref src, ref dst, null); }
         public void UpsertCompletionCallback(ref Key key, ref Value value, Empty ctx) { }
         public void DeleteCompletionCallback(ref Key key, Empty ctx) { }
+        public bool SupportsLocks => false;
         public void Lock(ref RecordInfo recordInfo, ref Key key, ref Value value) { }
         public void Unlock(ref RecordInfo recordInfo, ref Key key, ref Value value) { }
     }

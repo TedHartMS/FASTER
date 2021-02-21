@@ -885,6 +885,8 @@ namespace FASTER.core
                 return ref recordInfo;
             }
 
+            public bool SupportsLocks => _clientSession.functions.SupportsLocks;
+
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void Lock(ref RecordInfo recordInfo, ref Key key, ref Value value) => _clientSession.functions.Lock(ref recordInfo, ref key, ref value);
 

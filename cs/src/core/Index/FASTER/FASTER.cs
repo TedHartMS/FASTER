@@ -602,6 +602,7 @@ namespace FASTER.core
             if (internalStatus == OperationStatus.SUCCESS || internalStatus == OperationStatus.NOTFOUND)
             {
                 status = (Status)internalStatus;
+#if false // TODO indexing
                 if (this.SupportsMutableIndexes && pcontext.IsNewRecord)
                 {
                     ref RecordInfo recordInfo = ref this.RecordAccessor.SpinLockRecordInfo(pcontext.logicalAddress);
@@ -614,6 +615,7 @@ namespace FASTER.core
                     }
                     recordInfo.Unlock();
                 }
+#endif
             }
             else
             {
@@ -641,6 +643,7 @@ namespace FASTER.core
             if (internalStatus == OperationStatus.SUCCESS || internalStatus == OperationStatus.NOTFOUND)
             {
                 status = (Status)internalStatus;
+#if false // TODO indexing
                 if (this.SupportsMutableIndexes && pcontext.IsNewRecord)
                 {
                     ref RecordInfo recordInfo = ref this.RecordAccessor.SpinLockRecordInfo(pcontext.logicalAddress);
@@ -653,6 +656,7 @@ namespace FASTER.core
                     }
                     recordInfo.Unlock();
                 }
+#endif
             }
             else
             {

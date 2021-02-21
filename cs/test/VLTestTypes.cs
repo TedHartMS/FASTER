@@ -183,8 +183,8 @@ namespace FASTER.test
         }
 
 #if !NETSTANDARD2_1
+        public bool SupportsLocks => false;
         public void Lock(ref RecordInfo recordInfo, ref Key key, ref VLValue value) { }
-
         public void Unlock(ref RecordInfo recordInfo, ref Key key, ref VLValue value) { }
 #endif
     }
@@ -260,8 +260,8 @@ namespace FASTER.test
         }
 
 #if !NETSTANDARD2_1
+        public bool SupportsLocks => false;
         public void Lock(ref RecordInfo recordInfo, ref VLValue key, ref VLValue value) { }
-
         public void Unlock(ref RecordInfo recordInfo, ref VLValue key, ref VLValue value) { }
 #endif
     }

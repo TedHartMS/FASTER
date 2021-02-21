@@ -260,8 +260,8 @@ namespace FASTER.test.recovery.objects
         public void CheckpointCompletionCallback(string sessionId, CommitPoint commitPoint) { }
 
 #if !NETSTANDARD2_1
+        public bool SupportsLocks => false;
         public void Lock(ref RecordInfo recordInfo, ref MyKey key, ref MyValue value) { }
-
         public void Unlock(ref RecordInfo recordInfo, ref MyKey key, ref MyValue value) { }
 #endif
     }

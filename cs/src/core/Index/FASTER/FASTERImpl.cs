@@ -340,12 +340,12 @@ namespace FASTER.core
             ref RecordInfo recordInfo = ref hlog.GetInfo(physicalAddress);
             if (sessionCtx.phase == Phase.REST && logicalAddress >= hlog.ReadOnlyAddress && !recordInfo.Tombstone)
             {
-#if false // original
+#if true // original
                 if (fasterSession.ConcurrentWriter(ref key, ref value, ref hlog.GetValue(physicalAddress), logicalAddress))
                 {
                     return OperationStatus.SUCCESS;
                 }
-#endif
+#else
                 ref Value recordValue = ref hlog.GetValue(physicalAddress);
                 fasterSession.Lock(ref recordInfo, ref key, ref recordValue);
                 try
@@ -357,6 +357,7 @@ namespace FASTER.core
                 {
                     fasterSession.Unlock(ref recordInfo, ref key, ref recordValue);
                 }
+#endif
                 goto CreateNewRecord;
             }
 
