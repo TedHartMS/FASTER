@@ -334,14 +334,28 @@ namespace FASTER.core
                                         out physicalAddress);
                 }
             }
-#endregion
+            #endregion
 
             // Optimization for most common case
-            if (sessionCtx.phase == Phase.REST && logicalAddress >= hlog.ReadOnlyAddress && !hlog.GetInfo(physicalAddress).Tombstone)
+            ref RecordInfo recordInfo = ref hlog.GetInfo(physicalAddress);
+            if (sessionCtx.phase == Phase.REST && logicalAddress >= hlog.ReadOnlyAddress && !recordInfo.Tombstone)
             {
+#if false // original
                 if (fasterSession.ConcurrentWriter(ref key, ref value, ref hlog.GetValue(physicalAddress), logicalAddress))
                 {
                     return OperationStatus.SUCCESS;
+                }
+#endif
+                ref Value recordValue = ref hlog.GetValue(physicalAddress);
+                fasterSession.Lock(ref recordInfo, ref key, ref recordValue);
+                try
+                {
+                    if (fasterSession.ConcurrentWriter(ref key, ref value, ref recordValue, logicalAddress))
+                        return OperationStatus.SUCCESS;
+                }
+                finally
+                {
+                    fasterSession.Unlock(ref recordInfo, ref key, ref recordValue);
                 }
                 goto CreateNewRecord;
             }
@@ -1134,9 +1148,9 @@ namespace FASTER.core
             if (hlog.ValueHasObjects())
                 value = default;
         }
-        #endregion
+#endregion
 
-        #region ContainsKeyInMemory
+#region ContainsKeyInMemory
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal Status InternalContainsKeyInMemory<Input, Output, Context, FasterSession>(
@@ -1758,9 +1772,9 @@ namespace FASTER.core
             foundPhysicalAddress = Constants.kInvalidAddress;
             return false;
         }
-        #endregion
+#endregion
 
-        #region Split Index
+#region Split Index
         private void SplitBuckets(long hash)
         {
             long masked_bucket_index = hash & state[1 - resizeInfo.version].size_mask;

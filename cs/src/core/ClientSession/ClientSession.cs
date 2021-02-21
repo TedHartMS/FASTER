@@ -745,14 +745,74 @@ namespace FASTER.core
                 _clientSession.functions.ConcurrentReader(ref key, ref input, ref value, ref dst);
             }
 
-            public bool ConcurrentWriter(ref Key key, ref Value src, ref Value dst, long address) 
-                => !_clientSession.fht.SupportsMutableIndexes || _clientSession.fht.SecondaryIndexBroker.MutableValueIndexCount == 0
-                    ? _clientSession.functions.ConcurrentWriter(ref key, ref src, ref dst)
-                    : ConcurrentWriterSI(ref key, ref src, ref dst, address);
-
-            private bool ConcurrentWriterSI(ref Key key, ref Value src, ref Value dst, long address)
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public bool ConcurrentWriter(ref Key key, ref Value src, ref Value dst, long address)
             {
-                ref RecordInfo recordInfo = ref this.Lock(address, ref key, ref dst);
+                if (_clientSession.functions.ConcurrentWriter(ref key, ref src, ref dst))
+                {
+                    // KeyIndexes do not need notification of in-place updates because the key does not change.
+                    if (_clientSession.fht.SupportsMutableIndexes && _clientSession.fht.SecondaryIndexBroker.MutableValueIndexCount > 0)
+                        _clientSession.fht.SecondaryIndexBroker.Upsert(ref dst, address);
+                    return true;
+                }
+                return false;
+            }
+
+#if false // outer -- experimental
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public bool ConcurrentWriter(ref Key key, ref Value src, ref Value dst, long address)
+            {
+                return address > 0 // surrogate for: _clientSession.recordLocker is null
+                    ? ConcurrentWriterNoLock(ref key, ref src, ref dst, address)
+                    : ConcurrentWriterLock(ref key, ref src, ref dst, address);
+            }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            private bool ConcurrentWriterNoLock(ref Key key, ref Value src, ref Value dst, long address)
+            {
+                if (_clientSession.functions.ConcurrentWriter(ref key, ref src, ref dst))
+                {
+                    // KeyIndexes do not need notification of in-place updates because the key does not change.
+                    if (_clientSession.fht.SupportsMutableIndexes && _clientSession.fht.SecondaryIndexBroker.MutableValueIndexCount > 0)
+                        _clientSession.fht.SecondaryIndexBroker.Upsert(ref dst, address);
+                    return true;
+                }
+                return false;
+            }
+
+            private bool ConcurrentWriterLock(ref Key key, ref Value src, ref Value dst, long address)
+            {
+                RecordInfo recordInfo = default;
+                this.Lock(ref recordInfo, ref key, ref dst);
+                try
+                {
+                    // KeyIndexes do not need notification of in-place updates because the key does not change.
+                    if (_clientSession.functions.ConcurrentWriter(ref key, ref src, ref dst))
+                    {
+                        if (_clientSession.fht.SupportsMutableIndexes && _clientSession.fht.SecondaryIndexBroker.MutableValueIndexCount > 0)
+                            _clientSession.fht.SecondaryIndexBroker.Upsert(ref dst, address);
+                        return true;
+                    }
+                }
+                finally
+                {
+                    this.Unlock(ref recordInfo, ref key, ref dst);
+                }
+                return false;
+            }
+
+            private bool ConcurrentWriterSI(ref RecordInfo recordInfo, ref Key key, ref Value src, ref Value dst, long address)
+            {
+#if true
+                if (!recordInfo.Tombstone && _clientSession.functions.ConcurrentWriter(ref key, ref src, ref dst))
+                {
+                    _clientSession.fht.SecondaryIndexBroker.Upsert(ref dst, address);
+                    return true;
+                }
+                return false;
+#else
+                //ref RecordInfo recordInfo = ref this.Lock(address, ref key, ref dst);
+                RecordInfo recordInfo = default;
                 try
                 {
                     if (!recordInfo.Tombstone && _clientSession.functions.ConcurrentWriter(ref key, ref src, ref dst))
@@ -764,10 +824,14 @@ namespace FASTER.core
                 }
                 finally
                 {
-                    this.Unlock(ref recordInfo, ref key, ref dst);
+                    //this.Unlock(ref recordInfo, ref key, ref dst);
                 }
+                //this.Unlock(ref recordInfo, ref key, ref dst);
+
                 return false;
+#endif
             }
+#endif // outer - experimental
 
             public bool ConcurrentDeleter(ref Key key, ref Value value, long address)
                 // Non-Advanced IFunctions has no ConcurrentDeleter
