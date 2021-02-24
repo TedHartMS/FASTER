@@ -83,8 +83,8 @@ namespace FASTER.benchmark
 
         public bool SupportsLocks => false;
 
-        public void Lock(ref RecordInfo recordInfo, ref Key key, ref Value value) { }
+        public void Lock(ref RecordInfo recordInfo, ref Key key, ref Value value, OperationType opType, ref long context) { }
 
-        public void Unlock(ref RecordInfo recordInfo, ref Key key, ref Value value) { }
+        public bool Unlock(ref RecordInfo recordInfo, ref Key key, ref Value value, OperationType opType, long context) => true;
     }
 }

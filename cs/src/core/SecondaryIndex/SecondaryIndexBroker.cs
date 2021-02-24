@@ -126,10 +126,10 @@ namespace FASTER.core
         /// Deletes a recordId keyed by a mutable value from all mutable secondary value indexes.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Delete(ref TKVValue value, long recordId)
+        public void Delete(long recordId)
         {
             foreach (var valueIndex in mutableValueIndexes)
-                valueIndex.Delete(ref value, recordId);
+                valueIndex.Delete(recordId);
         }
         #endregion Mutable ValueIndexes
 

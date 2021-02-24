@@ -450,18 +450,26 @@ namespace FASTER.core
                     internalStatus = InternalRMW(ref key, ref input, ref context, ref pcontext, fasterSession, currentCtx, serialNo);
                 while (internalStatus == OperationStatus.RETRY_NOW || internalStatus == OperationStatus.RETRY_LATER);
 
-                
+                Status status;
                 if (internalStatus == OperationStatus.SUCCESS || internalStatus == OperationStatus.NOTFOUND)
                 {
-                    return new ValueTask<RmwAsyncResult<Input, Output, Context>>(new RmwAsyncResult<Input, Output, Context>((Status)internalStatus, default));
+                    status = (Status)internalStatus;
                 }
                 else
                 {
-                    var status = HandleOperationStatus(currentCtx, currentCtx, ref pcontext, fasterSession, internalStatus, true, out diskRequest);
-
-                    if (status != Status.PENDING)
-                        return new ValueTask<RmwAsyncResult<Input, Output, Context>>(new RmwAsyncResult<Input, Output, Context>(status, default));
+                    status = HandleOperationStatus(currentCtx, currentCtx, ref pcontext, fasterSession, internalStatus, true, out diskRequest);
                 }
+
+                if (this.SupportsMutableIndexes && (status == Status.OK || status == Status.NOTFOUND) && pcontext.IsNewRecord)
+                {
+                    long physicalAddress = this.hlog.GetPhysicalAddress(pcontext.logicalAddress);
+                    ref RecordInfo recordInfo = ref this.hlog.GetInfo(physicalAddress);
+                    ref Value value = ref this.hlog.GetValue(physicalAddress);
+                    UpdateSIForInsert<Input, Output, Context, IFasterSession<Key, Value, Input, Output, Context>>(ref key, ref value, ref recordInfo, pcontext.logicalAddress, fasterSession);
+                }
+
+                if (status != Status.PENDING)
+                    return new ValueTask<RmwAsyncResult<Input, Output, Context>>(new RmwAsyncResult<Input, Output, Context>(status, default));
             }
             finally
             {

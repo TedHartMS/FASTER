@@ -32,8 +32,8 @@ namespace FASTER.core
         public void UpsertCompletionCallback(ref Key key, ref Value value, Empty ctx) { }
         public void DeleteCompletionCallback(ref Key key, Empty ctx) { }
         public bool SupportsLocks => false;
-        public void Lock(ref RecordInfo recordInfo, ref Key key, ref Value value) { }
-        public void Unlock(ref RecordInfo recordInfo, ref Key key, ref Value value) { }
+        public void Lock(ref RecordInfo recordInfo, ref Key key, ref Value value, OperationType opType, ref long context) { }
+        public bool Unlock(ref RecordInfo recordInfo, ref Key key, ref Value value, OperationType opType, long context) => true;
     }
 
     internal sealed class LogCompactFunctions<Key, Value, CompactionFunctions> : IFunctions<Key, Value, Empty, Empty, Empty>
@@ -60,8 +60,8 @@ namespace FASTER.core
         public void UpsertCompletionCallback(ref Key key, ref Value value, Empty ctx) { }
         public void DeleteCompletionCallback(ref Key key, Empty ctx) { }
         public bool SupportsLocks => false;
-        public void Lock(ref RecordInfo recordInfo, ref Key key, ref Value value) { }
-        public void Unlock(ref RecordInfo recordInfo, ref Key key, ref Value value) { }
+        public void Lock(ref RecordInfo recordInfo, ref Key key, ref Value value, OperationType opType, ref long context) { }
+        public bool Unlock(ref RecordInfo recordInfo, ref Key key, ref Value value, OperationType opType, long context) => true;
     }
 
     internal unsafe struct DefaultVariableCompactionFunctions<Key, Value> : ICompactionFunctions<Key, Value>

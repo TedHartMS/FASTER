@@ -87,10 +87,9 @@ namespace FASTER.core
         void Upsert(ref TKVValue value, long recordId, bool isMutable);
 
         /// <summary>
-        /// Removes a recordId from the secondary index's key(s) derived from the <paramref name="value"/>. Called only for mutable indexes.
+        /// Removes a recordId from the secondary index. Called only for mutable indexes.
         /// </summary>
-        /// <param name="value">The value from whose derived key(s) the <paramref name="recordId"/> is to be removed</param>
         /// <param name="recordId">The recordId to be removed</param>
-        void Delete(ref TKVValue value, long recordId);
+        void Delete(long recordId);
     }
 }

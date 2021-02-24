@@ -12,12 +12,20 @@ using System.Threading;
 
 namespace FASTER.core
 {
-    internal enum OperationType
+    /// <summary>
+    /// The type of FASTER operation being done
+    /// </summary>
+    public enum OperationType
     {
+        /// <summary>Read operation</summary>
         READ,
+        /// <summary>Read-Modify-Write operation</summary>
         RMW,
+        /// <summary>Upsert operation</summary>
         UPSERT,
+        /// <summary>Insert operation (either Upsert or RMW resulted in a new record)</summary>
         INSERT,
+        /// <summary>Delete operation</summary>
         DELETE
     }
 

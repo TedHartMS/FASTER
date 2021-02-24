@@ -16,28 +16,28 @@ namespace FASTER.test
     {
         internal class Functions : AdvancedSimpleFunctions<int, int>
         {
-            private readonly RecordAccessor<int, int> recordAccessor;
-
-            internal Functions(RecordAccessor<int, int> accessor) => this.recordAccessor = accessor;
-
-            public override void ConcurrentReader(ref int key, ref int input, ref int value, ref int dst, long address)
+            public override void ConcurrentReader(ref int key, ref int input, ref int value, ref int dst, ref RecordInfo recordInfo, long address)
             {
-                this.recordAccessor.SpinLock(address);
                 dst = value;
-                this.recordAccessor.Unlock(address);
             }
 
-            bool LockAndIncrement(ref int dst, long address)
+            bool Increment(ref int dst)
             {
-                this.recordAccessor.SpinLock(address);
                 ++dst;
-                this.recordAccessor.Unlock(address);
                 return true;
             }
 
-            public override bool ConcurrentWriter(ref int key, ref int src, ref int dst, long address) => LockAndIncrement(ref dst, address);
+            public override bool ConcurrentWriter(ref int key, ref int src, ref int dst, ref RecordInfo recordInfo, long address) => Increment(ref dst);
 
-            public override bool InPlaceUpdater(ref int key, ref int input, ref int value, long address) => LockAndIncrement(ref value, address);
+            public override bool InPlaceUpdater(ref int key, ref int input, ref int value, ref RecordInfo recordInfo, long address) => Increment(ref value);
+
+            public override bool SupportsLocks => true;
+            public override void Lock(ref RecordInfo recordInfo, ref int key, ref int value, OperationType opType, ref long context) => recordInfo.SpinLock();
+            public override bool Unlock(ref RecordInfo recordInfo, ref int key, ref int value, OperationType opType, long context)
+            {
+                recordInfo.Unlock();
+                return true;
+            }
         }
 
         private FasterKV<int, int> fkv;
@@ -49,7 +49,7 @@ namespace FASTER.test
         {
             log = Devices.CreateLogDevice(TestContext.CurrentContext.TestDirectory + "/GenericStringTests.log", deleteOnClose: true);
             fkv = new FasterKV<int, int>( 1L << 20, new LogSettings { LogDevice = log, ObjectLogDevice = null } );
-            session = fkv.For(new Functions(fkv.RecordAccessor)).NewSession<Functions>();
+            session = fkv.For(new Functions()).NewSession<Functions>();
         }
 
         [TearDown]
@@ -66,25 +66,13 @@ namespace FASTER.test
         [Test]
         public unsafe void RecordInfoLockTest()
         {
-            // Re-entrancy check
-            static void checkLatch(RecordInfo* ptr, long count)
+            for (var ii = 0; ii < 10; ++ii)
             {
-                Assert.IsTrue(RecordInfo.threadLockedRecord == ptr);
-                Assert.IsTrue(RecordInfo.threadLockedRecordEntryCount == count);
-            }
-            RecordInfo recordInfo = new RecordInfo();
-            RecordInfo* ri = (RecordInfo*)Unsafe.AsPointer(ref recordInfo);
-            checkLatch(null, 0);
-            recordInfo.SpinLock();
-            checkLatch(ri, 1);
-            recordInfo.SpinLock();
-            checkLatch(ri, 2);
-            recordInfo.Unlock();
-            checkLatch(ri, 1);
-            recordInfo.Unlock();
-            checkLatch(null, 0);
+                RecordInfo recordInfo = new RecordInfo();
+                RecordInfo* ri = &recordInfo;
 
-            XLockTest(() => recordInfo.SpinLock(), () => recordInfo.Unlock());
+                XLockTest(() => ri->SpinLock(), () => ri->Unlock());
+            }
         }
 
         private void XLockTest(Action locker, Action unlocker)
@@ -94,7 +82,14 @@ namespace FASTER.test
             const int numIters = 5000;
 
             var tasks = Enumerable.Range(0, numThreads).Select(ii => Task.Factory.StartNew(XLockTestFunc)).ToArray();
-            Task.WaitAll(tasks);
+            try
+            {
+                Task.WaitAll(tasks);
+            }
+            catch (AggregateException ex)
+            {
+                Assert.Fail(ex.InnerExceptions.First().Message);
+            }
 
             Assert.AreEqual(numThreads * numIters, lockTestValue);
 

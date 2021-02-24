@@ -11,18 +11,10 @@ namespace FASTER.core
     public class SpanByteFunctions<Key, Output, Context> : FunctionsBase<Key, SpanByte, SpanByte, Output, Context>
     {
         /// <summary>
-        /// Whether we lock values before concurrent operations
-        /// </summary>
-        protected readonly bool locking;
-
-        /// <summary>
         /// Constructor
         /// </summary>
         /// <param name="locking"></param>
-        public SpanByteFunctions(bool locking = false)
-        {
-            this.locking = locking;
-        }
+        public SpanByteFunctions(bool locking = false) : base(locking) { }
 
         /// <inheritdoc />
         public override void SingleWriter(ref Key key, ref SpanByte src, ref SpanByte dst)

@@ -79,6 +79,7 @@ namespace FASTER.benchmark
         readonly string distribution;
         readonly int readPercent;
         readonly Functions functions = new Functions();
+        SecondaryIndexType secondaryIndexType = SecondaryIndexType.None;
 
         volatile bool done = false;
 
@@ -110,7 +111,6 @@ namespace FASTER.benchmark
 
             var path = "D:\\data\\FasterYcsbBenchmark\\";
             device = Devices.CreateLogDevice(path + "hlog", preallocateFile: true);
-            var secondaryIndexType = (SecondaryIndexType)indexType_;
 
             if (kSmallMemoryLog)
                 store = new FasterKV<Key, Value>
@@ -159,7 +159,7 @@ namespace FASTER.benchmark
             int count = 0;
 #endif
 
-            var session = store.For(functions).NewSession<Functions>(null, kAffinitizedSession);
+            var session = store.For(functions).NewSession<Functions>(null, threadAffinitized: secondaryIndexType == SecondaryIndexType.None);
 
             while (!done)
             {
@@ -396,7 +396,7 @@ namespace FASTER.benchmark
             else
                 Native32.AffinitizeThreadShardedNuma((uint)thread_idx, 2); // assuming two NUMA sockets
 
-            var session = store.For(functions).NewSession<Functions>(null, kAffinitizedSession);
+            var session = store.For(functions).NewSession<Functions>(null, threadAffinitized: secondaryIndexType == SecondaryIndexType.None);
 
 #if DASHBOARD
             var tstart = Stopwatch.GetTimestamp();

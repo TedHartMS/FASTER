@@ -77,11 +77,6 @@ namespace FASTER.core
         /// </summary>
         public LogAccessor<Key, Value> ReadCache { get; }
 
-        /// <summary>
-        /// An accessor to the record at a given logical address, for use in IFunctions callbacks.
-        /// </summary>
-        public RecordAccessor<Key, Value> RecordAccessor { get; }
-
         internal ConcurrentDictionary<string, CommitPoint> _recoveredSessions;
 
         /// <summary>
@@ -130,8 +125,6 @@ namespace FASTER.core
                     this.comparer = FasterEqualityComparer.Get<Key>();
                 }
             }
-
-            this.RecordAccessor = new RecordAccessor<Key, Value>(this);
 
             if (checkpointSettings == null)
                 checkpointSettings = new CheckpointSettings();
@@ -602,29 +595,58 @@ namespace FASTER.core
             if (internalStatus == OperationStatus.SUCCESS || internalStatus == OperationStatus.NOTFOUND)
             {
                 status = (Status)internalStatus;
-#if false // TODO indexing
-                if (this.SupportsMutableIndexes && pcontext.IsNewRecord)
-                {
-                    ref RecordInfo recordInfo = ref this.RecordAccessor.SpinLockRecordInfo(pcontext.logicalAddress);
-                    if (!recordInfo.Invalid && !recordInfo.Tombstone)
-                    {
-                        if (this.SecondaryIndexBroker.MutableKeyIndexCount > 0)
-                            this.SecondaryIndexBroker.Insert(ref key);
-                        if (this.SecondaryIndexBroker.MutableValueIndexCount > 0)
-                            this.SecondaryIndexBroker.Insert(ref value, pcontext.logicalAddress);
-                    }
-                    recordInfo.Unlock();
-                }
-#endif
             }
             else
             {
                 status = HandleOperationStatus(sessionCtx, sessionCtx, ref pcontext, fasterSession, internalStatus, false, out _);
             }
 
+            if (this.SupportsMutableIndexes && (status == Status.OK || status == Status.NOTFOUND) && pcontext.IsNewRecord)
+            {
+                ref RecordInfo recordInfo = ref this.hlog.GetInfo(this.hlog.GetPhysicalAddress(pcontext.logicalAddress));
+                UpdateSIForInsert<Input, Output, Context, FasterSession>(ref key, ref value, ref recordInfo, pcontext.logicalAddress, fasterSession);
+            }
+
             Debug.Assert(serialNo >= sessionCtx.serialNum, "Operation serial numbers must be non-decreasing");
             sessionCtx.serialNum = serialNo;
             return status;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void UpdateSIForInsert<Input, Output, Context, FasterSession>(ref Key key, ref Value value, ref RecordInfo recordInfo, long address, FasterSession fasterSession)
+            where FasterSession : IFasterSession<Key, Value, Input, Output, Context>
+        {
+            if (!fasterSession.SupportsLocks)
+                UpdateSIForInsertNoLock(ref key, ref value, ref recordInfo, address);
+            else
+                UpdateSIForInsertLock<Input, Output, Context, FasterSession>(ref key, ref value, ref recordInfo, address, fasterSession);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void UpdateSIForInsertNoLock(ref Key key, ref Value value, ref RecordInfo recordInfo, long address)
+        {
+            if (!recordInfo.Invalid && !recordInfo.Tombstone)
+            {
+                if (this.SecondaryIndexBroker.MutableKeyIndexCount > 0)
+                    this.SecondaryIndexBroker.Insert(ref key);
+                if (this.SecondaryIndexBroker.MutableValueIndexCount > 0)
+                    this.SecondaryIndexBroker.Insert(ref value, address);
+            }
+        }
+
+        private void UpdateSIForInsertLock<Input, Output, Context, FasterSession>(ref Key key, ref Value value, ref RecordInfo recordInfo, long address, FasterSession fasterSession)
+            where FasterSession : IFasterSession<Key, Value, Input, Output, Context>
+        {
+            long context = 0;
+            fasterSession.Lock(ref recordInfo, ref key, ref value, OperationType.INSERT, ref context);
+            try
+            {
+                UpdateSIForInsertNoLock(ref key, ref value, ref recordInfo, address);
+            }
+            finally
+            {
+                fasterSession.Unlock(ref recordInfo, ref key, ref value, OperationType.INSERT, context);
+            }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -643,24 +665,18 @@ namespace FASTER.core
             if (internalStatus == OperationStatus.SUCCESS || internalStatus == OperationStatus.NOTFOUND)
             {
                 status = (Status)internalStatus;
-#if false // TODO indexing
-                if (this.SupportsMutableIndexes && pcontext.IsNewRecord)
-                {
-                    ref RecordInfo recordInfo = ref this.RecordAccessor.SpinLockRecordInfo(pcontext.logicalAddress);
-                    if (!recordInfo.Invalid && !recordInfo.Tombstone)
-                    {
-                        if (this.SecondaryIndexBroker.MutableKeyIndexCount > 0)
-                            this.SecondaryIndexBroker.Insert(ref key);
-                        if (this.SecondaryIndexBroker.MutableValueIndexCount > 0)
-                            this.SecondaryIndexBroker.Insert(ref this.hlog.GetValue(this.hlog.GetPhysicalAddress(pcontext.logicalAddress)), pcontext.logicalAddress);
-                    }
-                    recordInfo.Unlock();
-                }
-#endif
             }
             else
             {
                 status = HandleOperationStatus(sessionCtx, sessionCtx, ref pcontext, fasterSession, internalStatus, false, out _);
+            }
+
+            if (this.SupportsMutableIndexes && (status == Status.OK || status == Status.NOTFOUND) && pcontext.IsNewRecord)
+            {
+                long physicalAddress = this.hlog.GetPhysicalAddress(pcontext.logicalAddress);
+                ref RecordInfo recordInfo = ref this.hlog.GetInfo(physicalAddress);
+                ref Value value = ref this.hlog.GetValue(physicalAddress);
+                UpdateSIForInsert<Input, Output, Context, FasterSession>(ref key, ref value, ref recordInfo, pcontext.logicalAddress, fasterSession);
             }
 
             Debug.Assert(serialNo >= sessionCtx.serialNum, "Operation serial numbers must be non-decreasing");
@@ -692,6 +708,13 @@ namespace FASTER.core
             else
             {
                 status = HandleOperationStatus(sessionCtx, sessionCtx, ref pcontext, fasterSession, internalStatus, false, out _);
+            }
+
+            if (this.SupportsMutableIndexes && status == Status.OK && pcontext.IsNewRecord)
+            {
+                // No need to lock here; we have just written a new record with a tombstone, so it will not be changed
+                // TODO - but this can race with an INSERT...
+                this.UpdateSIForDelete(ref key, pcontext.logicalAddress, isNewRecord: true);
             }
 
             Debug.Assert(serialNo >= sessionCtx.serialNum, "Operation serial numbers must be non-decreasing");

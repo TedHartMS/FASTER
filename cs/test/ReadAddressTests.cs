@@ -6,8 +6,6 @@ using FASTER.core;
 using System.IO;
 using NUnit.Framework;
 using System.Threading.Tasks;
-using System.Collections.Generic;
-using System.Diagnostics;
 
 namespace FASTER.test.readaddress
 {
@@ -61,41 +59,35 @@ namespace FASTER.test.readaddress
             }
         }
 
+        private class InsertValueIndex : ISecondaryValueIndex<Value>
+        {
+            public long lastWriteAddress;
+
+            public string Name => nameof(InsertValueIndex);
+
+            public bool IsMutable => true;
+
+            public void Delete(long recordId) { }
+
+            public void Insert(ref Value value, long recordId) => lastWriteAddress = recordId;
+
+            public void Upsert(ref Value value, long recordId, bool isMutable) { }
+        }
+
         private static long SetReadOutput(long key, long value) => (key << 32) | value;
 
         internal class Functions : AdvancedSimpleFunctions<Key, Value, Context>
         {
-            internal long lastWriteAddress = Constants.kInvalidAddress;
-
-            public override void ConcurrentReader(ref Key key, ref Value input, ref Value value, ref Value dst, long address) 
+            public override void ConcurrentReader(ref Key key, ref Value input, ref Value value, ref Value dst, ref RecordInfo recordInfo, long address) 
                 => dst.value = SetReadOutput(key.key, value.value);
 
             public override void SingleReader(ref Key key, ref Value input, ref Value value, ref Value dst, long address) 
                 => dst.value = SetReadOutput(key.key, value.value);
 
             // Return false to force a chain of values.
-            public override bool ConcurrentWriter(ref Key key, ref Value src, ref Value dst, long address) => false;
+            public override bool ConcurrentWriter(ref Key key, ref Value src, ref Value dst, ref RecordInfo recordInfo, long address) => false;
 
-            public override bool InPlaceUpdater(ref Key key, ref Value input, ref Value value, long address) => false;
-
-            // Record addresses
-            public override void SingleWriter(ref Key key, ref Value src, ref Value dst, long address)
-            {
-                this.lastWriteAddress = address;
-                base.SingleWriter(ref key, ref src, ref dst, address);
-            }
-
-            public override void InitialUpdater(ref Key key, ref Value input, ref Value value, long address)
-            {
-                this.lastWriteAddress = address;
-                base.InitialUpdater(ref key, ref input, ref value, address);
-            }
-
-            public override void CopyUpdater(ref Key key, ref Value input, ref Value oldValue, ref Value newValue, long newAddress)
-            {
-                this.lastWriteAddress = newAddress;
-                base.CopyUpdater(ref key, ref input, ref oldValue, ref newValue, newAddress);
-            }
+            public override bool InPlaceUpdater(ref Key key, ref Value input, ref Value value, ref RecordInfo recordInfo, long address) => false;
 
             // Track the recordInfo for its PreviousAddress.
             public override void ReadCompletionCallback(ref Key key, ref Value input, ref Value output, Context ctx, Status status, RecordInfo recordInfo)
@@ -126,6 +118,7 @@ namespace FASTER.test.readaddress
             internal IDevice logDevice;
             internal string testDir;
             private readonly bool flush;
+            InsertValueIndex insertValueIndex = new InsertValueIndex();
 
             internal long[] InsertAddresses = new long[numKeys];
 
@@ -151,8 +144,11 @@ namespace FASTER.test.readaddress
                     logSettings: logSettings,
                     checkpointSettings: new CheckpointSettings { CheckpointDir = $"{this.testDir}/CheckpointDir" },
                     serializerSettings: null,
-                    comparer: new Key.Comparer()
+                    comparer: new Key.Comparer(),
+                    supportsMutableIndexes: true
                     );
+
+                this.fkv.SecondaryIndexBroker.AddIndex(insertValueIndex);
             }
 
             internal async ValueTask Flush()
@@ -195,7 +191,7 @@ namespace FASTER.test.readaddress
                     if (status == Status.PENDING)
                         await session.CompletePendingAsync();
 
-                    InsertAddresses[ii] = functions.lastWriteAddress;
+                    InsertAddresses[ii] = insertValueIndex.lastWriteAddress;
                     //Assert.IsTrue(session.ctx.HasNoPendingRequests);
 
                     // Illustrate that deleted records can be shown as well (unless overwritten by in-place operations, which are not done here)

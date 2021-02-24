@@ -24,7 +24,7 @@ namespace FASTER.benchmark
 
         public bool IsMutable => true;
 
-        public void Delete(ref Value value, long recordId) { }
+        public void Delete(long recordId) { }
 
         public void Insert(ref Value value, long recordId) { }
 
