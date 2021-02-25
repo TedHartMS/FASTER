@@ -38,9 +38,20 @@ namespace FASTER.core
         public virtual void DeleteCompletionCallback(ref Key key, Context ctx) { }
         public virtual void CheckpointCompletionCallback(string sessionId, CommitPoint commitPoint) { }
 
-        public virtual bool SupportsLocks => locking;
-        public virtual void Lock(ref RecordInfo recordInfo, ref Key key, ref Value value, OperationType opType, ref long context) { }
-        public virtual bool Unlock(ref RecordInfo recordInfo, ref Key key, ref Value value, OperationType opType, long context) => true;
+        public virtual bool SupportsLocking => locking;
+
+        public virtual void Lock(ref RecordInfo recordInfo, ref Key key, ref Value value, LockType lockType, ref long context)
+        {
+            if (locking)
+                recordInfo.SpinLock();
+        }
+
+        public virtual bool Unlock(ref RecordInfo recordInfo, ref Key key, ref Value value, LockType lockType, long context)
+        {
+            if (locking)
+                recordInfo.Unlock();
+            return true;
+        }
     }
 
     /// <summary>
@@ -113,9 +124,20 @@ namespace FASTER.core
         public virtual void DeleteCompletionCallback(ref Key key, Context ctx) { }
         public virtual void CheckpointCompletionCallback(string sessionId, CommitPoint commitPoint) { }
 
-        public virtual bool SupportsLocks => locking;
-        public virtual void Lock(ref RecordInfo recordInfo, ref Key key, ref Value value, OperationType opType, ref long context) { }
-        public virtual bool Unlock(ref RecordInfo recordInfo, ref Key key, ref Value value, OperationType opType, long context) => true;
+        public virtual bool SupportsLocking => locking;
+
+        public virtual void Lock(ref RecordInfo recordInfo, ref Key key, ref Value value, LockType lockType, ref long context)
+        {
+            if (locking)
+                recordInfo.SpinLock();
+        }
+
+        public virtual bool Unlock(ref RecordInfo recordInfo, ref Key key, ref Value value, LockType lockType, long context)
+        {
+            if (locking)
+                recordInfo.Unlock();
+            return true;
+        }
     }
 
     /// <summary>

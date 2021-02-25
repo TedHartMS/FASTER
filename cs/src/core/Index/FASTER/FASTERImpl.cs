@@ -467,7 +467,7 @@ namespace FASTER.core
                 if (foundEntry.word == entry.word)
                 {
                     pendingContext.logicalAddress = newLogicalAddress;
-                    pendingContext.IsNewRecord = true;
+                    pendingContext.IsNewRecord = this.SupportsMutableIndexes;
                     status = OperationStatus.SUCCESS;
                     goto LatchRelease;
                 }
@@ -512,15 +512,6 @@ namespace FASTER.core
 #endregion
 
             return status;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal bool UpdateSIForIPU(ref Value value, long address)
-        {
-            // KeyIndexes do not need notification of in-place updates because the key does not change.
-            if (this.SupportsMutableIndexes && this.SecondaryIndexBroker.MutableValueIndexCount > 0)
-                this.SecondaryIndexBroker.Upsert(ref value, address);
-            return true;
         }
 
         #endregion
@@ -830,7 +821,7 @@ namespace FASTER.core
                 if (foundEntry.word == entry.word)
                 {
                     pendingContext.logicalAddress = newLogicalAddress;
-                    pendingContext.IsNewRecord = true;
+                    pendingContext.IsNewRecord = this.SupportsMutableIndexes;
                     goto LatchRelease;
                 }
                 else
@@ -1098,7 +1089,7 @@ namespace FASTER.core
                 if (foundEntry.word == entry.word)
                 {
                     pendingContext.logicalAddress = newLogicalAddress;
-                    pendingContext.IsNewRecord = true;
+                    pendingContext.IsNewRecord = this.SupportsMutableIndexes;
                     status = OperationStatus.SUCCESS;
                     goto LatchRelease;
                 }

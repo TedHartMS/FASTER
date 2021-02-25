@@ -591,7 +591,6 @@ namespace FASTER.core
             while (internalStatus == OperationStatus.RETRY_NOW);
 
             Status status;
-
             if (internalStatus == OperationStatus.SUCCESS || internalStatus == OperationStatus.NOTFOUND)
             {
                 status = (Status)internalStatus;
@@ -601,8 +600,9 @@ namespace FASTER.core
                 status = HandleOperationStatus(sessionCtx, sessionCtx, ref pcontext, fasterSession, internalStatus, false, out _);
             }
 
-            if (this.SupportsMutableIndexes && (status == Status.OK || status == Status.NOTFOUND) && pcontext.IsNewRecord)
+            if (pcontext.IsNewRecord)
             {
+                Debug.Assert(status == Status.OK);
                 ref RecordInfo recordInfo = ref this.hlog.GetInfo(this.hlog.GetPhysicalAddress(pcontext.logicalAddress));
                 UpdateSIForInsert<Input, Output, Context, FasterSession>(ref key, ref value, ref recordInfo, pcontext.logicalAddress, fasterSession);
             }
@@ -613,10 +613,19 @@ namespace FASTER.core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal bool UpdateSIForIPU(ref Value value, long address)
+        {
+            // KeyIndexes do not need notification of in-place updates because the key does not change.
+            if (this.SupportsMutableIndexes && this.SecondaryIndexBroker.MutableValueIndexCount > 0)
+                this.SecondaryIndexBroker.Upsert(ref value, address);
+            return true;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void UpdateSIForInsert<Input, Output, Context, FasterSession>(ref Key key, ref Value value, ref RecordInfo recordInfo, long address, FasterSession fasterSession)
             where FasterSession : IFasterSession<Key, Value, Input, Output, Context>
         {
-            if (!fasterSession.SupportsLocks)
+            if (!fasterSession.SupportsLocking)
                 UpdateSIForInsertNoLock(ref key, ref value, ref recordInfo, address);
             else
                 UpdateSIForInsertLock<Input, Output, Context, FasterSession>(ref key, ref value, ref recordInfo, address, fasterSession);
@@ -638,14 +647,14 @@ namespace FASTER.core
             where FasterSession : IFasterSession<Key, Value, Input, Output, Context>
         {
             long context = 0;
-            fasterSession.Lock(ref recordInfo, ref key, ref value, OperationType.INSERT, ref context);
+            fasterSession.Lock(ref recordInfo, ref key, ref value, LockType.Exclusive, ref context);
             try
             {
                 UpdateSIForInsertNoLock(ref key, ref value, ref recordInfo, address);
             }
             finally
             {
-                fasterSession.Unlock(ref recordInfo, ref key, ref value, OperationType.INSERT, context);
+                fasterSession.Unlock(ref recordInfo, ref key, ref value, LockType.Exclusive, context);
             }
         }
 
@@ -671,8 +680,9 @@ namespace FASTER.core
                 status = HandleOperationStatus(sessionCtx, sessionCtx, ref pcontext, fasterSession, internalStatus, false, out _);
             }
 
-            if (this.SupportsMutableIndexes && (status == Status.OK || status == Status.NOTFOUND) && pcontext.IsNewRecord)
+            if (pcontext.IsNewRecord)
             {
+                Debug.Assert(status == Status.OK || status == Status.NOTFOUND);
                 long physicalAddress = this.hlog.GetPhysicalAddress(pcontext.logicalAddress);
                 ref RecordInfo recordInfo = ref this.hlog.GetInfo(physicalAddress);
                 ref Value value = ref this.hlog.GetValue(physicalAddress);
@@ -710,8 +720,10 @@ namespace FASTER.core
                 status = HandleOperationStatus(sessionCtx, sessionCtx, ref pcontext, fasterSession, internalStatus, false, out _);
             }
 
-            if (this.SupportsMutableIndexes && status == Status.OK && pcontext.IsNewRecord)
+            if (pcontext.IsNewRecord)
             {
+                Debug.Assert(status == Status.OK);
+
                 // No need to lock here; we have just written a new record with a tombstone, so it will not be changed
                 // TODO - but this can race with an INSERT...
                 this.UpdateSIForDelete(ref key, pcontext.logicalAddress, isNewRecord: true);

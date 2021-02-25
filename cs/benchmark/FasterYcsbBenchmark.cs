@@ -78,8 +78,8 @@ namespace FASTER.benchmark
         readonly int numaStyle;
         readonly string distribution;
         readonly int readPercent;
-        readonly Functions functions = new Functions();
-        SecondaryIndexType secondaryIndexType = SecondaryIndexType.None;
+        readonly Functions functions;
+        readonly SecondaryIndexType secondaryIndexType = SecondaryIndexType.None;
 
         volatile bool done = false;
 
@@ -94,6 +94,9 @@ namespace FASTER.benchmark
             distribution = distribution_;
             readPercent = readPercent_;
             this.backupMode = (BackupMode)backupOptions_;
+            secondaryIndexType = (SecondaryIndexType)indexType_;
+            functions = new Functions(secondaryIndexType != SecondaryIndexType.None);
+            Console.WriteLine($"SupportsLocking: {functions.SupportsLocking}");
 
 #if DASHBOARD
             statsWritten = new AutoResetEvent[threadCount];
@@ -123,7 +126,7 @@ namespace FASTER.benchmark
                     new CheckpointSettings { CheckPointType = CheckpointType.FoldOver, CheckpointDir = path },
                     supportsMutableIndexes: secondaryIndexType != SecondaryIndexType.None);
 
-            if (secondaryIndexType != SecondaryIndexType.None)
+            if (functions.SupportsLocking)
             {
                 if (secondaryIndexType.HasFlag(SecondaryIndexType.Key))
                     store.SecondaryIndexBroker.AddIndex(new NullKeyIndex<Key>());
@@ -159,7 +162,7 @@ namespace FASTER.benchmark
             int count = 0;
 #endif
 
-            var session = store.For(functions).NewSession<Functions>(null, threadAffinitized: secondaryIndexType == SecondaryIndexType.None);
+            var session = store.For(functions).NewSession<Functions>(null, kAffinitizedSession);
 
             while (!done)
             {
@@ -396,7 +399,7 @@ namespace FASTER.benchmark
             else
                 Native32.AffinitizeThreadShardedNuma((uint)thread_idx, 2); // assuming two NUMA sockets
 
-            var session = store.For(functions).NewSession<Functions>(null, threadAffinitized: secondaryIndexType == SecondaryIndexType.None);
+            var session = store.For(functions).NewSession<Functions>(null, kAffinitizedSession);
 
 #if DASHBOARD
             var tstart = Stopwatch.GetTimestamp();

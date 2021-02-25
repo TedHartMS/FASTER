@@ -31,9 +31,9 @@ namespace FASTER.test
 
             public override bool InPlaceUpdater(ref int key, ref int input, ref int value, ref RecordInfo recordInfo, long address) => Increment(ref value);
 
-            public override bool SupportsLocks => true;
-            public override void Lock(ref RecordInfo recordInfo, ref int key, ref int value, OperationType opType, ref long context) => recordInfo.SpinLock();
-            public override bool Unlock(ref RecordInfo recordInfo, ref int key, ref int value, OperationType opType, long context)
+            public override bool SupportsLocking => true;
+            public override void Lock(ref RecordInfo recordInfo, ref int key, ref int value, LockType lockType, ref long context) => recordInfo.SpinLock();
+            public override bool Unlock(ref RecordInfo recordInfo, ref int key, ref int value, LockType lockType, long context)
             {
                 recordInfo.Unlock();
                 return true;
@@ -66,7 +66,7 @@ namespace FASTER.test
         [Test]
         public unsafe void RecordInfoLockTest()
         {
-            for (var ii = 0; ii < 10; ++ii)
+            for (var ii = 0; ii < 5; ++ii)
             {
                 RecordInfo recordInfo = new RecordInfo();
                 RecordInfo* ri = &recordInfo;
@@ -82,14 +82,7 @@ namespace FASTER.test
             const int numIters = 5000;
 
             var tasks = Enumerable.Range(0, numThreads).Select(ii => Task.Factory.StartNew(XLockTestFunc)).ToArray();
-            try
-            {
-                Task.WaitAll(tasks);
-            }
-            catch (AggregateException ex)
-            {
-                Assert.Fail(ex.InnerExceptions.First().Message);
-            }
+            Task.WaitAll(tasks);
 
             Assert.AreEqual(numThreads * numIters, lockTestValue);
 

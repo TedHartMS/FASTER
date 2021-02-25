@@ -90,7 +90,7 @@ namespace FASTER.core
         /// <param name="key">The key for this record</param>
         /// <param name="input">The user input to be used for computing the updated <paramref name="value"/></param>
         /// <param name="value">The destination to be updated; because this is an in-place update, there is a previous value there.</param>
-        /// <param name="recordInfo">A reference to the header of the record; may be used by <see cref="Lock(ref RecordInfo, ref Key, ref Value, OperationType, ref long)"/></param>
+        /// <param name="recordInfo">A reference to the header of the record; may be used by <see cref="Lock(ref RecordInfo, ref Key, ref Value, LockType, ref long)"/></param>
         /// <param name="address">The logical address of the record being updated; used as a RecordId by indexing</param>
         bool InPlaceUpdater(ref Key key, ref Input input, ref Value value, ref RecordInfo recordInfo, long address);
 
@@ -111,7 +111,7 @@ namespace FASTER.core
         /// <param name="input">The user input for computing <paramref name="dst"/> from <paramref name="value"/></param>
         /// <param name="value">The value for the record being read</param>
         /// <param name="dst">The location where <paramref name="value"/> is to be copied</param>
-        /// <param name="recordInfo">A reference to the header of the record; may be used by <see cref="Lock(ref RecordInfo, ref Key, ref Value, OperationType, ref long)"/></param>
+        /// <param name="recordInfo">A reference to the header of the record; may be used by <see cref="Lock(ref RecordInfo, ref Key, ref Value, LockType, ref long)"/></param>
         /// <param name="address">The logical address of the record being copied to; used as a RecordId by indexing</param>
         void ConcurrentReader(ref Key key, ref Input input, ref Value value, ref Output dst, ref RecordInfo recordInfo, long address);
 
@@ -130,7 +130,7 @@ namespace FASTER.core
         /// <param name="key">The key for the record to be written</param>
         /// <param name="src">The value to be copied to <paramref name="dst"/></param>
         /// <param name="dst">The location where <paramref name="src"/> is to be copied; because this method is called only for in-place updates, there is a previous value there.</param>
-        /// <param name="recordInfo">A reference to the header of the record; may be used by <see cref="Lock(ref RecordInfo, ref Key, ref Value, OperationType, ref long)"/></param>
+        /// <param name="recordInfo">A reference to the header of the record; may be used by <see cref="Lock(ref RecordInfo, ref Key, ref Value, LockType, ref long)"/></param>
         /// <param name="address">The logical address of the record being copied to; used as a RecordId by indexing"/></param>
         bool ConcurrentWriter(ref Key key, ref Value src, ref Value dst, ref RecordInfo recordInfo, long address);
 
@@ -139,16 +139,16 @@ namespace FASTER.core
         /// </summary>
         /// <param name="key">The key for the record to be deleted</param>
         /// <param name="value">The value for the record being deleted; because this method is called only for in-place updates, there is a previous value there. Usually this is ignored or assigned 'default'.</param>
-        /// <param name="recordInfo">A reference to the header of the record; may be used by <see cref="Lock(ref RecordInfo, ref Key, ref Value, OperationType, ref long)"/></param>
+        /// <param name="recordInfo">A reference to the header of the record; may be used by <see cref="Lock(ref RecordInfo, ref Key, ref Value, LockType, ref long)"/></param>
         /// <param name="address">The logical address of the record being copied to; used as a RecordId by indexing</param>
         /// <returns>True if handled by the Functions implementation, else false</returns>
         public bool ConcurrentDeleter(ref Key key, ref Value value, ref RecordInfo recordInfo, long address);
 
         /// <summary>
-        /// Whether this Functions implementation actually locks in <see cref="Lock(ref RecordInfo, ref Key, ref Value, OperationType, ref long)"/> 
-        /// and <see cref="Unlock(ref RecordInfo, ref Key, ref Value, OperationType, long)"/>
+        /// Whether this Functions implementation actually locks in <see cref="Lock(ref RecordInfo, ref Key, ref Value, LockType, ref long)"/> 
+        /// and <see cref="Unlock(ref RecordInfo, ref Key, ref Value, LockType, long)"/>
         /// </summary>
-        bool SupportsLocks { get; }
+        bool SupportsLocking { get; }
 
         /// <summary>
         /// User-provided lock call, defaulting to no-op. A default exclusive implementation is available via <see cref="RecordInfo.SpinLock()"/>.
@@ -157,12 +157,12 @@ namespace FASTER.core
         /// <param name="recordInfo">The header for the current record</param>
         /// <param name="key">The key for the current record</param>
         /// <param name="value">The value for the current record</param>
-        /// <param name="opType">The type of FASTER operation being done (can be used to decide whether to obtain a read vs. exclusinve lock).</param>
-        /// <param name="context">Context-specific information; will be passed to <see cref="Unlock(ref RecordInfo, ref Key, ref Value, OperationType, long)"/></param>
+        /// <param name="lockType">The type of lock being taken</param>
+        /// <param name="context">Context-specific information; will be passed to <see cref="Unlock(ref RecordInfo, ref Key, ref Value, LockType, long)"/></param>
         /// <remarks>
         /// This is called only for records guaranteed to be in the mutable range.
         /// </remarks>
-        void Lock(ref RecordInfo recordInfo, ref Key key, ref Value value, OperationType opType, ref long context);
+        void Lock(ref RecordInfo recordInfo, ref Key key, ref Value value, LockType lockType, ref long context);
 
         /// <summary>
         /// User-provided unlock call, defaulting to no-op. A default exclusive implementation is available via <see cref="RecordInfo.Unlock()"/>.
@@ -171,8 +171,8 @@ namespace FASTER.core
         /// <param name="recordInfo">The header for the current record</param>
         /// <param name="key">The key for the current record</param>
         /// <param name="value">The value for the current record</param>
-        /// <param name="opType">The type of FASTER operation being done, as passed to <see cref="Lock(ref RecordInfo, ref Key, ref Value, OperationType, ref long)"/></param>
-        /// <param name="context">The context returned from <see cref="Lock(ref RecordInfo, ref Key, ref Value, OperationType, ref long)"/></param>
+        /// <param name="lockType">The type of lock being released, as passed to <see cref="Lock(ref RecordInfo, ref Key, ref Value, LockType, ref long)"/></param>
+        /// <param name="context">The context returned from <see cref="Lock(ref RecordInfo, ref Key, ref Value, LockType, ref long)"/></param>
         /// <remarks>
         /// This is called only for records guaranteed to be in the mutable range.
         /// </remarks>
@@ -180,6 +180,25 @@ namespace FASTER.core
         /// True if no inconsistencies detected. Otherwise, the lock and user's callback are reissued.
         /// Currently this is handled only for <see cref="ConcurrentReader(ref Key, ref Input, ref Value, ref Output, ref RecordInfo, long)"/>.
         /// </returns>
-        bool Unlock(ref RecordInfo recordInfo, ref Key key, ref Value value, OperationType opType, long context);
+        bool Unlock(ref RecordInfo recordInfo, ref Key key, ref Value value, LockType lockType, long context);
+    }
+
+    /// <summary>
+    /// Callback functions to FASTER (two-param version)
+    /// </summary>
+    /// <typeparam name="Key"></typeparam>
+    /// <typeparam name="Value"></typeparam>
+    public interface IAdvancedFunctions<Key, Value> : IAdvancedFunctions<Key, Value, Value, Value, Empty>
+    {
+    }
+
+    /// <summary>
+    /// Callback functions to FASTER (two-param version with context)
+    /// </summary>
+    /// <typeparam name="Key"></typeparam>
+    /// <typeparam name="Value"></typeparam>
+    /// <typeparam name="Context"></typeparam>
+    public interface IAdvancedFunctions<Key, Value, Context> : IAdvancedFunctions<Key, Value, Value, Value, Context>
+    {
     }
 }
