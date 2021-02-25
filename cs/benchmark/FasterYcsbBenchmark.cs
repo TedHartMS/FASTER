@@ -79,11 +79,10 @@ namespace FASTER.benchmark
         readonly string distribution;
         readonly int readPercent;
         readonly Functions functions;
-        readonly SecondaryIndexType secondaryIndexType = SecondaryIndexType.None;
 
         volatile bool done = false;
 
-        public FASTER_YcsbBenchmark(int threadCount_, int numaStyle_, string distribution_, int readPercent_, int backupOptions_, int indexType_)
+        public FASTER_YcsbBenchmark(int threadCount_, int numaStyle_, string distribution_, int readPercent_, int backupOptions_, int lockImpl_, int secondaryIndexType_)
         {
             // Pin loading thread if it is not used for checkpointing
             if (kPeriodicCheckpointMilliseconds <= 0)
@@ -94,9 +93,9 @@ namespace FASTER.benchmark
             distribution = distribution_;
             readPercent = readPercent_;
             this.backupMode = (BackupMode)backupOptions_;
-            secondaryIndexType = (SecondaryIndexType)indexType_;
-            functions = new Functions(secondaryIndexType != SecondaryIndexType.None);
-            Console.WriteLine($"SupportsLocking: {functions.SupportsLocking}");
+            var lockImpl = (LockImpl)lockImpl_;
+            var secondaryIndexType = (SecondaryIndexType)secondaryIndexType_;
+            functions = new Functions(lockImpl != LockImpl.None);
 
 #if DASHBOARD
             statsWritten = new AutoResetEvent[threadCount];
@@ -126,13 +125,10 @@ namespace FASTER.benchmark
                     new CheckpointSettings { CheckPointType = CheckpointType.FoldOver, CheckpointDir = path },
                     supportsMutableIndexes: secondaryIndexType != SecondaryIndexType.None);
 
-            if (functions.SupportsLocking)
-            {
-                if (secondaryIndexType.HasFlag(SecondaryIndexType.Key))
-                    store.SecondaryIndexBroker.AddIndex(new NullKeyIndex<Key>());
-                if (secondaryIndexType.HasFlag(SecondaryIndexType.Value))
-                    store.SecondaryIndexBroker.AddIndex(new NullValueIndex<Value>());
-            }
+            if (secondaryIndexType.HasFlag(SecondaryIndexType.Key))
+                store.SecondaryIndexBroker.AddIndex(new NullKeyIndex<Key>());
+            if (secondaryIndexType.HasFlag(SecondaryIndexType.Value))
+                store.SecondaryIndexBroker.AddIndex(new NullValueIndex<Value>());
         }
 
         private void RunYcsb(int thread_idx)
@@ -248,7 +244,7 @@ namespace FASTER.benchmark
             Interlocked.Add(ref total_ops_done, reads_done + writes_done);
         }
 
-        public unsafe void Run()
+        public unsafe double Run()
         {
             RandomGenerator rng = new RandomGenerator();
 
@@ -385,11 +381,13 @@ namespace FASTER.benchmark
             long endTailAddress = store.Log.TailAddress;
             Console.WriteLine("End tail address = " + endTailAddress);
 
+            double opsPerSecond = total_ops_done / seconds;
             Console.WriteLine("Total " + total_ops_done + " ops done " + " in " + seconds + " secs.");
             Console.WriteLine("##, " + distribution + ", " + numaStyle + ", " + readPercent + ", "
-                + threadCount + ", " + total_ops_done / seconds + ", "
+                + threadCount + ", " + opsPerSecond + ", "
                 + (endTailAddress - startTailAddress));
             device.Dispose();
+            return opsPerSecond;
         }
 
         private void SetupYcsb(int thread_idx)

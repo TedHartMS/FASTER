@@ -87,14 +87,12 @@ namespace FASTER.benchmark
 
         public void Lock(ref RecordInfo recordInfo, ref Key key, ref Value value, LockType lockType, ref long context)
         {
-            //if (locking)
-            //    recordInfo.SpinLock();
+            if (locking) recordInfo.SpinLock();
         }
 
         public bool Unlock(ref RecordInfo recordInfo, ref Key key, ref Value value, LockType lockType, long context)
         {
-            //if (locking)
-            //    recordInfo.Unlock();
+            if (locking) recordInfo.Unlock();
             return true;
         }
     }

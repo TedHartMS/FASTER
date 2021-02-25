@@ -194,7 +194,7 @@ namespace FASTER.benchmark
             Interlocked.Add(ref total_ops_done, reads_done + writes_done);
         }
 
-        public unsafe void Run()
+        public unsafe double Run()
         {
             RandomGenerator rng = new RandomGenerator();
 
@@ -286,9 +286,11 @@ namespace FASTER.benchmark
 
             double seconds = swatch.ElapsedMilliseconds / 1000.0;
 
+            double opsPerSecond = total_ops_done / seconds;
             Console.WriteLine("Total " + total_ops_done + " ops done " + " in " + seconds + " secs.");
             Console.WriteLine("##, " + distribution + ", " + numaStyle + ", " + readPercent + ", "
-                + threadCount + ", " + total_ops_done / seconds);
+                + threadCount + ", " + opsPerSecond);
+            return opsPerSecond;
         }
 
         private void SetupYcsb(int thread_idx)

@@ -35,7 +35,7 @@ namespace FASTER.benchmark
         const int kPeriodicCheckpointMilliseconds = 0;
 #else
         const bool kDumpDistribution = false;
-        const bool kUseSmallData = false;
+        const bool kUseSmallData = true; //false;
         const bool kUseSyntheticData = false;
         const bool kSmallMemoryLog = false;
         const bool kAffinitizedSession = true;
@@ -82,17 +82,20 @@ namespace FASTER.benchmark
         readonly int numaStyle;
         readonly string distribution;
         readonly int readPercent;
-        readonly FunctionsSB functions = new FunctionsSB();
+        readonly FunctionsSB functions;
 
         volatile bool done = false;
 
-        public FasterSpanByteYcsbBenchmark(int threadCount_, int numaStyle_, string distribution_, int readPercent_, int backupOptions_)
+        public FasterSpanByteYcsbBenchmark(int threadCount_, int numaStyle_, string distribution_, int readPercent_, int backupOptions_, int lockImpl_, int secondaryIndexType_)
         {
             threadCount = threadCount_;
             numaStyle = numaStyle_;
             distribution = distribution_;
             readPercent = readPercent_;
             this.backupMode = (BackupMode)backupOptions_;
+            var lockImpl = (LockImpl)lockImpl_;
+            var secondaryIndexType = (SecondaryIndexType)secondaryIndexType_;
+            functions = new FunctionsSB(lockImpl != LockImpl.None);
 
 #if DASHBOARD
             statsWritten = new AutoResetEvent[threadCount];
@@ -113,10 +116,19 @@ namespace FASTER.benchmark
 
             if (kSmallMemoryLog)
                 store = new FasterKV<SpanByte, SpanByte>
-                    (kMaxKey / 2, new LogSettings { LogDevice = device, PreallocateLog = true, PageSizeBits = 22, SegmentSizeBits = 26, MemorySizeBits = 26 }, new CheckpointSettings { CheckPointType = CheckpointType.FoldOver, CheckpointDir = path });
+                    (kMaxKey / 2, new LogSettings { LogDevice = device, PreallocateLog = true, PageSizeBits = 22, SegmentSizeBits = 26, MemorySizeBits = 26 },
+                    new CheckpointSettings { CheckPointType = CheckpointType.FoldOver, CheckpointDir = path },
+                    supportsMutableIndexes: secondaryIndexType != SecondaryIndexType.None);
             else
                 store = new FasterKV<SpanByte, SpanByte>
-                    (kMaxKey / 2, new LogSettings { LogDevice = device, PreallocateLog = true, MemorySizeBits = 35 }, new CheckpointSettings { CheckPointType = CheckpointType.FoldOver, CheckpointDir = path });
+                    (kMaxKey / 2, new LogSettings { LogDevice = device, PreallocateLog = true, MemorySizeBits = 35 },
+                    new CheckpointSettings { CheckPointType = CheckpointType.FoldOver, CheckpointDir = path },
+                    supportsMutableIndexes: secondaryIndexType != SecondaryIndexType.None);
+
+            if (secondaryIndexType.HasFlag(SecondaryIndexType.Key))
+                store.SecondaryIndexBroker.AddIndex(new NullKeyIndex<Key>());
+            if (secondaryIndexType.HasFlag(SecondaryIndexType.Value))
+                store.SecondaryIndexBroker.AddIndex(new NullValueIndex<Value>());
         }
 
         private void RunYcsb(int thread_idx)
@@ -236,7 +248,7 @@ namespace FASTER.benchmark
             Interlocked.Add(ref total_ops_done, reads_done + writes_done);
         }
 
-        public unsafe void Run()
+        public unsafe double Run()
         {
             //Native32.AffinitizeThreadShardedNuma(0, 2);
 
@@ -374,11 +386,13 @@ namespace FASTER.benchmark
             long endTailAddress = store.Log.TailAddress;
             Console.WriteLine("End tail address = " + endTailAddress);
 
+            double opsPerSecond = total_ops_done / seconds;
             Console.WriteLine("Total " + total_ops_done + " ops done " + " in " + seconds + " secs.");
             Console.WriteLine("##, " + distribution + ", " + numaStyle + ", " + readPercent + ", "
-                + threadCount + ", " + total_ops_done / seconds + ", "
+                + threadCount + ", " + opsPerSecond + ", "
                 + (endTailAddress - startTailAddress));
             device.Dispose();
+            return opsPerSecond;
         }
 
         private void SetupYcsb(int thread_idx)
