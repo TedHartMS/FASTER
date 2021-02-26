@@ -113,6 +113,7 @@ namespace FASTER.benchmark
                 {
                     var test = new FASTER_YcsbBenchmark(options.ThreadCount, options.NumaStyle, options.Distribution, options.ReadPercent, options.Backup, options.LockImpl, options.SecondaryIndexType);
                     opsPerRun.Add(test.Run());
+                    test.Dispose();
                 }
                 else if (b == BenchmarkType.SpanByte)
                 {
@@ -128,6 +129,7 @@ namespace FASTER.benchmark
                 if (iter < options.IterationCount - 1)
                 {
                     GC.Collect();
+                    GC.WaitForFullGCComplete();
                     Thread.Sleep(1000);
                 }
             }

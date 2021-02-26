@@ -131,6 +131,14 @@ namespace FASTER.benchmark
                 store.SecondaryIndexBroker.AddIndex(new NullValueIndex<Value>());
         }
 
+        public void Dispose()
+        {
+            store.Dispose();
+            device.Dispose();
+            init_keys_ = null;
+            txn_keys_ = null;
+        }
+
         private void RunYcsb(int thread_idx)
         {
             RandomGenerator rng = new RandomGenerator((uint)(1 + thread_idx));
@@ -386,7 +394,6 @@ namespace FASTER.benchmark
             Console.WriteLine("##, " + distribution + ", " + numaStyle + ", " + readPercent + ", "
                 + threadCount + ", " + opsPerSecond + ", "
                 + (endTailAddress - startTailAddress));
-            device.Dispose();
             return opsPerSecond;
         }
 
@@ -554,6 +561,8 @@ namespace FASTER.benchmark
                 {
                     throw new InvalidDataException("Init file load fail!");
                 }
+
+                chunk_handle.Free();
             }
 
             Console.WriteLine("loaded " + kInitCount + " keys.");
@@ -596,6 +605,8 @@ namespace FASTER.benchmark
                 {
                     throw new InvalidDataException("Txn file load fail!" + count + ":" + kTxnCount);
                 }
+
+                chunk_handle.Free();
             }
 
             Console.WriteLine("loaded " + kTxnCount + " txns.");
