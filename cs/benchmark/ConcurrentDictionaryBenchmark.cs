@@ -194,7 +194,7 @@ namespace FASTER.benchmark
             Interlocked.Add(ref total_ops_done, reads_done + writes_done);
         }
 
-        public unsafe double Run()
+        public unsafe (double, double) Run()
         {
             RandomGenerator rng = new RandomGenerator();
 
@@ -236,7 +236,8 @@ namespace FASTER.benchmark
             }
             sw.Stop();
 
-            Console.WriteLine("Loading time: {0}ms", sw.ElapsedMilliseconds);
+            double initsPerSecond = ((double)kInitCount / sw.ElapsedMilliseconds) * 1000;
+            Console.WriteLine($"Loading time: {sw.ElapsedMilliseconds}ms ({initsPerSecond:N3} inserts per sec)");
 
             idx_ = 0;
 
@@ -290,7 +291,7 @@ namespace FASTER.benchmark
             Console.WriteLine("Total " + total_ops_done + " ops done " + " in " + seconds + " secs.");
             Console.WriteLine("##, " + distribution + ", " + numaStyle + ", " + readPercent + ", "
                 + threadCount + ", " + opsPerSecond);
-            return opsPerSecond;
+            return (initsPerSecond, opsPerSecond);
         }
 
         private void SetupYcsb(int thread_idx)

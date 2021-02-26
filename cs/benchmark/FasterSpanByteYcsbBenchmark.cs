@@ -248,7 +248,7 @@ namespace FASTER.benchmark
             Interlocked.Add(ref total_ops_done, reads_done + writes_done);
         }
 
-        public unsafe double Run()
+        public unsafe (double, double) Run()
         {
             //Native32.AffinitizeThreadShardedNuma(0, 2);
 
@@ -307,7 +307,8 @@ namespace FASTER.benchmark
                 }
                 sw.Stop();
             }
-            Console.WriteLine("Loading time: {0}ms", sw.ElapsedMilliseconds);
+            double initsPerSecond = storeWasRecovered ? 0 : ((double)kInitCount / sw.ElapsedMilliseconds) * 1000;
+            Console.WriteLine($"Loading time: {sw.ElapsedMilliseconds}ms ({initsPerSecond:N3} inserts per sec)");
 
             long startTailAddress = store.Log.TailAddress;
             Console.WriteLine("Start tail address = " + startTailAddress);
@@ -391,8 +392,9 @@ namespace FASTER.benchmark
             Console.WriteLine("##, " + distribution + ", " + numaStyle + ", " + readPercent + ", "
                 + threadCount + ", " + opsPerSecond + ", "
                 + (endTailAddress - startTailAddress));
+            store.Dispose();
             device.Dispose();
-            return opsPerSecond;
+            return (initsPerSecond, opsPerSecond);
         }
 
         private void SetupYcsb(int thread_idx)

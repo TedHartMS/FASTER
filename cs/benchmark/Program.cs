@@ -99,7 +99,14 @@ namespace FASTER.benchmark
             var b = (BenchmarkType)options.Benchmark;
             Console.WriteLine($"Scenario: {b}, Locking: {(LockImpl)options.LockImpl}, Indexing: {(SecondaryIndexType)options.SecondaryIndexType}");
 
+            var initsPerRun = new List<double>();
             var opsPerRun = new List<double>();
+
+            void addResult((double ips, double ops) result)
+            {
+                initsPerRun.Add(result.ips);
+                opsPerRun.Add(result.ops);
+            }
 
             for (var iter = 0; iter < options.IterationCount; ++iter)
             {
@@ -112,33 +119,53 @@ namespace FASTER.benchmark
                 if (b == BenchmarkType.Ycsb)
                 {
                     var test = new FASTER_YcsbBenchmark(options.ThreadCount, options.NumaStyle, options.Distribution, options.ReadPercent, options.Backup, options.LockImpl, options.SecondaryIndexType);
-                    opsPerRun.Add(test.Run());
+                    addResult(test.Run());
                 }
                 else if (b == BenchmarkType.SpanByte)
                 {
                     var test = new FasterSpanByteYcsbBenchmark(options.ThreadCount, options.NumaStyle, options.Distribution, options.ReadPercent, options.Backup, options.LockImpl, options.SecondaryIndexType);
-                    opsPerRun.Add(test.Run());
+                    addResult(test.Run());
                 }
                 else if (b == BenchmarkType.ConcurrentDictionaryYcsb)
                 {
                     var test = new ConcurrentDictionary_YcsbBenchmark(options.ThreadCount, options.NumaStyle, options.Distribution, options.ReadPercent);
-                    opsPerRun.Add(test.Run());
+                    addResult(test.Run());
                 }
 
                 if (iter < options.IterationCount - 1)
                 {
                     GC.Collect();
-                    Thread.Sleep(1000);
+                    GC.WaitForFullGCComplete();
                 }
             }
 
             if (options.IterationCount > 1)
             {
-                var meanOpsPerRun = opsPerRun.Sum() / options.IterationCount;
-                var stddev = Math.Sqrt(opsPerRun.Sum(n => Math.Pow(n - meanOpsPerRun, 2)) / options.IterationCount);
+                if (options.IterationCount >= 5)
+                {
+                    static void discardHiLo(List<double> vec)
+                    {
+                        vec.Sort();
+                        vec[0] = vec[vec.Count - 2];        // overwrite lowest with second-highest
+                        vec.RemoveRange(vec.Count - 2, 2);  // remove highest and (now-duplicated) second-highest
+                    }
+                    discardHiLo(initsPerRun);
+                    discardHiLo(opsPerRun);
+                }
 
                 Console.WriteLine();
-                Console.WriteLine($"Average ops per second: {meanOpsPerRun:N3} (stddev: {stddev:N3})");
+                var discardMessage = initsPerRun.Count < options.IterationCount ? " (high and low results discarded)" : string.Empty;
+                Console.WriteLine($"Averages per second{discardMessage}:");
+                static void showStats(string tag, List<double> vec)
+                {
+                    var mean = vec.Sum() / vec.Count;
+                    var stddev = Math.Sqrt(vec.Sum(n => Math.Pow(n - mean, 2)) / vec.Count);
+                    var stddevpct = (stddev / mean) * 100;
+                    Console.WriteLine($"    {tag} per second: {mean:N3} (stddev: {stddev:N1}; {stddevpct:N1}%)");
+                }
+
+                showStats("Load Inserts", initsPerRun);
+                showStats("Transactions", opsPerRun);
             }
         }
     }
