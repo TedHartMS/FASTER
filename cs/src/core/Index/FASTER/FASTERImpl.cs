@@ -467,7 +467,7 @@ namespace FASTER.core
                 if (foundEntry.word == entry.word)
                 {
                     pendingContext.logicalAddress = newLogicalAddress;
-                    pendingContext.IsNewRecord = this.SupportsMutableIndexes;
+                    pendingContext.IsNewRecord = true;
                     status = OperationStatus.SUCCESS;
                     goto LatchRelease;
                 }
@@ -821,7 +821,7 @@ namespace FASTER.core
                 if (foundEntry.word == entry.word)
                 {
                     pendingContext.logicalAddress = newLogicalAddress;
-                    pendingContext.IsNewRecord = this.SupportsMutableIndexes;
+                    pendingContext.IsNewRecord = true;
                     goto LatchRelease;
                 }
                 else
@@ -1089,7 +1089,7 @@ namespace FASTER.core
                 if (foundEntry.word == entry.word)
                 {
                     pendingContext.logicalAddress = newLogicalAddress;
-                    pendingContext.IsNewRecord = this.SupportsMutableIndexes;
+                    pendingContext.IsNewRecord = true;
                     status = OperationStatus.SUCCESS;
                     goto LatchRelease;
                 }
@@ -1521,12 +1521,9 @@ namespace FASTER.core
 
                 if (foundEntry.word == entry.word)
                 {
-                    if (this.SupportsMutableIndexes)
-                    {
-                        ref RecordInfo recordInfo = ref this.hlog.GetInfo(newPhysicalAddress);
-                        ref Value recordValue = ref this.hlog.GetValue(newPhysicalAddress);
-                        UpdateSIForInsert<Input, Output, Context, FasterSession>(ref key, ref recordValue, ref recordInfo, newLogicalAddress, fasterSession);
-                    }
+                    ref RecordInfo recordInfo = ref this.hlog.GetInfo(newPhysicalAddress);
+                    ref Value recordValue = ref this.hlog.GetValue(newPhysicalAddress);
+                    UpdateSIForInsert<Input, Output, Context, FasterSession>(ref key, ref recordValue, ref recordInfo, newLogicalAddress, fasterSession);
                     return status;
                 }
                 else

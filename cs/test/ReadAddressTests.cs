@@ -144,8 +144,7 @@ namespace FASTER.test.readaddress
                     logSettings: logSettings,
                     checkpointSettings: new CheckpointSettings { CheckpointDir = $"{this.testDir}/CheckpointDir" },
                     serializerSettings: null,
-                    comparer: new Key.Comparer(),
-                    supportsMutableIndexes: true
+                    comparer: new Key.Comparer()
                     );
 
                 this.fkv.SecondaryIndexBroker.AddIndex(insertValueIndex);
