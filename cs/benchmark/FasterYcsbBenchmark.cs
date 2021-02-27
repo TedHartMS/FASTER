@@ -15,7 +15,7 @@ using System.Threading;
 
 namespace FASTER.benchmark
 {
-    internal class FASTER_YcsbBenchmark : IBenchmarkTest
+    internal class FASTER_YcsbBenchmark
     {
         public enum Op : ulong
         {
@@ -67,25 +67,27 @@ namespace FASTER.benchmark
         readonly int readPercent;
         readonly Functions functions;
         readonly SecondaryIndexType secondaryIndexType = SecondaryIndexType.None;
-        readonly uint distributionSeed;
         readonly Input[] input_;
 
-        Key[] init_keys_;
-        Key[] txn_keys_;
+        readonly Key[] init_keys_;
+        readonly Key[] txn_keys_;
 
-        IDevice device;
-        FasterKV<Key, Value> store;
+        readonly IDevice device;
+        readonly FasterKV<Key, Value> store;
 
         long idx_ = 0;
         long total_ops_done = 0;
         volatile bool done = false;
 
-        internal FASTER_YcsbBenchmark(int threadCount_, int numaStyle_, string distribution_, int readPercent_, BackupMode backupMode_, LockImpl lockImpl_, SecondaryIndexType secondaryIndexType_, int seed_)
+        internal FASTER_YcsbBenchmark(Key[] i_keys_, Key[] t_keys_, int threadCount_, int numaStyle_, string distribution_, int readPercent_, 
+                                      BackupMode backupMode_, LockImpl lockImpl_, SecondaryIndexType secondaryIndexType_)
         {
             // Pin loading thread if it is not used for checkpointing
             if (kPeriodicCheckpointMilliseconds <= 0)
                 Native32.AffinitizeThreadShardedNuma(0, 2);
 
+            init_keys_ = i_keys_;
+            txn_keys_ = t_keys_;
             threadCount = threadCount_;
             numaStyle = numaStyle_;
             distribution = distribution_;
@@ -94,7 +96,6 @@ namespace FASTER.benchmark
             var lockImpl = lockImpl_;
             functions = new Functions(lockImpl != LockImpl.None);
             secondaryIndexType = secondaryIndexType_;
-            distributionSeed = (uint)seed_;
 
 #if DASHBOARD
             statsWritten = new AutoResetEvent[threadCount];
@@ -109,14 +110,10 @@ namespace FASTER.benchmark
             writeStats = new bool[threadCount];
             freq = Stopwatch.Frequency;
 #endif
-
             input_ = new Input[8];
             for (int i = 0; i < 8; i++)
                 input_[i].value = i;
-        }
 
-        public void CreateStore()
-        {
             var path = "D:\\data\\FasterYcsbBenchmark\\";
             device = Devices.CreateLogDevice(path + "hlog", preallocateFile: true);
 
@@ -135,16 +132,10 @@ namespace FASTER.benchmark
                 store.SecondaryIndexBroker.AddIndex(new NullValueIndex<Value>());
         }
 
-        public void DisposeStore()
+        public void Dispose()
         {
             store.Dispose();
-            store = null;
             device.Dispose();
-            device = null;
-
-            idx_ = 0;
-            total_ops_done = 0;
-            done = false;
         }
 
         private void RunYcsb(int thread_idx)
@@ -520,7 +511,7 @@ namespace FASTER.benchmark
 
         #region Load Data
 
-        private unsafe void LoadDataFromFile(string filePath)
+        private static unsafe void LoadDataFromFile(string filePath, string distribution, out Key[] i_keys, out Key[] t_keys)
         {
             string init_filename = filePath + "/load_" + distribution + "_250M_raw.dat";
             string txn_filename = filePath + "/run_" + distribution + "_250M_1000M_raw.dat";
@@ -530,7 +521,7 @@ namespace FASTER.benchmark
                 FileShare.Read))
             {
                 Console.WriteLine("loading keys from " + init_filename + " into memory...");
-                init_keys_ = new Key[kInitCount];
+                i_keys = new Key[kInitCount];
 
                 byte[] chunk = new byte[kFileChunkSize];
                 GCHandle chunk_handle = GCHandle.Alloc(chunk, GCHandleType.Pinned);
@@ -544,7 +535,7 @@ namespace FASTER.benchmark
                     int size = stream.Read(chunk, 0, kFileChunkSize);
                     for (int idx = 0; idx < size; idx += 8)
                     {
-                        init_keys_[count].value = *(long*)(chunk_ptr + idx);
+                        i_keys[count].value = *(long*)(chunk_ptr + idx);
                         ++count;
                         if (count == kInitCount)
                             break;
@@ -577,7 +568,7 @@ namespace FASTER.benchmark
 
                 Console.WriteLine("loading txns from " + txn_filename + " into memory...");
 
-                txn_keys_ = new Key[kTxnCount];
+                t_keys = new Key[kTxnCount];
 
                 count = 0;
                 long offset = 0;
@@ -588,7 +579,7 @@ namespace FASTER.benchmark
                     int size = stream.Read(chunk, 0, kFileChunkSize);
                     for (int idx = 0; idx < size; idx += 8)
                     {
-                        txn_keys_[count].value = *(long*)(chunk_ptr + idx);
+                        t_keys[count].value = *(long*)(chunk_ptr + idx);
                         ++count;
                         if (count == kTxnCount)
                             break;
@@ -613,11 +604,11 @@ namespace FASTER.benchmark
             Console.WriteLine("loaded " + kTxnCount + " txns.");
         }
 
-        public void LoadData()
+        public static void LoadData(string distribution, uint seed, out Key[] i_keys, out Key[] t_keys)
         {
             if (kUseSyntheticData)
             {
-                LoadSyntheticData();
+                LoadSyntheticData(distribution, seed, out i_keys, out t_keys);
                 return;
             }
 
@@ -634,35 +625,35 @@ namespace FASTER.benchmark
 
             if (Directory.Exists(filePath))
             {
-                LoadDataFromFile(filePath);
+                LoadDataFromFile(filePath, distribution, out i_keys, out t_keys);
             }
             else
             {
                 Console.WriteLine("WARNING: Could not find YCSB directory, loading synthetic data instead");
-                LoadSyntheticData();
+                LoadSyntheticData(distribution, seed, out i_keys, out t_keys);
             }
         }
 
-        private void LoadSyntheticData()
+        private static void LoadSyntheticData(string distribution, uint seed, out Key[] i_keys, out Key[] t_keys)
         {
             Console.WriteLine("Loading synthetic data (uniform distribution)");
 
-            init_keys_ = new Key[kInitCount];
+            i_keys = new Key[kInitCount];
             long val = 0;
             for (int idx = 0; idx < kInitCount; idx++)
             {
-                init_keys_[idx] = new Key { value = val++ };
+                i_keys[idx] = new Key { value = val++ };
             }
 
             Console.WriteLine("loaded " + kInitCount + " keys.");
 
-            RandomGenerator generator = new RandomGenerator(distributionSeed);
+            RandomGenerator generator = new RandomGenerator(seed);
 
-            txn_keys_ = new Key[kTxnCount];
+            t_keys = new Key[kTxnCount];
 
             for (int idx = 0; idx < kTxnCount; idx++)
             {
-                txn_keys_[idx] = new Key { value = (long)generator.Generate64(kInitCount) };
+                t_keys[idx] = new Key { value = (long)generator.Generate64(kInitCount) };
             }
 
             Console.WriteLine("loaded " + kTxnCount + " txns.");

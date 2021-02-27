@@ -91,7 +91,7 @@ namespace FASTER.benchmark
 
     public class Program
     {
-        const int kTrimResultCount = int.MaxValue; // Use some high value like int.MaxValue to bypass
+        const int kTrimResultCount = 3;// int.MaxValue; // Use some high value like int.MaxValue to bypass
 
         public static void Main(string[] args)
         {
@@ -134,14 +134,40 @@ namespace FASTER.benchmark
                 opsPerRun.Add(result.ops);
             }
 
-            IBenchmarkTest test = b switch
+            Key[] init_keys_ = default;
+            Key[] txn_keys_ = default;
+            KeySpanByte[] init_span_keys_ = default;
+            KeySpanByte[] txn_span_keys_ = default;
+
+            switch (b)
             {
-                BenchmarkType.Ycsb => new FASTER_YcsbBenchmark(options.ThreadCount, options.NumaStyle, distribution, options.ReadPercent, backupMode, lockImpl, secondaryIndexType, options.RandomSeed),
-                BenchmarkType.SpanByte => new FasterSpanByteYcsbBenchmark(options.ThreadCount, options.NumaStyle, distribution, options.ReadPercent, backupMode, lockImpl, secondaryIndexType, options.RandomSeed),
-                BenchmarkType.ConcurrentDictionaryYcsb => new ConcurrentDictionary_YcsbBenchmark(options.ThreadCount, options.NumaStyle, distribution, options.ReadPercent),
-                _ => throw new ApplicationException("Unknown benchmark type")
-            };
-            test.LoadData();
+                case BenchmarkType.Ycsb:
+                    FASTER_YcsbBenchmark.LoadData(distribution, (uint)options.RandomSeed, out init_keys_, out txn_keys_);
+                    break;
+                case BenchmarkType.SpanByte:
+                    FasterSpanByteYcsbBenchmark.LoadData(distribution, (uint)options.RandomSeed, out init_span_keys_, out txn_span_keys_);
+                    break;
+                case BenchmarkType.ConcurrentDictionaryYcsb:
+                    ConcurrentDictionary_YcsbBenchmark.LoadData(distribution, (uint)options.RandomSeed, out init_keys_, out txn_keys_);
+                    break;
+                default:
+                    throw new ApplicationException("Unknown benchmark type");
+            }
+
+            static void showStats(string tag, List<double> vec, string discardMessage = "")
+            {
+                var mean = vec.Sum() / vec.Count;
+                var stddev = Math.Sqrt(vec.Sum(n => Math.Pow(n - mean, 2)) / vec.Count);
+                var stddevpct = (stddev / mean) * 100;
+                Console.WriteLine($"###; {tag}; {mean:N3}; sd; {stddev:N1}; {stddevpct:N1}%");
+            }
+
+            void showAllStats(string discardMessage = "")
+            {
+                Console.WriteLine($"Averages per second over {initsPerRun.Count} iteration(s){discardMessage}:");
+                showStats("ins/sec", initsPerRun);
+                showStats("ops/sec", opsPerRun);
+            }
 
             for (var iter = 0; iter < options.IterationCount; ++iter)
             {
@@ -151,9 +177,29 @@ namespace FASTER.benchmark
                     Console.WriteLine($"Iteration {iter + 1} of {options.IterationCount}");
                 }
 
-                test.CreateStore();
-                addResult(test.Run());
-                test.DisposeStore();
+                switch (b)
+                {
+                    case BenchmarkType.Ycsb:
+                        var yTest = new FASTER_YcsbBenchmark(init_keys_, txn_keys_, options.ThreadCount, options.NumaStyle, distribution, options.ReadPercent, backupMode, lockImpl, secondaryIndexType);
+                        addResult(yTest.Run());
+                        yTest.Dispose();
+                        break;
+                    case BenchmarkType.SpanByte:
+                        var sTest = new FasterSpanByteYcsbBenchmark(init_span_keys_, txn_span_keys_, options.ThreadCount, options.NumaStyle, distribution, options.ReadPercent, backupMode, lockImpl, secondaryIndexType);
+                        addResult(sTest.Run());
+                        sTest.Dispose();
+                        break;
+                    case BenchmarkType.ConcurrentDictionaryYcsb:
+                        var cTest = new ConcurrentDictionary_YcsbBenchmark(init_keys_, txn_keys_, options.ThreadCount, options.NumaStyle, distribution, options.ReadPercent);
+                        addResult(cTest.Run());
+                        cTest.Dispose();
+                        break;
+                    default:
+                        throw new ApplicationException("Unknown benchmark type");
+                }
+
+                if (options.IterationCount > 1)
+                    showAllStats();
 
                 if (iter < options.IterationCount - 1)
                 {
@@ -163,35 +209,21 @@ namespace FASTER.benchmark
                 }
             }
 
-            if (options.IterationCount > 1)
+            if (options.IterationCount >= kTrimResultCount)
             {
-                if (options.IterationCount >= kTrimResultCount)
+                static void discardHiLo(List<double> vec)
                 {
-                    static void discardHiLo(List<double> vec)
-                    {
-                        vec.Sort();
+                    vec.Sort();
 #pragma warning disable IDE0056 // Use index operator (^ is not supported on .NET Framework or NETCORE pre-3.0)
-                        vec[0] = vec[vec.Count - 2];        // overwrite lowest with second-highest
+                    vec[0] = vec[vec.Count - 2];        // overwrite lowest with second-highest
 #pragma warning restore IDE0056 // Use index operator
-                        vec.RemoveRange(vec.Count - 2, 2);  // remove highest and (now-duplicated) second-highest
-                    }
-                    discardHiLo(initsPerRun);
-                    discardHiLo(opsPerRun);
+                    vec.RemoveRange(vec.Count - 2, 2);  // remove highest and (now-duplicated) second-highest
                 }
+                discardHiLo(initsPerRun);
+                discardHiLo(opsPerRun);
 
                 Console.WriteLine();
-                var discardMessage = initsPerRun.Count < options.IterationCount ? $" ({options.IterationCount} iterations with high and low discarded)" : string.Empty;
-                Console.WriteLine($"Averages per second over {initsPerRun.Count} run(s){discardMessage}:");
-                static void showStats(string tag, List<double> vec)
-                {
-                    var mean = vec.Count == 1 ? 0.0 : vec.Sum() / vec.Count;
-                    var stddev = vec.Count == 1 ? 0.0 : Math.Sqrt(vec.Sum(n => Math.Pow(n - mean, 2)) / vec.Count);
-                    var stddevpct = (stddev / mean) * 100;
-                    Console.WriteLine($"###; {tag}; {mean:N3}; sd; {stddev:N1}; {stddevpct:N1}%");
-                }
-
-                showStats("ins/sec", initsPerRun);
-                showStats("ops/sec", opsPerRun);
+                showAllStats($" ({options.IterationCount} iterations specified, with high and low discarded)");
             }
         }
     }

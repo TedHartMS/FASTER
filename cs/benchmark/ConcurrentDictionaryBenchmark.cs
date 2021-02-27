@@ -33,7 +33,7 @@ namespace FASTER.benchmark
         }
     }
 
-    public unsafe class ConcurrentDictionary_YcsbBenchmark : IBenchmarkTest
+    public unsafe class ConcurrentDictionary_YcsbBenchmark
     {
         public enum Op : ulong
         {
@@ -60,18 +60,20 @@ namespace FASTER.benchmark
         readonly int readPercent;
         readonly Input[] input_;
 
-        Key[] init_keys_;
-        Key[] txn_keys_;
+        readonly Key[] init_keys_;
+        readonly Key[] txn_keys_;
 
-        ConcurrentDictionary<Key, Value> store;
+        readonly ConcurrentDictionary<Key, Value> store;
 
         long idx_ = 0;
         long total_ops_done = 0;
         volatile bool done = false;
         Input* input_ptr;
 
-        public ConcurrentDictionary_YcsbBenchmark(int threadCount_, int numaStyle_, string distribution_, int readPercent_)
+        public ConcurrentDictionary_YcsbBenchmark(Key[] i_keys_, Key[] t_keys_, int threadCount_, int numaStyle_, string distribution_, int readPercent_)
         {
+            init_keys_ = i_keys_;
+            txn_keys_ = t_keys_;
             threadCount = threadCount_;
             numaStyle = numaStyle_;
             distribution = distribution_;
@@ -93,22 +95,13 @@ namespace FASTER.benchmark
             input_ = new Input[8];
             for (int i = 0; i < 8; i++)
                 input_[i].value = i;
-        }
 
-        public void CreateStore()
-        { 
             store = new ConcurrentDictionary<Key, Value>(threadCount, kMaxKey, new KeyComparer());
         }
 
-        public void DisposeStore()
+        public void Dispose()
         {
             store.Clear();
-            store = null;
-
-            idx_ = 0;
-            total_ops_done = 0;
-            done = false;
-            input_ptr = null;
         }
 
         private void RunYcsb(int thread_idx)
@@ -418,7 +411,7 @@ namespace FASTER.benchmark
 
         #region Load Data
 
-        private void LoadDataFromFile(string filePath)
+        private static void LoadDataFromFile(string filePath, string distribution, out Key[] i_keys, out Key[] t_keys)
         {
             string init_filename = filePath + "/load_" + distribution + "_250M_raw.dat";
             string txn_filename = filePath + "/run_" + distribution + "_250M_1000M_raw.dat";
@@ -428,7 +421,7 @@ namespace FASTER.benchmark
                 FileShare.Read))
             {
                 Console.WriteLine("loading keys from " + init_filename + " into memory...");
-                init_keys_ = new Key[kInitCount];
+                i_keys = new Key[kInitCount];
 
                 byte[] chunk = new byte[kFileChunkSize];
                 GCHandle chunk_handle = GCHandle.Alloc(chunk, GCHandleType.Pinned);
@@ -442,7 +435,7 @@ namespace FASTER.benchmark
                     int size = stream.Read(chunk, 0, kFileChunkSize);
                     for (int idx = 0; idx < size; idx += 8)
                     {
-                        init_keys_[count].value = *(long*)(chunk_ptr + idx);
+                        i_keys[count].value = *(long*)(chunk_ptr + idx);
                         ++count;
                     }
                     if (size == kFileChunkSize)
@@ -471,7 +464,7 @@ namespace FASTER.benchmark
 
                 Console.WriteLine("loading txns from " + txn_filename + " into memory...");
 
-                txn_keys_ = new Key[kTxnCount];
+                t_keys = new Key[kTxnCount];
 
                 count = 0;
                 long offset = 0;
@@ -482,7 +475,7 @@ namespace FASTER.benchmark
                     int size = stream.Read(chunk, 0, kFileChunkSize);
                     for (int idx = 0; idx < size; idx += 8)
                     {
-                        txn_keys_[count] = *((Key*)(chunk_ptr + idx));
+                        t_keys[count] = *((Key*)(chunk_ptr + idx));
                         ++count;
                     }
                     if (size == kFileChunkSize)
@@ -503,11 +496,11 @@ namespace FASTER.benchmark
             Console.WriteLine("loaded " + kTxnCount + " txns.");
         }
 
-        public void LoadData()
+        public static void LoadData(string distribution, uint seed, out Key[] i_keys, out Key[] t_keys)
         {
             if (kUseSyntheticData)
             {
-                LoadSyntheticData();
+                LoadSyntheticData(distribution, seed, out i_keys, out t_keys);
                 return;
             }
 
@@ -524,35 +517,36 @@ namespace FASTER.benchmark
 
             if (Directory.Exists(filePath))
             {
-                LoadDataFromFile(filePath);
+                LoadDataFromFile(filePath, distribution, out i_keys, out t_keys);
+                return;
             }
             else
             {
                 Console.WriteLine("WARNING: Could not find YCSB directory, loading synthetic data instead");
-                LoadSyntheticData();
+                LoadSyntheticData(distribution, seed, out i_keys, out t_keys);
             }
         }
 
-        private void LoadSyntheticData()
+        private static void LoadSyntheticData(string distribution, uint seed, out Key[] i_keys, out Key[] t_keys)
         {
             Console.WriteLine("Loading synthetic data (uniform distribution)");
 
-            init_keys_ = new Key[kInitCount];
+            i_keys = new Key[kInitCount];
             long val = 0;
             for (int idx = 0; idx < kInitCount; idx++)
             {
-                init_keys_[idx] = new Key { value = val++ };
+                i_keys[idx] = new Key { value = val++ };
             }
 
             Console.WriteLine("loaded " + kInitCount + " keys.");
 
-            RandomGenerator generator = new RandomGenerator();
+            RandomGenerator generator = new RandomGenerator(seed);
 
-            txn_keys_ = new Key[kTxnCount];
+            t_keys = new Key[kTxnCount];
 
             for (int idx = 0; idx < kTxnCount; idx++)
             {
-                txn_keys_[idx] = new Key { value = (long)generator.Generate64(kInitCount) };
+                t_keys[idx] = new Key { value = (long)generator.Generate64(kInitCount) };
             }
 
             Console.WriteLine("loaded " + kTxnCount + " txns.");

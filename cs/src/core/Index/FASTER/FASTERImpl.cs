@@ -467,7 +467,7 @@ namespace FASTER.core
                 if (foundEntry.word == entry.word)
                 {
                     pendingContext.logicalAddress = newLogicalAddress;
-                    pendingContext.IsNewRecord = true;
+                    pendingContext.IsNewRecord = this.SecondaryIndexBroker.HasMutableIndexes;
                     status = OperationStatus.SUCCESS;
                     goto LatchRelease;
                 }
@@ -821,7 +821,7 @@ namespace FASTER.core
                 if (foundEntry.word == entry.word)
                 {
                     pendingContext.logicalAddress = newLogicalAddress;
-                    pendingContext.IsNewRecord = true;
+                    pendingContext.IsNewRecord = this.SecondaryIndexBroker.HasMutableIndexes;
                     goto LatchRelease;
                 }
                 else
@@ -1089,7 +1089,7 @@ namespace FASTER.core
                 if (foundEntry.word == entry.word)
                 {
                     pendingContext.logicalAddress = newLogicalAddress;
-                    pendingContext.IsNewRecord = true;
+                    pendingContext.IsNewRecord = this.SecondaryIndexBroker.HasMutableIndexes;
                     status = OperationStatus.SUCCESS;
                     goto LatchRelease;
                 }
