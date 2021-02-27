@@ -460,7 +460,7 @@ namespace FASTER.core
                     status = HandleOperationStatus(currentCtx, currentCtx, ref pcontext, fasterSession, internalStatus, true, out diskRequest);
                 }
 
-                if (this.SupportsMutableIndexes && (status == Status.OK || status == Status.NOTFOUND) && pcontext.IsNewRecord)
+                if ((status == Status.OK || status == Status.NOTFOUND) && pcontext.IsNewRecord)
                 {
                     long physicalAddress = this.hlog.GetPhysicalAddress(pcontext.logicalAddress);
                     ref RecordInfo recordInfo = ref this.hlog.GetInfo(physicalAddress);

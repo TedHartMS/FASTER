@@ -80,12 +80,6 @@ namespace FASTER.core
         internal ConcurrentDictionary<string, CommitPoint> _recoveredSessions;
 
         /// <summary>
-        /// This FASTER instance support indexes that receive updates immediately on relevant FASTER operations,
-        /// when they are done in the mutable region.
-        /// </summary>
-        public readonly bool SupportsMutableIndexes;
-
-        /// <summary>
         /// Manages secondary indexes for this FASTER instance.
         /// </summary>
         public SecondaryIndexBroker<Key, Value> SecondaryIndexBroker { get; } = new SecondaryIndexBroker<Key, Value>();
@@ -99,11 +93,10 @@ namespace FASTER.core
         /// <param name="serializerSettings">Serializer settings</param>
         /// <param name="comparer">FASTER equality comparer for key</param>
         /// <param name="variableLengthStructSettings"></param>
-        /// <param name="supportsMutableIndexes">If true, this FASTER instance supports mutable indexes</param>
         public FasterKV(long size, LogSettings logSettings,
             CheckpointSettings checkpointSettings = null, SerializerSettings<Key, Value> serializerSettings = null,
             IFasterEqualityComparer<Key> comparer = null,
-            VariableLengthStructSettings<Key, Value> variableLengthStructSettings = null, bool supportsMutableIndexes = false)
+            VariableLengthStructSettings<Key, Value> variableLengthStructSettings = null)
         {
             if (comparer != null)
                 this.comparer = comparer;
@@ -223,8 +216,6 @@ namespace FASTER.core
                     ReadCache = new LogAccessor<Key, Value>(this, readcache);
                 }
             }
-
-            this.SupportsMutableIndexes = supportsMutableIndexes;
 
             hlog.Initialize();
 
@@ -616,7 +607,7 @@ namespace FASTER.core
         internal bool UpdateSIForIPU(ref Value value, long address)
         {
             // KeyIndexes do not need notification of in-place updates because the key does not change.
-            if (this.SupportsMutableIndexes && this.SecondaryIndexBroker.MutableValueIndexCount > 0)
+            if (this.SecondaryIndexBroker.MutableValueIndexCount > 0)
                 this.SecondaryIndexBroker.Upsert(ref value, address);
             return true;
         }

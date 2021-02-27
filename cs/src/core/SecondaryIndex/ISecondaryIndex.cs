@@ -16,7 +16,6 @@ namespace FASTER.core
         /// <summary>
         /// If true, the index is updated immediately on each FasterKV operation; otherwise it is updated only when record pages go ReadOnly.
         /// </summary>
-        /// <remarks>Requires <see cref="FasterKV{Key, Value}.SupportsMutableIndexes"/></remarks>
         bool IsMutable { get; }
     }
 

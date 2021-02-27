@@ -15,7 +15,7 @@ using System.Threading;
 
 namespace FASTER.benchmark
 {
-    public class FASTER_YcsbBenchmark
+    internal class FASTER_YcsbBenchmark : IBenchmarkTest
     {
         public enum Op : ulong
         {
@@ -30,7 +30,7 @@ namespace FASTER.benchmark
         const bool kUseSyntheticData = true;
         const bool kSmallMemoryLog = false;
         const bool kAffinitizedSession = true;
-        const int kRunSeconds = 3;
+        const int kRunSeconds = 30;
         const int kPeriodicCheckpointMilliseconds = 0;
 #else
         const bool kDumpDistribution = false;
@@ -61,28 +61,26 @@ namespace FASTER.benchmark
         const int kFileChunkSize = 4096;
         const long kChunkSize = 640;
 
-        Key[] init_keys_;
-
-        Key[] txn_keys_;
-
-        long idx_ = 0;
-
-        Input[] input_;
-        readonly IDevice device;
-
-        readonly FasterKV<Key, Value> store;
-
-        long total_ops_done = 0;
-
         readonly int threadCount;
         readonly int numaStyle;
         readonly string distribution;
         readonly int readPercent;
         readonly Functions functions;
+        readonly SecondaryIndexType secondaryIndexType = SecondaryIndexType.None;
+        readonly uint distributionSeed;
+        readonly Input[] input_;
 
+        Key[] init_keys_;
+        Key[] txn_keys_;
+
+        IDevice device;
+        FasterKV<Key, Value> store;
+
+        long idx_ = 0;
+        long total_ops_done = 0;
         volatile bool done = false;
 
-        public FASTER_YcsbBenchmark(int threadCount_, int numaStyle_, string distribution_, int readPercent_, int backupOptions_, int lockImpl_, int secondaryIndexType_)
+        internal FASTER_YcsbBenchmark(int threadCount_, int numaStyle_, string distribution_, int readPercent_, BackupMode backupMode_, LockImpl lockImpl_, SecondaryIndexType secondaryIndexType_, int seed_)
         {
             // Pin loading thread if it is not used for checkpointing
             if (kPeriodicCheckpointMilliseconds <= 0)
@@ -92,10 +90,11 @@ namespace FASTER.benchmark
             numaStyle = numaStyle_;
             distribution = distribution_;
             readPercent = readPercent_;
-            this.backupMode = (BackupMode)backupOptions_;
-            var lockImpl = (LockImpl)lockImpl_;
-            var secondaryIndexType = (SecondaryIndexType)secondaryIndexType_;
+            this.backupMode = backupMode_;
+            var lockImpl = lockImpl_;
             functions = new Functions(lockImpl != LockImpl.None);
+            secondaryIndexType = secondaryIndexType_;
+            distributionSeed = (uint)seed_;
 
 #if DASHBOARD
             statsWritten = new AutoResetEvent[threadCount];
@@ -111,24 +110,41 @@ namespace FASTER.benchmark
             freq = Stopwatch.Frequency;
 #endif
 
+            input_ = new Input[8];
+            for (int i = 0; i < 8; i++)
+                input_[i].value = i;
+        }
+
+        public void CreateStore()
+        {
             var path = "D:\\data\\FasterYcsbBenchmark\\";
             device = Devices.CreateLogDevice(path + "hlog", preallocateFile: true);
 
             if (kSmallMemoryLog)
                 store = new FasterKV<Key, Value>
                     (kMaxKey / 2, new LogSettings { LogDevice = device, PreallocateLog = true, PageSizeBits = 22, SegmentSizeBits = 26, MemorySizeBits = 26 },
-                    new CheckpointSettings { CheckPointType = CheckpointType.FoldOver, CheckpointDir = path },
-                    supportsMutableIndexes: secondaryIndexType != SecondaryIndexType.None);
+                    new CheckpointSettings { CheckPointType = CheckpointType.FoldOver, CheckpointDir = path });
             else
                 store = new FasterKV<Key, Value>
                     (kMaxKey / 2, new LogSettings { LogDevice = device, PreallocateLog = true },
-                    new CheckpointSettings { CheckPointType = CheckpointType.FoldOver, CheckpointDir = path },
-                    supportsMutableIndexes: secondaryIndexType != SecondaryIndexType.None);
+                    new CheckpointSettings { CheckPointType = CheckpointType.FoldOver, CheckpointDir = path });
 
             if (secondaryIndexType.HasFlag(SecondaryIndexType.Key))
                 store.SecondaryIndexBroker.AddIndex(new NullKeyIndex<Key>());
             if (secondaryIndexType.HasFlag(SecondaryIndexType.Value))
                 store.SecondaryIndexBroker.AddIndex(new NullValueIndex<Value>());
+        }
+
+        public void DisposeStore()
+        {
+            store.Dispose();
+            store = null;
+            device.Dispose();
+            device = null;
+
+            idx_ = 0;
+            total_ops_done = 0;
+            done = false;
         }
 
         private void RunYcsb(int thread_idx)
@@ -246,14 +262,6 @@ namespace FASTER.benchmark
 
         public unsafe (double, double) Run()
         {
-            RandomGenerator rng = new RandomGenerator();
-
-            LoadData();
-
-            input_ = new Input[8];
-            for (int i = 0; i < 8; i++)
-                input_[i].value = i;
-
 #if DASHBOARD
             var dash = new Thread(() => DoContinuousMeasurements());
             dash.Start();
@@ -387,7 +395,6 @@ namespace FASTER.benchmark
             Console.WriteLine("##, " + distribution + ", " + numaStyle + ", " + readPercent + ", "
                 + threadCount + ", " + opsPerSecond + ", "
                 + (endTailAddress - startTailAddress));
-            device.Dispose();
             return (initsPerSecond, opsPerSecond);
         }
 
@@ -555,6 +562,8 @@ namespace FASTER.benchmark
                 {
                     throw new InvalidDataException("Init file load fail!");
                 }
+
+                chunk_handle.Free();
             }
 
             Console.WriteLine("loaded " + kInitCount + " keys.");
@@ -597,12 +606,14 @@ namespace FASTER.benchmark
                 {
                     throw new InvalidDataException("Txn file load fail!" + count + ":" + kTxnCount);
                 }
+
+                chunk_handle.Free();
             }
 
             Console.WriteLine("loaded " + kTxnCount + " txns.");
         }
 
-        private void LoadData()
+        public void LoadData()
         {
             if (kUseSyntheticData)
             {
@@ -645,7 +656,7 @@ namespace FASTER.benchmark
 
             Console.WriteLine("loaded " + kInitCount + " keys.");
 
-            RandomGenerator generator = new RandomGenerator();
+            RandomGenerator generator = new RandomGenerator(distributionSeed);
 
             txn_keys_ = new Key[kTxnCount];
 

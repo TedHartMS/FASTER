@@ -33,7 +33,7 @@ namespace FASTER.benchmark
         }
     }
 
-    public unsafe class ConcurrentDictionary_YcsbBenchmark
+    public unsafe class ConcurrentDictionary_YcsbBenchmark : IBenchmarkTest
     {
         public enum Op : ulong
         {
@@ -51,28 +51,24 @@ namespace FASTER.benchmark
         const int kFileChunkSize = 4096;
         const long kChunkSize = 640;
 
-        Key[] init_keys_;
-
-        Key[] txn_keys_;
-
-        long idx_ = 0;
-
-        Input[] input_;
-        Input* input_ptr;
-
-        readonly ConcurrentDictionary<Key, Value> store;
-
-        long total_ops_done = 0;
+        const int kRunSeconds = 30;
+        const int kCheckpointSeconds = -1;
 
         readonly int threadCount;
         readonly int numaStyle;
         readonly string distribution;
         readonly int readPercent;
+        readonly Input[] input_;
 
-        const int kRunSeconds = 30;
-        const int kCheckpointSeconds = -1;
+        Key[] init_keys_;
+        Key[] txn_keys_;
 
+        ConcurrentDictionary<Key, Value> store;
+
+        long idx_ = 0;
+        long total_ops_done = 0;
         volatile bool done = false;
+        Input* input_ptr;
 
         public ConcurrentDictionary_YcsbBenchmark(int threadCount_, int numaStyle_, string distribution_, int readPercent_)
         {
@@ -94,9 +90,25 @@ namespace FASTER.benchmark
             writeStats = new bool[threadCount];
             freq = Stopwatch.Frequency;
 #endif
+            input_ = new Input[8];
+            for (int i = 0; i < 8; i++)
+                input_[i].value = i;
+        }
 
-
+        public void CreateStore()
+        { 
             store = new ConcurrentDictionary<Key, Value>(threadCount, kMaxKey, new KeyComparer());
+        }
+
+        public void DisposeStore()
+        {
+            store.Clear();
+            store = null;
+
+            idx_ = 0;
+            total_ops_done = 0;
+            done = false;
+            input_ptr = null;
         }
 
         private void RunYcsb(int thread_idx)
@@ -198,13 +210,6 @@ namespace FASTER.benchmark
         {
             RandomGenerator rng = new RandomGenerator();
 
-            LoadData();
-
-            input_ = new Input[8];
-            for (int i = 0; i < 8; i++)
-            {
-                input_[i].value = i;
-            }
             GCHandle handle = GCHandle.Alloc(input_, GCHandleType.Pinned);
             input_ptr = (Input*)handle.AddrOfPinnedObject();
 
@@ -284,6 +289,9 @@ namespace FASTER.benchmark
 #if DASHBOARD
             dash.Abort();
 #endif
+
+            handle.Free();
+            input_ptr = null;
 
             double seconds = swatch.ElapsedMilliseconds / 1000.0;
 
@@ -495,7 +503,7 @@ namespace FASTER.benchmark
             Console.WriteLine("loaded " + kTxnCount + " txns.");
         }
 
-        private void LoadData()
+        public void LoadData()
         {
             if (kUseSyntheticData)
             {

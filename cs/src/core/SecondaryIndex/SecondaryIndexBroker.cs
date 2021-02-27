@@ -56,6 +56,11 @@ namespace FASTER.core
         public int Count => indexes.Count;
 
         /// <summary>
+        /// The number of indexes registered.
+        /// </summary>
+        public bool HasMutableIndexes => mutableKeyIndexes.Length + mutableValueIndexes.Length > 0;
+
+        /// <summary>
         /// Enumerates the list of indexes.
         /// </summary>
         /// <returns></returns>
