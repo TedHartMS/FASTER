@@ -5,7 +5,6 @@ using CommandLine;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net.Http.Headers;
 using System.Threading;
 
 namespace FASTER.benchmark
@@ -154,12 +153,14 @@ namespace FASTER.benchmark
                     throw new ApplicationException("Unknown benchmark type");
             }
 
-            static void showStats(string tag, List<double> vec, string discardMessage = "")
+            string delim = "###";
+
+            void showStats(string tag, List<double> vec, string discardMessage = "")
             {
                 var mean = vec.Sum() / vec.Count;
                 var stddev = Math.Sqrt(vec.Sum(n => Math.Pow(n - mean, 2)) / vec.Count);
                 var stddevpct = (stddev / mean) * 100;
-                Console.WriteLine($"###; {tag}; {mean:N3}; sd; {stddev:N1}; {stddevpct:N1}%");
+                Console.WriteLine($"{delim}; {tag}; {mean:N3}; sd; {stddev:N1}; {stddevpct:N1}%");
             }
 
             void showAllStats(string discardMessage = "")
@@ -199,13 +200,19 @@ namespace FASTER.benchmark
                 }
 
                 if (options.IterationCount > 1)
-                    showAllStats();
-
-                if (iter < options.IterationCount - 1)
                 {
-                    GC.Collect();
-                    GC.WaitForFullGCComplete();
-                    Thread.Sleep(1000);
+                    if (iter < options.IterationCount - 1)
+                    {
+                        showAllStats();
+                        GC.Collect();
+                        GC.WaitForFullGCComplete();
+                        Thread.Sleep(1000);
+                    }
+                    else
+                    {
+                        delim = "#+#";
+                        showAllStats();
+                    }
                 }
             }
 
@@ -223,6 +230,7 @@ namespace FASTER.benchmark
                 discardHiLo(opsPerRun);
 
                 Console.WriteLine();
+                delim = "#-#";
                 showAllStats($" ({options.IterationCount} iterations specified, with high and low discarded)");
             }
         }
