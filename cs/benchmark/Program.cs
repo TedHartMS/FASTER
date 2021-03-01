@@ -9,88 +9,27 @@ using System.Threading;
 
 namespace FASTER.benchmark
 {
-    class Options
+    enum AggregateType
     {
-        [Option('b', "benchmark", Required = false, Default = 0,
-        HelpText = "Benchmark to run:" +
-                        "\n    0 = YCSB" +
-                        "\n    1 = YCSB with SpanByte" +
-                        "\n    2 = ConcurrentDictionary")]
-        public int Benchmark { get; set; }
-
-        [Option('t', "threads", Required = false, Default = 8,
-         HelpText = "Number of threads to run the workload on")]
-        public int ThreadCount { get; set; }
-
-        [Option('n', "numa", Required = false, Default = 0,
-             HelpText = "NUMA options:" +
-                        "\n    0 = No sharding across NUMA sockets" +
-                        "\n    1 = Sharding across NUMA sockets")]
-        public int NumaStyle { get; set; }
-
-        [Option('k', "backup", Required = false, Default = 0,
-             HelpText = "Enable Backup and Restore of FasterKV for fast test startup:" +
-                        "\n    0 = None; Populate FasterKV from data" +
-                        "\n    1 = Recover FasterKV from Checkpoint; if this fails, populate FasterKV from data" +
-                        "\n    2 = Checkpoint FasterKV (unless it was Recovered by option 1; if option 1 is not specified, this will overwrite an existing Checkpoint)" +
-                        "\n    3 = Both (Recover FasterKV if a Checkpoint is available, else populate FasterKV from data and Checkpoint it so it can be Restored in a subsequent run)")]
-        public int Backup { get; set; }
-
-        [Option('l', "locking", Required = false, Default = 0,
-             HelpText = "Locking Implementation:" +
-                        "\n    0 = None (default)" +
-                        "\n    1 = RecordInfo.SpinLock()")]
-        public int LockImpl { get; set; }
-
-        [Option('x', "index", Required = false, Default = 0,
-             HelpText = "Secondary index type(s); these implement a no-op index to test the overhead on FasterKV operations:" +
-                        "\n    0 = None (default)" +
-                        "\n    1 = Key-based index" +
-                        "\n    2 = Value-based index" +
-                        "\n    3 = Both index types")]
-        public int SecondaryIndexType { get; set; }
-
-        [Option('i', "iterations", Required = false, Default = 1,
-         HelpText = "Number of iterations of the test to run")]
-        public int IterationCount { get; set; }
-
-        [Option('r', "read_percent", Required = false, Default = 50,
-         HelpText = "Percentage of reads (-1 for 100% read-modify-write")]
-        public int ReadPercent { get; set; }
-
-        [Option('d', "distribution", Required = false, Default = "uniform",
-            HelpText = "Distribution of keys in workload")]
-        public string Distribution { get; set; }
-
-        [Option('s', "seed", Required = false, Default = 211,
-            HelpText = "Seed for synthetic data distribution")]
-        public int RandomSeed { get; set; }
+        Running,
+        FinalFull,
+        FinalTrimmed
     }
 
-    enum BenchmarkType : int
+    enum StatsLine : int
     {
-        Ycsb, SpanByte, ConcurrentDictionaryYcsb
-    };
-
-    [Flags] enum BackupMode : int
-    {
-        None, Restore, Backup, Both
-    };
-
-    enum LockImpl : int
-    {
-        None, RecordInfo
-    };
-
-    [Flags]
-    enum SecondaryIndexType : int
-    {
-        None, Key, Value, Both
-    };
+        Iteration = 3,
+        RunningIns = 4,
+        RunningOps = 5,
+        FinalFullIns = 10,
+        FinalFullOps = 11,
+        FinalTrimmedIns = 20,
+        FinalTrimmedOps = 21
+    }
 
     public class Program
     {
-        const int kTrimResultCount = 3;// int.MaxValue; // Use some high value like int.MaxValue to bypass
+        const int kTrimResultCount = 3; // Use some high value like int.MaxValue to disable
 
         public static void Main(string[] args)
         {
@@ -119,10 +58,12 @@ namespace FASTER.benchmark
             if (!verifyOption(Enum.IsDefined(typeof(SecondaryIndexType), secondaryIndexType), "Secondary Index Type")) return;
             if (!verifyOption(options.IterationCount > 0, "Iteration Count")) return;
             if (!verifyOption(options.ReadPercent >= -1 && options.ReadPercent <= 100, "Read Percent")) return;
-            var distribution = options.Distribution.ToLower();
-            if (!verifyOption(distribution == "uniform" || distribution == "zipf", "Distribution")) return;
+            var distribution = options.DistributionName.ToLower();
+            if (!verifyOption(distribution == YcsbGlobals.UniformDist || distribution == YcsbGlobals.ZipfDist, "Distribution")) return;
 
             Console.WriteLine($"Scenario: {b}, Locking: {(LockImpl)options.LockImpl}, Indexing: {(SecondaryIndexType)options.SecondaryIndexType}");
+
+            YcsbGlobals.OptionsString = options.GetOptionsString();
 
             var initsPerRun = new List<double>();
             var opsPerRun = new List<double>();
@@ -153,30 +94,41 @@ namespace FASTER.benchmark
                     throw new ApplicationException("Unknown benchmark type");
             }
 
-            string delim = "###";
-
-            void showStats(string tag, List<double> vec, string discardMessage = "")
+            static void showStats(StatsLine lineNum, string tag, List<double> vec, string discardMessage = "")
             {
                 var mean = vec.Sum() / vec.Count;
                 var stddev = Math.Sqrt(vec.Sum(n => Math.Pow(n - mean, 2)) / vec.Count);
                 var stddevpct = (stddev / mean) * 100;
-                Console.WriteLine($"{delim}; {tag}; {mean:N3}; sd; {stddev:N1}; {stddevpct:N1}%");
+                Console.WriteLine(YcsbGlobals.StatsLine(lineNum, tag, mean, stddev, stddevpct));
             }
 
-            void showAllStats(string discardMessage = "")
+            void showAllStats(AggregateType aggregateType, string discardMessage = "")
             {
-                Console.WriteLine($"Averages per second over {initsPerRun.Count} iteration(s){discardMessage}:");
-                showStats("ins/sec", initsPerRun);
-                showStats("ops/sec", opsPerRun);
+                var aggTypeString = aggregateType == AggregateType.Running ? "Running" : "Final";
+                Console.WriteLine($"{aggTypeString} averages per second over {initsPerRun.Count} iteration(s){discardMessage}:");
+                var statsLineNum = aggregateType switch
+                {
+                    AggregateType.Running => StatsLine.RunningIns,
+                    AggregateType.FinalFull => StatsLine.FinalFullIns,
+                    AggregateType.FinalTrimmed => StatsLine.FinalTrimmedIns,
+                    _ => throw new InvalidOperationException("Unknown AggregateType")
+                };
+                showStats(statsLineNum, "ins/sec", initsPerRun);
+                statsLineNum = aggregateType switch
+                {
+                    AggregateType.Running => StatsLine.RunningOps,
+                    AggregateType.FinalFull => StatsLine.FinalFullOps,
+                    AggregateType.FinalTrimmed => StatsLine.FinalTrimmedOps,
+                    _ => throw new InvalidOperationException("Unknown AggregateType")
+                };
+                showStats(statsLineNum, "ops/sec", opsPerRun);
             }
 
             for (var iter = 0; iter < options.IterationCount; ++iter)
             {
+                Console.WriteLine();
                 if (options.IterationCount > 1)
-                {
-                    Console.WriteLine();
                     Console.WriteLine($"Iteration {iter + 1} of {options.IterationCount}");
-                }
 
                 switch (b)
                 {
@@ -201,20 +153,18 @@ namespace FASTER.benchmark
 
                 if (options.IterationCount > 1)
                 {
+                    showAllStats(AggregateType.Running);
                     if (iter < options.IterationCount - 1)
                     {
-                        showAllStats();
                         GC.Collect();
                         GC.WaitForFullGCComplete();
                         Thread.Sleep(1000);
                     }
-                    else
-                    {
-                        delim = "#+#";
-                        showAllStats();
-                    }
                 }
             }
+
+            Console.WriteLine();
+            showAllStats(AggregateType.FinalFull);
 
             if (options.IterationCount >= kTrimResultCount)
             {
@@ -230,8 +180,7 @@ namespace FASTER.benchmark
                 discardHiLo(opsPerRun);
 
                 Console.WriteLine();
-                delim = "#-#";
-                showAllStats($" ({options.IterationCount} iterations specified, with high and low discarded)");
+                showAllStats(AggregateType.FinalTrimmed, $" ({options.IterationCount} iterations specified, with high and low discarded)");
             }
         }
     }

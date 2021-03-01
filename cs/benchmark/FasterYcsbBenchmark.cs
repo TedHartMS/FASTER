@@ -17,31 +17,6 @@ namespace FASTER.benchmark
 {
     internal class FASTER_YcsbBenchmark
     {
-        public enum Op : ulong
-        {
-            Upsert = 0,
-            Read = 1,
-            ReadModifyWrite = 2
-        }
-
-#if DEBUG
-        const bool kDumpDistribution = false;
-        const bool kUseSmallData = true;
-        const bool kUseSyntheticData = true;
-        const bool kSmallMemoryLog = false;
-        const bool kAffinitizedSession = true;
-        const int kRunSeconds = 30;
-        const int kPeriodicCheckpointMilliseconds = 0;
-#else
-        const bool kDumpDistribution = false;
-        const bool kUseSmallData = true; // false;
-        const bool kUseSyntheticData = false;
-        const bool kSmallMemoryLog = false;
-        const bool kAffinitizedSession = true;
-        const int kRunSeconds = 30;
-        const int kPeriodicCheckpointMilliseconds = 0;
-#endif
-
         // *** Use these to backup and recover database for fast benchmark repeat runs
         // Use BackupMode.Backup to create the backup, unless it was recovered during BackupMode.Recover
         // Use BackupMode.Restore for fast subsequent runs
@@ -49,14 +24,19 @@ namespace FASTER.benchmark
         readonly BackupMode backupMode;
         // ***
 
-        const long kInitCount_ = kUseSmallData ? 2500480 : 250000000;
-        const long kTxnCount_ = kUseSmallData ? 10000000 : 1000000000;
+#if DEBUG
+        internal const bool kDumpDistribution = false;
+        internal const bool kAffinitizedSession = true;
+        internal const int kPeriodicCheckpointMilliseconds = 0;
+#else
+        internal const bool kDumpDistribution = false;
+        internal const bool kAffinitizedSession = true;
+        internal const int kPeriodicCheckpointMilliseconds = 0;
+#endif
 
         // Ensure sizes are aligned to chunk sizes
-        const long kInitCount = kChunkSize * (kInitCount_ / kChunkSize);
-        const long kTxnCount = kChunkSize * (kTxnCount_ / kChunkSize);
-
-        const int kMaxKey = kUseSmallData ? 1 << 22 : 1 << 28;
+        const long kInitCount = kChunkSize * (YcsbGlobals.kInitCount / kChunkSize);
+        const long kTxnCount = kChunkSize * (YcsbGlobals.kTxnCount / kChunkSize);
 
         const int kFileChunkSize = 4096;
         const long kChunkSize = 640;
@@ -92,7 +72,7 @@ namespace FASTER.benchmark
             numaStyle = numaStyle_;
             distribution = distribution_;
             readPercent = readPercent_;
-            this.backupMode = backupMode_;
+            backupMode = backupMode_;
             var lockImpl = lockImpl_;
             functions = new Functions(lockImpl != LockImpl.None);
             secondaryIndexType = secondaryIndexType_;
@@ -117,13 +97,13 @@ namespace FASTER.benchmark
             var path = "D:\\data\\FasterYcsbBenchmark\\";
             device = Devices.CreateLogDevice(path + "hlog", preallocateFile: true);
 
-            if (kSmallMemoryLog)
+            if (YcsbGlobals.kSmallMemoryLog)
                 store = new FasterKV<Key, Value>
-                    (kMaxKey / 2, new LogSettings { LogDevice = device, PreallocateLog = true, PageSizeBits = 22, SegmentSizeBits = 26, MemorySizeBits = 26 },
+                    (YcsbGlobals.kMaxKey / 2, new LogSettings { LogDevice = device, PreallocateLog = true, PageSizeBits = 22, SegmentSizeBits = 26, MemorySizeBits = 26 },
                     new CheckpointSettings { CheckPointType = CheckpointType.FoldOver, CheckpointDir = path });
             else
                 store = new FasterKV<Key, Value>
-                    (kMaxKey / 2, new LogSettings { LogDevice = device, PreallocateLog = true },
+                    (YcsbGlobals.kMaxKey / 2, new LogSettings { LogDevice = device, PreallocateLog = true },
                     new CheckpointSettings { CheckPointType = CheckpointType.FoldOver, CheckpointDir = path });
 
             if (secondaryIndexType.HasFlag(SecondaryIndexType.Key))
@@ -301,11 +281,9 @@ namespace FASTER.benchmark
                 }
                 sw.Stop();
             }
-            double initsPerSecond = storeWasRecovered ? 0 : ((double)kInitCount / sw.ElapsedMilliseconds) * 1000;
-            Console.WriteLine($"Loading time: {sw.ElapsedMilliseconds}ms ({initsPerSecond:N3} inserts per sec)");
-
-            long startTailAddress = store.Log.TailAddress;
-            Console.WriteLine("Start tail address = " + startTailAddress);
+            double insertsPerSecond = storeWasRecovered ? 0 : ((double)kInitCount / sw.ElapsedMilliseconds) * 1000;
+            Console.WriteLine(YcsbGlobals.LoadingTimeLine(insertsPerSecond, sw.ElapsedMilliseconds));
+            Console.WriteLine(YcsbGlobals.AddressesLine(AddressLine.Before, store.Log.BeginAddress, store.Log.HeadAddress, store.Log.ReadOnlyAddress, store.Log.TailAddress));
 
             if (!storeWasRecovered && this.backupMode.HasFlag(BackupMode.Backup) && kPeriodicCheckpointMilliseconds <= 0)
             {
@@ -346,12 +324,12 @@ namespace FASTER.benchmark
 
             if (kPeriodicCheckpointMilliseconds <= 0)
             {
-                Thread.Sleep(TimeSpan.FromSeconds(kRunSeconds));
+                Thread.Sleep(TimeSpan.FromSeconds(YcsbGlobals.kRunSeconds));
             }
             else
             {
                 var checkpointTaken = 0;
-                while (swatch.ElapsedMilliseconds < 1000 * kRunSeconds)
+                while (swatch.ElapsedMilliseconds < 1000 * YcsbGlobals.kRunSeconds)
                 {
                     if (checkpointTaken < swatch.ElapsedMilliseconds / kPeriodicCheckpointMilliseconds)
                     {
@@ -378,15 +356,12 @@ namespace FASTER.benchmark
 #endif
 
             double seconds = swatch.ElapsedMilliseconds / 1000.0;
-            long endTailAddress = store.Log.TailAddress;
-            Console.WriteLine("End tail address = " + endTailAddress);
+            Console.WriteLine(YcsbGlobals.AddressesLine(AddressLine.After, store.Log.BeginAddress, store.Log.HeadAddress, store.Log.ReadOnlyAddress, store.Log.TailAddress));
 
             double opsPerSecond = total_ops_done / seconds;
-            Console.WriteLine("Total " + total_ops_done + " ops done " + " in " + seconds + " secs.");
-            Console.WriteLine("##, " + distribution + ", " + numaStyle + ", " + readPercent + ", "
-                + threadCount + ", " + opsPerSecond + ", "
-                + (endTailAddress - startTailAddress));
-            return (initsPerSecond, opsPerSecond);
+            Console.WriteLine(YcsbGlobals.TotalOpsString(total_ops_done, seconds));
+            Console.WriteLine(YcsbGlobals.StatsLine(StatsLine.Iteration, YcsbGlobals.OpsPerSec, opsPerSecond));
+            return (insertsPerSecond, opsPerSecond);
         }
 
         private void SetupYcsb(int thread_idx)
@@ -509,7 +484,7 @@ namespace FASTER.benchmark
         }
 #endif
 
-        #region Load Data
+#region Load Data
 
         private static unsafe void LoadDataFromFile(string filePath, string distribution, out Key[] i_keys, out Key[] t_keys)
         {
@@ -606,8 +581,10 @@ namespace FASTER.benchmark
 
         public static void LoadData(string distribution, uint seed, out Key[] i_keys, out Key[] t_keys)
         {
-            if (kUseSyntheticData)
+            if (YcsbGlobals.kUseSyntheticData || YcsbGlobals.kUseSmallData)
             {
+                if (!YcsbGlobals.kUseSyntheticData)
+                    Console.WriteLine("WARNING: Forcing synthetic data due to kSmallData");
                 LoadSyntheticData(distribution, seed, out i_keys, out t_keys);
                 return;
             }
@@ -636,7 +613,7 @@ namespace FASTER.benchmark
 
         private static void LoadSyntheticData(string distribution, uint seed, out Key[] i_keys, out Key[] t_keys)
         {
-            Console.WriteLine("Loading synthetic data (uniform distribution)");
+            Console.WriteLine($"Loading synthetic data ({distribution} distribution), seed = {seed}");
 
             i_keys = new Key[kInitCount];
             long val = 0;
@@ -648,19 +625,17 @@ namespace FASTER.benchmark
             Console.WriteLine("loaded " + kInitCount + " keys.");
 
             RandomGenerator generator = new RandomGenerator(seed);
+            var zipf = new ZipfGenerator(generator, (int)kInitCount, theta:0.99);
 
             t_keys = new Key[kTxnCount];
-
             for (int idx = 0; idx < kTxnCount; idx++)
             {
-                t_keys[idx] = new Key { value = (long)generator.Generate64(kInitCount) };
+                var rand = distribution == YcsbGlobals.UniformDist ? (long)generator.Generate64(kInitCount) : zipf.Next();
+                t_keys[idx] = new Key { value = rand};
             }
 
             Console.WriteLine("loaded " + kTxnCount + " txns.");
-
         }
-        #endregion
-
-
+#endregion
     }
 }
