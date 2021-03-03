@@ -54,7 +54,7 @@ namespace FASTER.benchmark
          HelpText = "Percentage of reads (-1 for 100% read-modify-write")]
         public int ReadPercent { get; set; }
 
-        [Option('d', "distribution", Required = false, Default = YcsbGlobals.UniformDist,
+        [Option('d', "distribution", Required = false, Default = YcsbConstants.UniformDist,
             HelpText = "Distribution of keys in workload")]
         public string DistributionName { get; set; }
 
@@ -62,7 +62,15 @@ namespace FASTER.benchmark
             HelpText = "Seed for synthetic data distribution")]
         public int RandomSeed { get; set; }
 
+        [Option((char)0, "sy", Required = false, Default = false,
+            HelpText = "Use synthetic data")]
+        public bool UseSyntheticData { get; set; }
+
         public string GetOptionsString()
-            => $"d: {DistributionName.ToLower()}; n: {NumaStyle}; r: {ReadPercent}; t: {ThreadCount}; x: {SecondaryIndexType}; z: {LockImpl}";
+        {
+            static string boolStr(bool value) => value ? "y" : "n";
+            return $"d: {DistributionName.ToLower()}; n: {NumaStyle}; r: {ReadPercent}; t: {ThreadCount}; x: {SecondaryIndexType}; z: {LockImpl}; i: {IterationCount};"
+                        + $" sd: {boolStr(YcsbConstants.kUseSmallData)}; sm: {boolStr(YcsbConstants.kSmallMemoryLog)}; sy: {boolStr(this.UseSyntheticData)}";
+        }
     }
 }

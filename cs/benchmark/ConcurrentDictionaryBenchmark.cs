@@ -1,7 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT license.
 
-#pragma warning disable 0162
+#pragma warning disable CS0162 // Unreachable code detected -- when switching on YcsbConstants 
 
 //#define DASHBOARD
 
@@ -10,7 +10,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -32,12 +31,8 @@ namespace FASTER.benchmark
         }
     }
 
-    public unsafe class ConcurrentDictionary_YcsbBenchmark
+    internal unsafe class ConcurrentDictionary_YcsbBenchmark
     {
-        const int kFileChunkSize = 4096;
-        const long kChunkSize = 640;
-
-        const int kRunSeconds = 30;
         const int kCheckpointSeconds = -1;
 
         readonly int threadCount;
@@ -56,14 +51,14 @@ namespace FASTER.benchmark
         volatile bool done = false;
         Input* input_ptr;
 
-        public ConcurrentDictionary_YcsbBenchmark(Key[] i_keys_, Key[] t_keys_, int threadCount_, int numaStyle_, string distribution_, int readPercent_)
+        internal ConcurrentDictionary_YcsbBenchmark(Key[] i_keys_, Key[] t_keys_, TestLoader testLoader)
         {
             init_keys_ = i_keys_;
             txn_keys_ = t_keys_;
-            threadCount = threadCount_;
-            numaStyle = numaStyle_;
-            distribution = distribution_;
-            readPercent = readPercent_;
+            threadCount = testLoader.Options.ThreadCount;
+            numaStyle = testLoader.Options.NumaStyle;
+            distribution = testLoader.Distribution;
+            readPercent = testLoader.Options.ReadPercent;
 
 #if DASHBOARD
             statsWritten = new AutoResetEvent[threadCount];
@@ -82,7 +77,7 @@ namespace FASTER.benchmark
             for (int i = 0; i < 8; i++)
                 input_[i].value = i;
 
-            store = new ConcurrentDictionary<Key, Value>(threadCount, YcsbGlobals.kMaxKey, new KeyComparer());
+            store = new ConcurrentDictionary<Key, Value>(threadCount, YcsbConstants.kMaxKey, new KeyComparer());
         }
 
         public void Dispose()
@@ -115,15 +110,15 @@ namespace FASTER.benchmark
 
             while (!done)
             {
-                long chunk_idx = Interlocked.Add(ref idx_, kChunkSize) - kChunkSize;
-                while (chunk_idx >= YcsbGlobals.kTxnCount)
+                long chunk_idx = Interlocked.Add(ref idx_, YcsbConstants.kChunkSize) - YcsbConstants.kChunkSize;
+                while (chunk_idx >= YcsbConstants.kTxnCount)
                 {
-                    if (chunk_idx == YcsbGlobals.kTxnCount)
+                    if (chunk_idx == YcsbConstants.kTxnCount)
                         idx_ = 0;
-                    chunk_idx = Interlocked.Add(ref idx_, kChunkSize) - kChunkSize;
+                    chunk_idx = Interlocked.Add(ref idx_, YcsbConstants.kChunkSize) - YcsbConstants.kChunkSize;
                 }
 
-                for (long idx = chunk_idx; idx < chunk_idx + kChunkSize && !done; ++idx)
+                for (long idx = chunk_idx; idx < chunk_idx + YcsbConstants.kChunkSize && !done; ++idx)
                 {
                     Op op;
                     int r = (int)rng.Generate(100);
@@ -220,8 +215,8 @@ namespace FASTER.benchmark
             }
             sw.Stop();
 
-            double insertsPerSecond = ((double)YcsbGlobals.kInitCount / sw.ElapsedMilliseconds) * 1000;
-            Console.WriteLine(YcsbGlobals.LoadingTimeLine(insertsPerSecond, sw.ElapsedMilliseconds));
+            double insertsPerSecond = ((double)YcsbConstants.kInitCount / sw.ElapsedMilliseconds) * 1000;
+            Console.WriteLine(TestStats.GetLoadingTimeLine(insertsPerSecond, sw.ElapsedMilliseconds));
 
             idx_ = 0;
 
@@ -244,12 +239,12 @@ namespace FASTER.benchmark
 
             if (kCheckpointSeconds <= 0)
             {
-                Thread.Sleep(TimeSpan.FromSeconds(kRunSeconds));
+                Thread.Sleep(TimeSpan.FromSeconds(YcsbConstants.kRunSeconds));
             }
             else
             {
                 int runSeconds = 0;
-                while (runSeconds < kRunSeconds)
+                while (runSeconds < YcsbConstants.kRunSeconds)
                 {
                     Thread.Sleep(TimeSpan.FromSeconds(kCheckpointSeconds));
                     runSeconds += kCheckpointSeconds;
@@ -275,8 +270,8 @@ namespace FASTER.benchmark
             double seconds = swatch.ElapsedMilliseconds / 1000.0;
 
             double opsPerSecond = total_ops_done / seconds;
-            Console.WriteLine(YcsbGlobals.TotalOpsString(total_ops_done, seconds));
-            Console.WriteLine(YcsbGlobals.StatsLine(StatsLine.Iteration, YcsbGlobals.OpsPerSec, opsPerSecond));
+            Console.WriteLine(TestStats.GetTotalOpsString(total_ops_done, seconds));
+            Console.WriteLine(TestStats.GetStatsLine(StatsLineNum.Iteration, YcsbConstants.OpsPerSec, opsPerSecond));
             return (insertsPerSecond, opsPerSecond);
         }
 
@@ -296,11 +291,11 @@ namespace FASTER.benchmark
 
             Value value = default;
 
-            for (long chunk_idx = Interlocked.Add(ref idx_, kChunkSize) - kChunkSize;
-                chunk_idx < YcsbGlobals.kInitCount;
-                chunk_idx = Interlocked.Add(ref idx_, kChunkSize) - kChunkSize)
+            for (long chunk_idx = Interlocked.Add(ref idx_, YcsbConstants.kChunkSize) - YcsbConstants.kChunkSize;
+                chunk_idx < YcsbConstants.kInitCount;
+                chunk_idx = Interlocked.Add(ref idx_, YcsbConstants.kChunkSize) - YcsbConstants.kChunkSize)
             {
-                for (long idx = chunk_idx; idx < chunk_idx + kChunkSize; ++idx)
+                for (long idx = chunk_idx; idx < chunk_idx + YcsbConstants.kChunkSize; ++idx)
                 {
 
                     Key key = init_keys_[idx];
@@ -396,153 +391,16 @@ namespace FASTER.benchmark
 
         #region Load Data
 
-        private static void LoadDataFromFile(string filePath, string distribution, out Key[] i_keys, out Key[] t_keys)
+        internal static void CreateKeyVectors(out Key[] i_keys, out Key[] t_keys)
         {
-            string init_filename = filePath + "/load_" + distribution + "_250M_raw.dat";
-            string txn_filename = filePath + "/run_" + distribution + "_250M_1000M_raw.dat";
-
-            long count = 0;
-            using (FileStream stream = File.Open(init_filename, FileMode.Open, FileAccess.Read,
-                FileShare.Read))
-            {
-                Console.WriteLine("loading keys from " + init_filename + " into memory...");
-                i_keys = new Key[YcsbGlobals.kInitCount];
-
-                byte[] chunk = new byte[kFileChunkSize];
-                GCHandle chunk_handle = GCHandle.Alloc(chunk, GCHandleType.Pinned);
-                byte* chunk_ptr = (byte*)chunk_handle.AddrOfPinnedObject();
-
-                long offset = 0;
-
-                while (true)
-                {
-                    stream.Position = offset;
-                    int size = stream.Read(chunk, 0, kFileChunkSize);
-                    for (int idx = 0; idx < size; idx += 8)
-                    {
-                        i_keys[count].value = *(long*)(chunk_ptr + idx);
-                        ++count;
-                    }
-                    if (size == kFileChunkSize)
-                        offset += kFileChunkSize;
-                    else
-                        break;
-
-                    if (count == YcsbGlobals.kInitCount)
-                        break;
-                }
-
-                if (count != YcsbGlobals.kInitCount)
-                {
-                    throw new InvalidDataException("Init file load fail!");
-                }
-            }
-
-            Console.WriteLine("loaded " + YcsbGlobals.kInitCount + " keys.");
-
-
-            using (FileStream stream = File.Open(txn_filename, FileMode.Open, FileAccess.Read, FileShare.Read))
-            {
-                byte[] chunk = new byte[kFileChunkSize];
-                GCHandle chunk_handle = GCHandle.Alloc(chunk, GCHandleType.Pinned);
-                byte* chunk_ptr = (byte*)chunk_handle.AddrOfPinnedObject();
-
-                Console.WriteLine("loading txns from " + txn_filename + " into memory...");
-
-                t_keys = new Key[YcsbGlobals.kTxnCount];
-
-                count = 0;
-                long offset = 0;
-
-                while (true)
-                {
-                    stream.Position = offset;
-                    int size = stream.Read(chunk, 0, kFileChunkSize);
-                    for (int idx = 0; idx < size; idx += 8)
-                    {
-                        t_keys[count] = *(Key*)(chunk_ptr + idx);
-                        ++count;
-                    }
-                    if (size == kFileChunkSize)
-                        offset += kFileChunkSize;
-                    else
-                        break;
-
-                    if (count == YcsbGlobals.kTxnCount)
-                        break;
-                }
-
-                if (count != YcsbGlobals.kTxnCount)
-                {
-                    throw new InvalidDataException("Txn file load fail!" + count + ":" + YcsbGlobals.kTxnCount);
-                }
-            }
-
-            Console.WriteLine("loaded " + YcsbGlobals.kTxnCount + " txns.");
+            i_keys = new Key[YcsbConstants.kInitCount];
+            t_keys = new Key[YcsbConstants.kTxnCount];
+        }
+        internal class KeySetter : IKeySetter<Key>
+        {
+            public void Set(Key[] vector, long idx, long value) => vector[idx].value = value;
         }
 
-        public static void LoadData(string distribution, uint seed, out Key[] i_keys, out Key[] t_keys)
-        {
-            if (YcsbGlobals.kUseSyntheticData || YcsbGlobals.kUseSmallData)
-            {
-                if (!YcsbGlobals.kUseSyntheticData)
-                    Console.WriteLine("WARNING: Forcing synthetic data due to kSmallData");
-                LoadSyntheticData(distribution, seed, out i_keys, out t_keys);
-                return;
-            }
-
-            string filePath = "C:\\ycsb_files";
-
-            if (!Directory.Exists(filePath))
-            {
-                filePath = "D:\\ycsb_files";
-            }
-            if (!Directory.Exists(filePath))
-            {
-                filePath = "E:\\ycsb_files";
-            }
-
-            if (Directory.Exists(filePath))
-            {
-                LoadDataFromFile(filePath, distribution, out i_keys, out t_keys);
-                return;
-            }
-            else
-            {
-                Console.WriteLine("WARNING: Could not find YCSB directory, loading synthetic data instead");
-                LoadSyntheticData(distribution, seed, out i_keys, out t_keys);
-            }
-        }
-
-        private static void LoadSyntheticData(string distribution, uint seed, out Key[] i_keys, out Key[] t_keys)
-        {
-            Console.WriteLine($"Loading synthetic data ({distribution} distribution), seed = {seed}");
-
-            i_keys = new Key[YcsbGlobals.kInitCount];
-            long val = 0;
-            for (int idx = 0; idx < YcsbGlobals.kInitCount; idx++)
-            {
-                i_keys[idx] = new Key { value = val++ };
-            }
-
-            Console.WriteLine("loaded " + YcsbGlobals.kInitCount + " keys.");
-
-            RandomGenerator generator = new RandomGenerator(seed);
-            var zipf = new ZipfGenerator(generator, (int)YcsbGlobals.kInitCount, theta: 0.99);
-
-            t_keys = new Key[YcsbGlobals.kTxnCount];
-
-            for (int idx = 0; idx < YcsbGlobals.kTxnCount; idx++)
-            {
-                var rand = distribution == YcsbGlobals.UniformDist ? (long)generator.Generate64(YcsbGlobals.kInitCount) : zipf.Next();
-                t_keys[idx] = new Key { value = rand };
-            }
-
-            Console.WriteLine("loaded " + YcsbGlobals.kTxnCount + " txns.");
-
-        }
         #endregion
-
-
     }
 }

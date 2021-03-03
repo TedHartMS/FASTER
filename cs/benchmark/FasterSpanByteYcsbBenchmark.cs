@@ -1,7 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT license.
 
-#pragma warning disable 0162
+#pragma warning disable CS0162 // Unreachable code detected -- when switching on YcsbConstants 
 
 // Define below to enable continuous performance report for dashboard
 // #define DASHBOARD
@@ -9,8 +9,6 @@
 using FASTER.core;
 using System;
 using System.Diagnostics;
-using System.IO;
-using System.Runtime.InteropServices;
 using System.Threading;
 
 namespace FASTER.benchmark
@@ -35,15 +33,13 @@ namespace FASTER.benchmark
         // ***
 
         // Ensure sizes are aligned to chunk sizes
-        const long kInitCount = kChunkSize * (YcsbGlobals.kInitCount / kChunkSize);
-        const long kTxnCount = kChunkSize * (YcsbGlobals.kTxnCount / kChunkSize);
+        const long kInitCount = YcsbConstants.kChunkSize * (YcsbConstants.kInitCount / YcsbConstants.kChunkSize);
+        const long kTxnCount = YcsbConstants.kChunkSize * (YcsbConstants.kTxnCount / YcsbConstants.kChunkSize);
 
         public const int kKeySize = 16;
         public const int kValueSize = 100;
 
-        const int kFileChunkSize = 4096;
-        const long kChunkSize = 640;
-
+        readonly ManualResetEventSlim waiter = new ManualResetEventSlim();
         readonly int threadCount;
         readonly int numaStyle;
         readonly string distribution;
@@ -62,19 +58,22 @@ namespace FASTER.benchmark
         long total_ops_done = 0;
         volatile bool done = false;
 
-        internal FasterSpanByteYcsbBenchmark(KeySpanByte[] i_keys_, KeySpanByte[] t_keys_, int threadCount_, int numaStyle_, string distribution_, int readPercent_, 
-                                             BackupMode backupMode_, LockImpl lockImpl_, SecondaryIndexType secondaryIndexType_)
+        internal FasterSpanByteYcsbBenchmark(KeySpanByte[] i_keys_, KeySpanByte[] t_keys_, TestLoader testLoader)
         {
+            // Pin loading thread if it is not used for checkpointing
+            if (kPeriodicCheckpointMilliseconds <= 0)
+                Native32.AffinitizeThreadShardedNuma(0, 2);
+
             init_keys_ = i_keys_;
             txn_keys_ = t_keys_;
-            threadCount = threadCount_;
-            numaStyle = numaStyle_;
-            distribution = distribution_;
-            readPercent = readPercent_;
-            backupMode = backupMode_;
-            var lockImpl = lockImpl_;
+            threadCount = testLoader.Options.ThreadCount;
+            numaStyle = testLoader.Options.NumaStyle;
+            distribution = testLoader.Distribution;
+            readPercent = testLoader.Options.ReadPercent;
+            backupMode = testLoader.BackupMode;
+            var lockImpl = testLoader.LockImpl;
             functions = new FunctionsSB(lockImpl != LockImpl.None);
-            secondaryIndexType = secondaryIndexType_;
+            secondaryIndexType = testLoader.SecondaryIndexType;
 
 #if DASHBOARD
             statsWritten = new AutoResetEvent[threadCount];
@@ -96,13 +95,13 @@ namespace FASTER.benchmark
             var path = "D:\\data\\FasterYcsbBenchmark\\";
             device = Devices.CreateLogDevice(path + "hlog", preallocateFile: true);
 
-            if (YcsbGlobals.kSmallMemoryLog)
+            if (YcsbConstants.kSmallMemoryLog)
                 store = new FasterKV<SpanByte, SpanByte>
-                    (YcsbGlobals.kMaxKey / 2, new LogSettings { LogDevice = device, PreallocateLog = true, PageSizeBits = 22, SegmentSizeBits = 26, MemorySizeBits = 26 },
+                    (YcsbConstants.kMaxKey / 2, new LogSettings { LogDevice = device, PreallocateLog = true, PageSizeBits = 22, SegmentSizeBits = 26, MemorySizeBits = 26 },
                     new CheckpointSettings { CheckPointType = CheckpointType.FoldOver, CheckpointDir = path });
             else
                 store = new FasterKV<SpanByte, SpanByte>
-                    (YcsbGlobals.kMaxKey / 2, new LogSettings { LogDevice = device, PreallocateLog = true, MemorySizeBits = 35 },
+                    (YcsbConstants.kMaxKey / 2, new LogSettings { LogDevice = device, PreallocateLog = true, MemorySizeBits = 35 },
                     new CheckpointSettings { CheckPointType = CheckpointType.FoldOver, CheckpointDir = path });
 
             if (secondaryIndexType.HasFlag(SecondaryIndexType.Key))
@@ -126,9 +125,10 @@ namespace FASTER.benchmark
             else
                 Native32.AffinitizeThreadShardedNuma((uint)thread_idx, 2); // assuming two NUMA sockets
 
+            waiter.Wait();
+
             Stopwatch sw = new Stopwatch();
             sw.Start();
-
 
             Span<byte> value = stackalloc byte[kValueSize];
             Span<byte> input = stackalloc byte[kValueSize];
@@ -152,15 +152,15 @@ namespace FASTER.benchmark
 
             while (!done)
             {
-                long chunk_idx = Interlocked.Add(ref idx_, kChunkSize) - kChunkSize;
+                long chunk_idx = Interlocked.Add(ref idx_, YcsbConstants.kChunkSize) - YcsbConstants.kChunkSize;
                 while (chunk_idx >= kTxnCount)
                 {
                     if (chunk_idx == kTxnCount)
                         idx_ = 0;
-                    chunk_idx = Interlocked.Add(ref idx_, kChunkSize) - kChunkSize;
+                    chunk_idx = Interlocked.Add(ref idx_, YcsbConstants.kChunkSize) - YcsbConstants.kChunkSize;
                 }
 
-                for (long idx = chunk_idx; idx < chunk_idx + kChunkSize && !done; ++idx)
+                for (long idx = chunk_idx; idx < chunk_idx + YcsbConstants.kChunkSize && !done; ++idx)
                 {
                     Op op;
                     int r = (int)rng.Generate(100);
@@ -251,17 +251,25 @@ namespace FASTER.benchmark
             var storeWasRecovered = false;
             if (this.backupMode.HasFlag(BackupMode.Restore) && kPeriodicCheckpointMilliseconds <= 0)
             {
-                sw.Start();
-                try
+                if (!YcsbConstants.kUseSmallData)
                 {
-                    Console.WriteLine("Recovering FasterKV for fast restart");
-                    store.Recover();
-                    storeWasRecovered = true;
-                } catch (Exception)
-                {
-                    Console.WriteLine("Unable to recover prior store");
+                    Console.WriteLine("Skipping Recover() for kSmallData");
                 }
-                sw.Stop();
+                else
+                {
+                    sw.Start();
+                    try
+                    {
+                        Console.WriteLine("Recovering FasterKV for fast restart");
+                        store.Recover();
+                        storeWasRecovered = true;
+                    }
+                    catch (Exception)
+                    {
+                        Console.WriteLine("Unable to recover prior store");
+                    }
+                    sw.Stop();
+                }
             }
             if (!storeWasRecovered)
             {
@@ -273,21 +281,24 @@ namespace FASTER.benchmark
                     workers[idx] = new Thread(() => SetupYcsb(x));
                 }
 
-                sw.Start();
                 // Start threads.
                 foreach (Thread worker in workers)
                 {
                     worker.Start();
                 }
+
+                waiter.Set();
+                sw.Start();
                 foreach (Thread worker in workers)
                 {
                     worker.Join();
                 }
                 sw.Stop();
+                waiter.Reset();
             }
             double insertsPerSecond = storeWasRecovered ? 0 : ((double)kInitCount / sw.ElapsedMilliseconds) * 1000;
-            Console.WriteLine(YcsbGlobals.LoadingTimeLine(insertsPerSecond, sw.ElapsedMilliseconds));
-            Console.WriteLine(YcsbGlobals.AddressesLine(AddressLine.Before, store.Log.BeginAddress, store.Log.HeadAddress, store.Log.ReadOnlyAddress, store.Log.TailAddress));
+            Console.WriteLine(TestStats.GetLoadingTimeLine(insertsPerSecond, sw.ElapsedMilliseconds));
+            Console.WriteLine(TestStats.GetAddressesLine(AddressLineNum.Before, store.Log.BeginAddress, store.Log.HeadAddress, store.Log.ReadOnlyAddress, store.Log.TailAddress));
 
             long startTailAddress = store.Log.TailAddress;
             Console.WriteLine("Start tail address = " + startTailAddress);
@@ -326,17 +337,18 @@ namespace FASTER.benchmark
                 worker.Start();
             }
 
+            waiter.Set();
             Stopwatch swatch = new Stopwatch();
             swatch.Start();
 
             if (kPeriodicCheckpointMilliseconds <= 0)
             {
-                Thread.Sleep(TimeSpan.FromSeconds(YcsbGlobals.kRunSeconds));
+                Thread.Sleep(TimeSpan.FromSeconds(YcsbConstants.kRunSeconds));
             }
             else
             {
                 var checkpointTaken = 0;
-                while (swatch.ElapsedMilliseconds < 1000 * YcsbGlobals.kRunSeconds)
+                while (swatch.ElapsedMilliseconds < 1000 * YcsbConstants.kRunSeconds)
                 {
                     if (checkpointTaken < swatch.ElapsedMilliseconds / kPeriodicCheckpointMilliseconds)
                     {
@@ -357,17 +369,18 @@ namespace FASTER.benchmark
             {
                 worker.Join();
             }
+            waiter.Reset();
 
 #if DASHBOARD
             dash.Join();
 #endif
 
             double seconds = swatch.ElapsedMilliseconds / 1000.0;
-            Console.WriteLine(YcsbGlobals.AddressesLine(AddressLine.After, store.Log.BeginAddress, store.Log.HeadAddress, store.Log.ReadOnlyAddress, store.Log.TailAddress));
+            Console.WriteLine(TestStats.GetAddressesLine(AddressLineNum.After, store.Log.BeginAddress, store.Log.HeadAddress, store.Log.ReadOnlyAddress, store.Log.TailAddress));
 
             double opsPerSecond = total_ops_done / seconds;
-            Console.WriteLine(YcsbGlobals.TotalOpsString(total_ops_done, seconds));
-            Console.WriteLine(YcsbGlobals.StatsLine(StatsLine.Iteration, YcsbGlobals.OpsPerSec, opsPerSecond));
+            Console.WriteLine(TestStats.GetTotalOpsString(total_ops_done, seconds));
+            Console.WriteLine(TestStats.GetStatsLine(StatsLineNum.Iteration, YcsbConstants.OpsPerSec, opsPerSecond));
             return (insertsPerSecond, opsPerSecond);
         }
 
@@ -377,6 +390,8 @@ namespace FASTER.benchmark
                 Native32.AffinitizeThreadRoundRobin((uint)thread_idx);
             else
                 Native32.AffinitizeThreadShardedNuma((uint)thread_idx, 2); // assuming two NUMA sockets
+
+            waiter.Wait();
 
             var session = store.For(functions).NewSession<FunctionsSB>(null, kAffinitizedSession);
 
@@ -390,11 +405,11 @@ namespace FASTER.benchmark
             Span<byte> value = stackalloc byte[kValueSize];
             ref SpanByte _value = ref SpanByte.Reinterpret(value);
 
-            for (long chunk_idx = Interlocked.Add(ref idx_, kChunkSize) - kChunkSize;
+            for (long chunk_idx = Interlocked.Add(ref idx_, YcsbConstants.kChunkSize) - YcsbConstants.kChunkSize;
                 chunk_idx < kInitCount;
-                chunk_idx = Interlocked.Add(ref idx_, kChunkSize) - kChunkSize)
+                chunk_idx = Interlocked.Add(ref idx_, YcsbConstants.kChunkSize) - YcsbConstants.kChunkSize)
             {
-                for (long idx = chunk_idx; idx < chunk_idx + kChunkSize; ++idx)
+                for (long idx = chunk_idx; idx < chunk_idx + YcsbConstants.kChunkSize; ++idx)
                 {
                     if (idx % 256 == 0)
                     {
@@ -494,162 +509,21 @@ namespace FASTER.benchmark
 
         #region Load Data
 
-        private static unsafe void LoadDataFromFile(string filePath, string distribution, out KeySpanByte[] i_keys, out KeySpanByte[] t_keys)
+        internal static void CreateKeyVectors(out KeySpanByte[] i_keys, out KeySpanByte[] t_keys)
         {
-            string init_filename = filePath + "/load_" + distribution + "_250M_raw.dat";
-            string txn_filename = filePath + "/run_" + distribution + "_250M_1000M_raw.dat";
-
-            long count = 0;
-            using (FileStream stream = File.Open(init_filename, FileMode.Open, FileAccess.Read,
-                FileShare.Read))
-            {
-                Console.WriteLine("loading keys from " + init_filename + " into memory...");
-                i_keys = new KeySpanByte[kInitCount];
-
-                byte[] chunk = new byte[kFileChunkSize];
-                GCHandle chunk_handle = GCHandle.Alloc(chunk, GCHandleType.Pinned);
-                byte* chunk_ptr = (byte*)chunk_handle.AddrOfPinnedObject();
-
-                long offset = 0;
-
-                while (true)
-                {
-                    stream.Position = offset;
-                    int size = stream.Read(chunk, 0, kFileChunkSize);
-                    for (int idx = 0; idx < size; idx += 8)
-                    {
-                        i_keys[count].length = kKeySize - 4;
-                        i_keys[count].value = *(long*)(chunk_ptr + idx);
-                        ++count;
-                        if (count == kInitCount)
-                            break;
-                    }
-                    if (size == kFileChunkSize)
-                        offset += kFileChunkSize;
-                    else
-                        break;
-
-                    if (count == kInitCount)
-                        break;
-                }
-
-                if (count != kInitCount)
-                {
-                    throw new InvalidDataException("Init file load fail!");
-                }
-
-                chunk_handle.Free();
-            }
-
-            Console.WriteLine("loaded " + kInitCount + " keys.");
-
-
-            using (FileStream stream = File.Open(txn_filename, FileMode.Open, FileAccess.Read, FileShare.Read))
-            {
-                byte[] chunk = new byte[kFileChunkSize];
-                GCHandle chunk_handle = GCHandle.Alloc(chunk, GCHandleType.Pinned);
-                byte* chunk_ptr = (byte*)chunk_handle.AddrOfPinnedObject();
-
-                Console.WriteLine("loading txns from " + txn_filename + " into memory...");
-
-                t_keys = new KeySpanByte[kTxnCount];
-
-                count = 0;
-                long offset = 0;
-
-                while (true)
-                {
-                    stream.Position = offset;
-                    int size = stream.Read(chunk, 0, kFileChunkSize);
-                    for (int idx = 0; idx < size; idx += 8)
-                    {
-                        t_keys[count].length = kKeySize - 4;
-                        t_keys[count].value = *(long*)(chunk_ptr + idx);
-                        ++count;
-                        if (count == kTxnCount)
-                            break;
-                    }
-                    if (size == kFileChunkSize)
-                        offset += kFileChunkSize;
-                    else
-                        break;
-
-                    if (count == kTxnCount)
-                        break;
-                }
-
-                if (count != kTxnCount)
-                {
-                    throw new InvalidDataException("Txn file load fail!" + count + ":" + kTxnCount);
-                }
-
-                chunk_handle.Free();
-            }
-
-            Console.WriteLine("loaded " + kTxnCount + " txns.");
-        }
-
-        public static void LoadData(string distribution, uint seed, out KeySpanByte[] i_keys, out KeySpanByte[] t_keys)
-        {
-            if (YcsbGlobals.kUseSyntheticData || YcsbGlobals.kUseSmallData)
-            {
-                if (!YcsbGlobals.kUseSyntheticData)
-                    Console.WriteLine("WARNING: Forcing synthetic data due to kSmallData");
-                LoadSyntheticData(distribution, seed, out i_keys, out t_keys);
-                return;
-            }
-
-            string filePath = "C:\\ycsb_files";
-
-            if (!Directory.Exists(filePath))
-            {
-                filePath = "D:\\ycsb_files";
-            }
-            if (!Directory.Exists(filePath))
-            {
-                filePath = "E:\\ycsb_files";
-            }
-
-            if (Directory.Exists(filePath))
-            {
-                LoadDataFromFile(filePath, distribution, out i_keys, out t_keys);
-            }
-            else
-            {
-                Console.WriteLine("WARNING: Could not find YCSB directory, loading synthetic data instead");
-                LoadSyntheticData(distribution, seed, out i_keys, out t_keys);
-            }
-        }
-
-        private static void LoadSyntheticData(string distribution, uint seed, out KeySpanByte[] i_keys, out KeySpanByte[] t_keys)
-        {
-            Console.WriteLine($"Loading synthetic data ({distribution} distribution), seed = {seed}");
-
             i_keys = new KeySpanByte[kInitCount];
-            long val = 0;
-            for (int idx = 0; idx < kInitCount; idx++)
-            {
-                i_keys[idx] = new KeySpanByte { length = kKeySize - 4, value = val++ };
-            }
-
-            Console.WriteLine("loaded " + kInitCount + " keys.");
-
-            RandomGenerator generator = new RandomGenerator(seed);
-            var zipf = new ZipfGenerator(generator, (int)kInitCount, theta: 0.99);
-
             t_keys = new KeySpanByte[kTxnCount];
-
-            for (int idx = 0; idx < kTxnCount; idx++)
-            {
-                var rand = distribution == YcsbGlobals.UniformDist ? (long)generator.Generate64(kInitCount) : zipf.Next();
-                t_keys[idx] = new KeySpanByte { length = kKeySize - 4, value = rand };
-            }
-
-            Console.WriteLine("loaded " + kTxnCount + " txns.");
-
         }
+
+        internal class KeySetter : IKeySetter<KeySpanByte>
+        {
+            public unsafe void Set(KeySpanByte[] vector, long idx, long value)
+            {
+                vector[idx].length = kKeySize - 4;
+                vector[idx].value = value;
+            }
+        }
+
         #endregion
-
-
     }
 }
