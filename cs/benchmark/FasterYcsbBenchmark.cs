@@ -41,6 +41,7 @@ namespace FASTER.benchmark
         const int kFileChunkSize = 4096;
         const long kChunkSize = 640;
 
+        readonly ManualResetEventSlim waiter = new ManualResetEventSlim();
         readonly int threadCount;
         readonly int numaStyle;
         readonly string distribution;
@@ -126,6 +127,8 @@ namespace FASTER.benchmark
                 Native32.AffinitizeThreadRoundRobin((uint)thread_idx);
             else
                 Native32.AffinitizeThreadShardedNuma((uint)thread_idx, 2); // assuming two NUMA sockets
+
+            waiter.Wait();
 
             Stopwatch sw = new Stopwatch();
             sw.Start();
@@ -269,17 +272,20 @@ namespace FASTER.benchmark
                     workers[idx] = new Thread(() => SetupYcsb(x));
                 }
 
-                sw.Start();
                 // Start threads.
                 foreach (Thread worker in workers)
                 {
                     worker.Start();
                 }
+
+                waiter.Set();
+                sw.Start();
                 foreach (Thread worker in workers)
                 {
                     worker.Join();
                 }
                 sw.Stop();
+                waiter.Reset();
             }
             double insertsPerSecond = storeWasRecovered ? 0 : ((double)kInitCount / sw.ElapsedMilliseconds) * 1000;
             Console.WriteLine(YcsbGlobals.LoadingTimeLine(insertsPerSecond, sw.ElapsedMilliseconds));
@@ -319,6 +325,7 @@ namespace FASTER.benchmark
                 worker.Start();
             }
 
+            waiter.Set();
             Stopwatch swatch = new Stopwatch();
             swatch.Start();
 
@@ -350,6 +357,7 @@ namespace FASTER.benchmark
             {
                 worker.Join();
             }
+            waiter.Reset();
 
 #if DASHBOARD
             dash.Join();
@@ -370,6 +378,8 @@ namespace FASTER.benchmark
                 Native32.AffinitizeThreadRoundRobin((uint)thread_idx);
             else
                 Native32.AffinitizeThreadShardedNuma((uint)thread_idx, 2); // assuming two NUMA sockets
+
+            waiter.Wait();
 
             var session = store.For(functions).NewSession<Functions>(null, kAffinitizedSession);
 
