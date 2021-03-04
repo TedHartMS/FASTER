@@ -80,7 +80,7 @@ namespace FASTER.benchmark
         internal const bool kSmallMemoryLog = false;
         internal const int kRunSeconds = 30;
 #else
-        internal const bool kUseSmallData = true; //false;
+        internal const bool kUseSmallData = false;
         internal const bool kSmallMemoryLog = false;
         internal const int kRunSeconds = 30;
 #endif
