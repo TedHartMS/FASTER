@@ -607,10 +607,9 @@ namespace FASTER.core
         internal bool UpdateSIForIPU(ref Value value, long address)
         {
             // KeyIndexes do not need notification of in-place updates because the key does not change.
-            if (this.SecondaryIndexBroker.MutableValueIndexCount == 0)
-                return true;
-            this.SecondaryIndexBroker.Upsert(ref value, address);
-            return false;
+            if (this.SecondaryIndexBroker.MutableValueIndexCount > 0)
+                this.SecondaryIndexBroker.Upsert(ref value, address);
+            return true;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

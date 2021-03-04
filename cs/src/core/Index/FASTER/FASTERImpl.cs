@@ -679,7 +679,7 @@ namespace FASTER.core
                             latchOperation = LatchOperation.None;
                         }
                     }
-                    goto CreatePendingContext; // Go pending
+                    latchDestination = LatchDestination.CreatePendingContext; // Go pending
                 }
 
                 // Safe Read-Only Region: Create a record in the mutable region
@@ -702,7 +702,7 @@ namespace FASTER.core
                             latchOperation = LatchOperation.None;
                         }
                     }
-                    goto CreatePendingContext; // Go pending
+                    latchDestination = LatchDestination.CreatePendingContext; // Go pending
                 }
 
                 // No record exists - create new
@@ -724,7 +724,6 @@ namespace FASTER.core
         #endregion
 
         #region Create failure context
-        CreatePendingContext:
             Debug.Assert(latchDestination == LatchDestination.CreatePendingContext);
             {
                 pendingContext.type = OperationType.RMW;

@@ -81,7 +81,7 @@ namespace FASTER.benchmark
             => $"##00; {InsPerSec}: {insertsPerSec:N2}; sec: {(double)elapsedMs / 1000:N3}";
 
         internal static string GetAddressesLine(AddressLineNum lineNum, long begin, long head, long rdonly, long tail)
-            => $"##{(int)lineNum:00}; begin: {begin:N0}; head: {head:N0}; readonly: {rdonly:N0}; tail: {tail}";
+            => $"##{(int)lineNum:00}; begin: {begin}; head: {head}; readonly: {rdonly}; tail: {tail}";
 
         internal static string GetStatsLine(StatsLineNum lineNum, string opsPerSecTag, double opsPerSec)
             => $"##{(int)lineNum:00}; {opsPerSecTag}: {opsPerSec:N2}; {OptionsString}";
