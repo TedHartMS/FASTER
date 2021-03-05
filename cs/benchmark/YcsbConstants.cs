@@ -72,6 +72,9 @@ namespace FASTER.benchmark
         internal const string UniformDist = "uniform";    // Uniformly random distribution of keys
         internal const string ZipfDist = "zipf";          // Smooth zipf curve (most localized keys)
 
+        internal const string SyntheticData = "synthetic";
+        internal const string YcsbData = "ycsb";
+
         internal const string InsPerSec = "ins/sec";
         internal const string OpsPerSec = "ops/sec";
 
@@ -79,11 +82,18 @@ namespace FASTER.benchmark
         internal const bool kUseSmallData = true;
         internal const bool kSmallMemoryLog = false;
         internal const int kRunSeconds = 30;
+        internal const bool kDumpDistribution = false;
+        internal const bool kAffinitizedSession = true;
+        internal const int kPeriodicCheckpointMilliseconds = 0;
 #else
         internal const bool kUseSmallData = false;
         internal const bool kSmallMemoryLog = false;
         internal const int kRunSeconds = 30;
+        internal const bool kDumpDistribution = false;
+        internal const bool kAffinitizedSession = true;
+        internal const int kPeriodicCheckpointMilliseconds = 0;
 #endif
+
         internal const long kInitCount = kUseSmallData ? 2500480 : 250000000;
         internal const long kTxnCount = kUseSmallData ? 10000000 : 1000000000;
         internal const int kMaxKey = kUseSmallData ? 1 << 22 : 1 << 28;

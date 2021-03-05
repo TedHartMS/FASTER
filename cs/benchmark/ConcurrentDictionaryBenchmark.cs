@@ -16,26 +16,17 @@ using System.Threading;
 
 namespace FASTER.benchmark
 {
-    public class KeyComparer : IEqualityComparer<Key>
+    internal class KeyComparer : IEqualityComparer<Key>
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool Equals(Key x, Key y)
-        {
-            return x.value == y.value;
-        }
+        public bool Equals(Key x, Key y) => x.value == y.value;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public int GetHashCode(Key obj)
-        {
-            return (int)Utility.GetHashCode(obj.value);
-        }
+        public int GetHashCode(Key obj) => (int)Utility.GetHashCode(obj.value);
     }
 
     internal unsafe class ConcurrentDictionary_YcsbBenchmark
     {
-        const int kCheckpointSeconds = -1;
-
-        readonly int threadCount;
         readonly int numaStyle;
         readonly string distribution;
         readonly int readPercent;
@@ -55,7 +46,6 @@ namespace FASTER.benchmark
         {
             init_keys_ = i_keys_;
             txn_keys_ = t_keys_;
-            threadCount = testLoader.Options.ThreadCount;
             numaStyle = testLoader.Options.NumaStyle;
             distribution = testLoader.Distribution;
             readPercent = testLoader.Options.ReadPercent;
@@ -77,10 +67,10 @@ namespace FASTER.benchmark
             for (int i = 0; i < 8; i++)
                 input_[i].value = i;
 
-            store = new ConcurrentDictionary<Key, Value>(threadCount, YcsbConstants.kMaxKey, new KeyComparer());
+            store = new ConcurrentDictionary<Key, Value>(testLoader.Options.ThreadCount, YcsbConstants.kMaxKey, new KeyComparer());
         }
 
-        public void Dispose()
+        internal void Dispose()
         {
             store.Clear();
         }
@@ -180,7 +170,7 @@ namespace FASTER.benchmark
             Interlocked.Add(ref total_ops_done, reads_done + writes_done);
         }
 
-        public unsafe (double, double) Run()
+        internal unsafe (double, double) Run(TestLoader testLoader)
         {
             RandomGenerator rng = new RandomGenerator();
 
@@ -192,12 +182,12 @@ namespace FASTER.benchmark
             dash.Start();
 #endif
 
-            Thread[] workers = new Thread[threadCount];
+            Thread[] workers = new Thread[testLoader.Options.ThreadCount];
 
             Console.WriteLine("Executing setup.");
 
             // Setup the store for the YCSB benchmark.
-            for (int idx = 0; idx < threadCount; ++idx)
+            for (int idx = 0; idx < testLoader.Options.ThreadCount; ++idx)
             {
                 int x = idx;
                 workers[idx] = new Thread(() => SetupYcsb(x));
@@ -223,7 +213,7 @@ namespace FASTER.benchmark
             Console.WriteLine("Executing experiment.");
 
             // Run the experiment.
-            for (int idx = 0; idx < threadCount; ++idx)
+            for (int idx = 0; idx < testLoader.Options.ThreadCount; ++idx)
             {
                 int x = idx;
                 workers[idx] = new Thread(() => RunYcsb(x));
@@ -237,17 +227,17 @@ namespace FASTER.benchmark
             Stopwatch swatch = new Stopwatch();
             swatch.Start();
 
-            if (kCheckpointSeconds <= 0)
+            if (YcsbConstants.kPeriodicCheckpointMilliseconds <= 0)
             {
                 Thread.Sleep(TimeSpan.FromSeconds(YcsbConstants.kRunSeconds));
             }
             else
             {
-                int runSeconds = 0;
+                double runSeconds = 0;
                 while (runSeconds < YcsbConstants.kRunSeconds)
                 {
-                    Thread.Sleep(TimeSpan.FromSeconds(kCheckpointSeconds));
-                    runSeconds += kCheckpointSeconds;
+                    Thread.Sleep(TimeSpan.FromMilliseconds(YcsbConstants.kPeriodicCheckpointMilliseconds));
+                    runSeconds += YcsbConstants.kPeriodicCheckpointMilliseconds / 1000;
                 }
             }
 

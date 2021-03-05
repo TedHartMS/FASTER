@@ -54,7 +54,7 @@ namespace FASTER.benchmark
         {
             var mean = vec.Sum() / vec.Count;
             var stddev = Math.Sqrt(vec.Sum(n => Math.Pow(n - mean, 2)) / vec.Count);
-            var stddevpct = (stddev / mean) * 100;
+            var stddevpct = mean == 0 ? 0 : (stddev / mean) * 100;
             Console.WriteLine(GetStatsLine(lineNum, tag, mean, stddev, stddevpct));
         }
 

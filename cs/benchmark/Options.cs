@@ -24,13 +24,13 @@ namespace FASTER.benchmark
                         "\n    1 = Sharding across NUMA sockets")]
         public int NumaStyle { get; set; }
 
-        [Option('k', "backup", Required = false, Default = 0,
-             HelpText = "Enable Backup and Restore of FasterKV for fast test startup:" +
-                        "\n    0 = None; Populate FasterKV from data" +
-                        "\n    1 = Recover FasterKV from Checkpoint; if this fails, populate FasterKV from data" +
-                        "\n    2 = Checkpoint FasterKV (unless it was Recovered by option 1; if option 1 is not specified, this will overwrite an existing Checkpoint)" +
-                        "\n    3 = Both (Recover FasterKV if a Checkpoint is available, else populate FasterKV from data and Checkpoint it so it can be Restored in a subsequent run)")]
-        public int Backup { get; set; }
+        [Option('k', "backup", Required = false, Default = false,
+             HelpText = "Enable Backup and Restore of FasterKV for fast test startup." +
+                        "\n    True = Recover FasterKV if a Checkpoint is available, else populate FasterKV from data and Checkpoint it so it can be Restored in a subsequent run" +
+                        "\n    False = Populate FasterKV from data" +
+                        "\n    Checkpoints are stored in directories under " + TestLoader.DataPath + " in directories named by distribution, ycsb vs. synthetic data, and key counts;" +
+                        "\n    to force a new checkpoint, delete the existing folder")]
+        public bool BackupAndRestore { get; set; }
 
         [Option('z', "locking", Required = false, Default = 0,
              HelpText = "Locking Implementation:" +

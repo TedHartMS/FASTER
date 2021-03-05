@@ -15,34 +15,14 @@ namespace FASTER.benchmark
 {
     internal class FASTER_YcsbBenchmark
     {
-        // *** Use these to backup and recover database for fast benchmark repeat runs
-        // Use BackupMode.Backup to create the backup, unless it was recovered during BackupMode.Recover
-        // Use BackupMode.Restore for fast subsequent runs
-        // Does NOT work when periodic checkpointing or kUseSmallData is turned on
-        readonly BackupMode backupMode;
-        // ***
-
-#if DEBUG
-        internal const bool kDumpDistribution = false;
-        internal const bool kAffinitizedSession = true;
-        internal const int kPeriodicCheckpointMilliseconds = 0;
-#else
-        internal const bool kDumpDistribution = false;
-        internal const bool kAffinitizedSession = true;
-        internal const int kPeriodicCheckpointMilliseconds = 0;
-#endif
-
         // Ensure sizes are aligned to chunk sizes
         const long kInitCount = YcsbConstants.kChunkSize * (YcsbConstants.kInitCount / YcsbConstants.kChunkSize);
         const long kTxnCount = YcsbConstants.kChunkSize * (YcsbConstants.kTxnCount / YcsbConstants.kChunkSize);
 
         readonly ManualResetEventSlim waiter = new ManualResetEventSlim();
-        readonly int threadCount;
         readonly int numaStyle;
-        readonly string distribution;
         readonly int readPercent;
         readonly Functions functions;
-        readonly SecondaryIndexType secondaryIndexType = SecondaryIndexType.None;
         readonly Input[] input_;
 
         readonly Key[] init_keys_;
@@ -58,19 +38,15 @@ namespace FASTER.benchmark
         internal FASTER_YcsbBenchmark(Key[] i_keys_, Key[] t_keys_, TestLoader testLoader)
         {
             // Pin loading thread if it is not used for checkpointing
-            if (kPeriodicCheckpointMilliseconds <= 0)
+            if (YcsbConstants.kPeriodicCheckpointMilliseconds <= 0)
                 Native32.AffinitizeThreadShardedNuma(0, 2);
 
             init_keys_ = i_keys_;
             txn_keys_ = t_keys_;
-            threadCount = testLoader.Options.ThreadCount;
             numaStyle = testLoader.Options.NumaStyle;
-            distribution = testLoader.Distribution;
             readPercent = testLoader.Options.ReadPercent;
-            backupMode = testLoader.BackupMode;
             var lockImpl = testLoader.LockImpl;
             functions = new Functions(lockImpl != LockImpl.None);
-            secondaryIndexType = testLoader.SecondaryIndexType;
 
 #if DASHBOARD
             statsWritten = new AutoResetEvent[threadCount];
@@ -85,29 +61,29 @@ namespace FASTER.benchmark
             writeStats = new bool[threadCount];
             freq = Stopwatch.Frequency;
 #endif
+
             input_ = new Input[8];
             for (int i = 0; i < 8; i++)
                 input_[i].value = i;
 
-            var path = "D:\\data\\FasterYcsbBenchmark\\";
-            device = Devices.CreateLogDevice(path + "hlog", preallocateFile: true);
+            device = Devices.CreateLogDevice(TestLoader.DevicePath, preallocateFile: true);
 
             if (YcsbConstants.kSmallMemoryLog)
                 store = new FasterKV<Key, Value>
                     (YcsbConstants.kMaxKey / 2, new LogSettings { LogDevice = device, PreallocateLog = true, PageSizeBits = 22, SegmentSizeBits = 26, MemorySizeBits = 26 },
-                    new CheckpointSettings { CheckPointType = CheckpointType.FoldOver, CheckpointDir = path });
+                    new CheckpointSettings { CheckPointType = CheckpointType.FoldOver, CheckpointDir = testLoader.BackupPath });
             else
                 store = new FasterKV<Key, Value>
                     (YcsbConstants.kMaxKey / 2, new LogSettings { LogDevice = device, PreallocateLog = true },
-                    new CheckpointSettings { CheckPointType = CheckpointType.FoldOver, CheckpointDir = path });
+                    new CheckpointSettings { CheckPointType = CheckpointType.FoldOver, CheckpointDir = testLoader.BackupPath });
 
-            if (secondaryIndexType.HasFlag(SecondaryIndexType.Key))
+            if (testLoader.SecondaryIndexType.HasFlag(SecondaryIndexType.Key))
                 store.SecondaryIndexBroker.AddIndex(new NullKeyIndex<Key>());
-            if (secondaryIndexType.HasFlag(SecondaryIndexType.Value))
+            if (testLoader.SecondaryIndexType.HasFlag(SecondaryIndexType.Value))
                 store.SecondaryIndexBroker.AddIndex(new NullValueIndex<Value>());
         }
 
-        public void Dispose()
+        internal void Dispose()
         {
             store.Dispose();
             device.Dispose();
@@ -141,7 +117,7 @@ namespace FASTER.benchmark
             int count = 0;
 #endif
 
-            var session = store.For(functions).NewSession<Functions>(null, kAffinitizedSession);
+            var session = store.For(functions).NewSession<Functions>(null, YcsbConstants.kAffinitizedSession);
 
             while (!done)
             {
@@ -166,7 +142,7 @@ namespace FASTER.benchmark
 
                     if (idx % 512 == 0)
                     {
-                        if (kAffinitizedSession)
+                        if (YcsbConstants.kAffinitizedSession)
                             session.Refresh();
                         session.CompletePending(false);
                     }
@@ -227,95 +203,67 @@ namespace FASTER.benchmark
             Interlocked.Add(ref total_ops_done, reads_done + writes_done);
         }
 
-        public unsafe (double, double) Run()
+        internal unsafe (double, double) Run(TestLoader testLoader)
         {
 #if DASHBOARD
             var dash = new Thread(() => DoContinuousMeasurements());
             dash.Start();
 #endif
 
-            Thread[] workers = new Thread[threadCount];
+            Thread[] workers = new Thread[testLoader.Options.ThreadCount];
 
             Console.WriteLine("Executing setup.");
 
-            Stopwatch sw = new Stopwatch();
-            var storeWasRecovered = false;
-            if (this.backupMode.HasFlag(BackupMode.Restore) && kPeriodicCheckpointMilliseconds <= 0)
-            {
-                if (!YcsbConstants.kUseSmallData)
-                {
-                    Console.WriteLine("Skipping Recover() for kSmallData");
-                }
-                else
-                {
-                    Console.WriteLine("Recovering store for fast restart");
-                    sw.Start();
-                    try
-                    {
-                        Console.WriteLine("Recovering FasterKV for fast restart");
-                        store.Recover();
-                        storeWasRecovered = true;
-                    }
-                    catch (Exception)
-                    {
-                        Console.WriteLine("Unable to recover prior store");
-                    }
-                    sw.Stop();
-                }
-            }
+            var storeWasRecovered = testLoader.MaybeRecoverStore(store);
+            long elapsedMs = 0;
             if (!storeWasRecovered)
             {
                 // Setup the store for the YCSB benchmark.
                 Console.WriteLine("Loading FasterKV from data");
-                for (int idx = 0; idx < threadCount; ++idx)
+                for (int idx = 0; idx < testLoader.Options.ThreadCount; ++idx)
                 {
                     int x = idx;
                     workers[idx] = new Thread(() => SetupYcsb(x));
                 }
 
-                // Start threads.
                 foreach (Thread worker in workers)
                 {
                     worker.Start();
                 }
 
                 waiter.Set();
-                sw.Start();
+                var sw = Stopwatch.StartNew();
                 foreach (Thread worker in workers)
                 {
                     worker.Join();
                 }
                 sw.Stop();
+                elapsedMs = sw.ElapsedMilliseconds;
                 waiter.Reset();
             }
-            double insertsPerSecond = storeWasRecovered ? 0 : ((double)kInitCount / sw.ElapsedMilliseconds) * 1000;
-            Console.WriteLine(TestStats.GetLoadingTimeLine(insertsPerSecond, sw.ElapsedMilliseconds));
+            double insertsPerSecond = elapsedMs == 0 ? 0 : ((double)kInitCount / elapsedMs) * 1000;
+            Console.WriteLine(TestStats.GetLoadingTimeLine(insertsPerSecond, elapsedMs));
             Console.WriteLine(TestStats.GetAddressesLine(AddressLineNum.Before, store.Log.BeginAddress, store.Log.HeadAddress, store.Log.ReadOnlyAddress, store.Log.TailAddress));
 
-            if (!storeWasRecovered && this.backupMode.HasFlag(BackupMode.Backup) && kPeriodicCheckpointMilliseconds <= 0)
-            {
-                Console.WriteLine("Checkpointing FasterKV for fast restart");
-                store.TakeFullCheckpoint(out _);
-                store.CompleteCheckpointAsync().GetAwaiter().GetResult();
-                Console.WriteLine("Completed checkpoint");
-            }
+            if (!storeWasRecovered)
+                testLoader.MaybeCheckpointStore(store);
 
             // Uncomment below to dispose log from memory, use for 100% read workloads only
             // store.Log.DisposeFromMemory();
 
             idx_ = 0;
 
-            if (kDumpDistribution)
+            if (YcsbConstants.kDumpDistribution)
                 Console.WriteLine(store.DumpDistribution());
 
             // Ensure first checkpoint is fast
-            if (kPeriodicCheckpointMilliseconds > 0)
+            if (YcsbConstants.kPeriodicCheckpointMilliseconds > 0)
                 store.Log.ShiftReadOnlyAddress(store.Log.TailAddress, true);
 
             Console.WriteLine("Executing experiment.");
 
             // Run the experiment.
-            for (int idx = 0; idx < threadCount; ++idx)
+            for (int idx = 0; idx < testLoader.Options.ThreadCount; ++idx)
             {
                 int x = idx;
                 workers[idx] = new Thread(() => RunYcsb(x));
@@ -330,7 +278,7 @@ namespace FASTER.benchmark
             Stopwatch swatch = new Stopwatch();
             swatch.Start();
 
-            if (kPeriodicCheckpointMilliseconds <= 0)
+            if (YcsbConstants.kPeriodicCheckpointMilliseconds <= 0)
             {
                 Thread.Sleep(TimeSpan.FromSeconds(YcsbConstants.kRunSeconds));
             }
@@ -339,7 +287,7 @@ namespace FASTER.benchmark
                 var checkpointTaken = 0;
                 while (swatch.ElapsedMilliseconds < 1000 * YcsbConstants.kRunSeconds)
                 {
-                    if (checkpointTaken < swatch.ElapsedMilliseconds / kPeriodicCheckpointMilliseconds)
+                    if (checkpointTaken < swatch.ElapsedMilliseconds / YcsbConstants.kPeriodicCheckpointMilliseconds)
                     {
                         if (store.TakeHybridLogCheckpoint(out _))
                         {
@@ -382,7 +330,7 @@ namespace FASTER.benchmark
 
             waiter.Wait();
 
-            var session = store.For(functions).NewSession<Functions>(null, kAffinitizedSession);
+            var session = store.For(functions).NewSession<Functions>(null, YcsbConstants.kAffinitizedSession);
 
 #if DASHBOARD
             var tstart = Stopwatch.GetTimestamp();

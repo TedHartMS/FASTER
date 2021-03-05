@@ -30,17 +30,17 @@ namespace FASTER.benchmark
                 {
                     case BenchmarkType.Ycsb:
                         var yTest = new FASTER_YcsbBenchmark(testLoader.init_keys, testLoader.txn_keys, testLoader);
-                        testStats.AddResult(yTest.Run());
+                        testStats.AddResult(yTest.Run(testLoader));
                         yTest.Dispose();
                         break;
                     case BenchmarkType.SpanByte:
                         var sTest = new FasterSpanByteYcsbBenchmark(testLoader.init_span_keys, testLoader.txn_span_keys, testLoader);
-                        testStats.AddResult(sTest.Run());
+                        testStats.AddResult(sTest.Run(testLoader));
                         sTest.Dispose();
                         break;
                     case BenchmarkType.ConcurrentDictionaryYcsb:
                         var cTest = new ConcurrentDictionary_YcsbBenchmark(testLoader.init_keys, testLoader.txn_keys, testLoader);
-                        testStats.AddResult(cTest.Run());
+                        testStats.AddResult(cTest.Run(testLoader));
                         cTest.Dispose();
                         break;
                     default:

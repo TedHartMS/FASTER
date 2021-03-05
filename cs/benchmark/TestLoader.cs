@@ -24,7 +24,6 @@ namespace FASTER.benchmark
         internal Options Options;
 
         internal BenchmarkType BenchmarkType;
-        internal BackupMode BackupMode;
         internal LockImpl LockImpl;
         internal SecondaryIndexType SecondaryIndexType;
         internal string Distribution;
@@ -55,10 +54,6 @@ namespace FASTER.benchmark
                 return false;
 
             if (!verifyOption(Options.NumaStyle >= 0 && Options.NumaStyle <= 1, "NumaStyle"))
-                return false;
-
-            this.BackupMode = (BackupMode)Options.Backup;
-            if (!verifyOption(Enum.IsDefined(typeof(BackupMode), this.BackupMode), "BackupMode"))
                 return false;
 
             this.LockImpl = (LockImpl)Options.LockImpl;
@@ -208,9 +203,7 @@ namespace FASTER.benchmark
                 return;
             }
 
-#pragma warning disable CS0162 // Unreachable code detected -- when !kUseSmallData
             long count = 0;
-#pragma warning restore CS0162 // Unreachable code detected
 
             using (FileStream stream = File.Open(init_filename, FileMode.Open, FileAccess.Read,
                 FileShare.Read))
@@ -319,6 +312,55 @@ namespace FASTER.benchmark
 
             sw.Stop();
             Console.WriteLine($"loaded {txn_keys.Length:N0} txns in {(double)sw.ElapsedMilliseconds / 1000:N3} seconds");
+        }
+
+        internal const string DataPath = "D:/data/FasterYcsbBenchmark";
+        
+        internal static string DevicePath => $"{DataPath}/hlog";
+
+        internal string BackupPath => $"{DataPath}/{this.Distribution}_{(this.Options.UseSyntheticData ? "synthetic" : "ycsb")}_{(YcsbConstants.kUseSmallData ? "2.5M_10M" : "250M_1000M")}";
+
+        internal bool MaybeRecoverStore<K, V>(FasterKV<K, V> store)
+        {
+            // Recover database for fast benchmark repeat runs.
+            if (this.Options.BackupAndRestore && YcsbConstants.kPeriodicCheckpointMilliseconds <= 0)
+            {
+                if (YcsbConstants.kUseSmallData)
+                {
+                    Console.WriteLine("Skipping Recover() for kSmallData");
+                    return false;
+                }
+
+                Console.WriteLine($"Recovering FasterKV from {this.BackupPath} for fast restart");
+                try
+                {
+                    var sw = Stopwatch.StartNew();
+                    store.Recover();
+                    sw.Stop();
+                    Console.WriteLine($"  Completed recovery in {(double)sw.ElapsedMilliseconds / 1000:N3} seconds");
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    var suffix = Directory.Exists(this.BackupPath) ? "" : " (directory does not exist)";
+                    Console.WriteLine($"Unable to recover prior store: {ex.Message}{suffix}");
+                }
+            }
+            return false;
+        }
+
+        internal void MaybeCheckpointStore<K, V>(FasterKV<K, V> store)
+        {
+            // Checkpoint database for fast benchmark repeat runs.
+            if (this.Options.BackupAndRestore && YcsbConstants.kPeriodicCheckpointMilliseconds <= 0)
+            {
+                Console.WriteLine($"Checkpointing FasterKV to {this.BackupPath} for fast restart");
+                Stopwatch sw = Stopwatch.StartNew();
+                store.TakeFullCheckpoint(out _);
+                store.CompleteCheckpointAsync().GetAwaiter().GetResult();
+                sw.Stop();
+                Console.WriteLine($"  Completed checkpoint in {(double)sw.ElapsedMilliseconds / 1000:N3} seconds");
+            }
         }
     }
 }
