@@ -71,11 +71,11 @@ namespace FASTER.benchmark
             if (YcsbConstants.kSmallMemoryLog)
                 store = new FasterKV<Key, Value>
                     (YcsbConstants.kMaxKey / 2, new LogSettings { LogDevice = device, PreallocateLog = true, PageSizeBits = 22, SegmentSizeBits = 26, MemorySizeBits = 26 },
-                    new CheckpointSettings { CheckPointType = CheckpointType.FoldOver, CheckpointDir = testLoader.BackupPath });
+                    new CheckpointSettings { CheckPointType = CheckpointType.Snapshot, CheckpointDir = testLoader.BackupPath });
             else
                 store = new FasterKV<Key, Value>
                     (YcsbConstants.kMaxKey / 2, new LogSettings { LogDevice = device, PreallocateLog = true },
-                    new CheckpointSettings { CheckPointType = CheckpointType.FoldOver, CheckpointDir = testLoader.BackupPath });
+                    new CheckpointSettings { CheckPointType = CheckpointType.Snapshot, CheckpointDir = testLoader.BackupPath });
 
             if (testLoader.SecondaryIndexType.HasFlag(SecondaryIndexType.Key))
                 store.SecondaryIndexBroker.AddIndex(new NullKeyIndex<Key>());
@@ -280,12 +280,12 @@ namespace FASTER.benchmark
 
             if (YcsbConstants.kPeriodicCheckpointMilliseconds <= 0)
             {
-                Thread.Sleep(TimeSpan.FromSeconds(YcsbConstants.kRunSeconds));
+                Thread.Sleep(TimeSpan.FromSeconds(testLoader.Options.RunSeconds));
             }
             else
             {
                 var checkpointTaken = 0;
-                while (swatch.ElapsedMilliseconds < 1000 * YcsbConstants.kRunSeconds)
+                while (swatch.ElapsedMilliseconds < 1000 * testLoader.Options.RunSeconds)
                 {
                     if (checkpointTaken < swatch.ElapsedMilliseconds / YcsbConstants.kPeriodicCheckpointMilliseconds)
                     {

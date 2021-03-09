@@ -74,6 +74,9 @@ namespace FASTER.benchmark
             if (!verifyOption(this.Distribution == YcsbConstants.UniformDist || this.Distribution == YcsbConstants.ZipfDist, "Distribution"))
                 return false;
 
+            if (!verifyOption(this.Options.RunSeconds >= 0, "RunSeconds"))
+                return false;
+
             Console.WriteLine($"Scenario: {this.BenchmarkType}, Locking: {(LockImpl)Options.LockImpl}, Indexing: {(SecondaryIndexType)Options.SecondaryIndexType}");
             return true;
         }
@@ -343,7 +346,7 @@ namespace FASTER.benchmark
                 catch (Exception ex)
                 {
                     var suffix = Directory.Exists(this.BackupPath) ? "" : " (directory does not exist)";
-                    Console.WriteLine($"Unable to recover prior store: {ex.Message}{suffix}");
+                    Console.WriteLine($"  Unable to recover prior store: {ex.Message}{suffix}");
                 }
             }
             return false;
