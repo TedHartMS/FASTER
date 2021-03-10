@@ -47,7 +47,6 @@ namespace FASTER.core
                 throw new FasterException("LogSettings.ObjectLogDevice needs to be specified (e.g., use Devices.CreateLogDevice, AzureStorageDevice, or NullDevice)");
             }
 
-            SerializerSettings = serializerSettings;
             SerializerSettings = serializerSettings ?? new SerializerSettings<Key, Value>();
 
             if ((!keyBlittable) && (settings.LogDevice as NullDevice == null) && ((SerializerSettings == null) || (SerializerSettings.keySerializer == null)))

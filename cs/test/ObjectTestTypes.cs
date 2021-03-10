@@ -283,10 +283,6 @@ namespace FASTER.test
 
     public class MyLargeFunctions : FunctionsBase<MyKey, MyLargeValue, MyInput, MyLargeOutput, Empty>
     {
-        public override void RMWCompletionCallback(ref MyKey key, ref MyInput input, Empty ctx, Status status)
-        {
-        }
-
         public override void ReadCompletionCallback(ref MyKey key, ref MyInput input, ref MyLargeOutput output, Empty ctx, Status status)
         {
             Assert.IsTrue(status == Status.OK);

@@ -395,7 +395,7 @@ namespace FASTER.core
             #endregion
 
             #region Create pending context
-            Debug.Assert(latchDestination == LatchDestination.CreatePendingContext);
+            Debug.Assert(latchDestination == LatchDestination.CreatePendingContext, $"Upsert CreatePendingContext encountered latchDest == {latchDestination}");
             {
                 pendingContext.type = OperationType.UPSERT;
                 pendingContext.key = hlog.GetKeyContainer(ref key);
@@ -721,10 +721,10 @@ namespace FASTER.core
                 status = CreateNewRecordRMW(ref key, ref input, ref pendingContext, fasterSession, sessionCtx, bucket, slot, logicalAddress, physicalAddress, tag, entry, latestLogicalAddress);
                 goto LatchRelease;
             }
-        #endregion
+            #endregion
 
-        #region Create failure context
-            Debug.Assert(latchDestination == LatchDestination.CreatePendingContext);
+            #region Create failure context
+            Debug.Assert(latchDestination == LatchDestination.CreatePendingContext, $"RMW CreatePendingContext encountered latchDest == {latchDestination}");
             {
                 pendingContext.type = OperationType.RMW;
                 pendingContext.key = hlog.GetKeyContainer(ref key);

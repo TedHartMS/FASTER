@@ -1,15 +1,10 @@
 ﻿// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT license.
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading;
 using FASTER.core;
 using System.IO;
 using NUnit.Framework;
-using System.Diagnostics;
 using System.Threading.Tasks;
 
 namespace FASTER.test.recovery.sumstore.recover_continue

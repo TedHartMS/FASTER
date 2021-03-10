@@ -1,8 +1,6 @@
 ﻿// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT license.
 
-#pragma warning disable 0162
-
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -381,7 +379,7 @@ namespace FASTER.core
         ///     on the return value to complete the read operation and obtain the result status, the output that is populated by the 
         ///     <see cref="IFunctions{Key, Value, Context}"/> implementation, and optionally a copy of the header for the retrieved record</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public ValueTask<FasterKV<Key, Value>.ReadAsyncResult<Input, Output, Context>> ReadAsync(ref Key key, ref Input input, long startAddress, ReadFlags readFlags,
+        public ValueTask<FasterKV<Key, Value>.ReadAsyncResult<Input, Output, Context>> ReadAsync(ref Key key, ref Input input, long startAddress, ReadFlags readFlags = ReadFlags.None,
                                                                                                  Context userContext = default, long serialNo = 0, CancellationToken cancellationToken = default)
         {
             Debug.Assert(SupportAsync, NotAsyncSessionErr);
@@ -403,7 +401,7 @@ namespace FASTER.core
         ///     on the return value to complete the read operation and obtain the result status, the output that is populated by the 
         ///     <see cref="IFunctions{Key, Value, Context}"/> implementation, and optionally a copy of the header for the retrieved record</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public ValueTask<FasterKV<Key, Value>.ReadAsyncResult<Input, Output, Context>> ReadAtAddressAsync(long address, ref Input input, ReadFlags readFlags,
+        public ValueTask<FasterKV<Key, Value>.ReadAsyncResult<Input, Output, Context>> ReadAtAddressAsync(long address, ref Input input, ReadFlags readFlags = ReadFlags.None,
                                                                                                           Context userContext = default, long serialNo = 0, CancellationToken cancellationToken = default)
         {
             Debug.Assert(SupportAsync, NotAsyncSessionErr);
@@ -554,7 +552,15 @@ namespace FASTER.core
         /// <returns>Status</returns>
         internal Status ContainsKeyInMemory(ref Key key, long fromAddress = -1)
         {
-            return fht.InternalContainsKeyInMemory(ref key, ctx, FasterSession, fromAddress);
+            if (SupportAsync) UnsafeResumeThread();
+            try
+            {
+                return fht.InternalContainsKeyInMemory(ref key, ctx, FasterSession, fromAddress);
+            }
+            finally
+            {
+                if (SupportAsync) UnsafeSuspendThread();
+            }
         }
 
         /// <summary>
@@ -670,7 +676,7 @@ namespace FASTER.core
             token.ThrowIfCancellationRequested();
 
             // Complete all pending operations on session
-            await CompletePendingAsync();
+            await CompletePendingAsync(token: token);
 
             var task = fht.CheckpointTask;
             CommitPoint localCommitPoint = LatestCommitPoint;
@@ -899,6 +905,12 @@ namespace FASTER.core
                 _clientSession.functions.UpsertCompletionCallback(ref key, ref value, ctx);
             }
 
+            public bool SupportsLocking => _clientSession.functions.SupportsLocking;
+
+            public void Lock(ref RecordInfo recordInfo, ref Key key, ref Value value, LockType lockType, ref long context) => _clientSession.functions.Lock(ref recordInfo, ref key, ref value, lockType, ref context);
+
+            public bool Unlock(ref RecordInfo recordInfo, ref Key key, ref Value value, LockType lockType, long context) => _clientSession.functions.Unlock(ref recordInfo, ref key, ref value, lockType, context);
+
             public IHeapContainer<Input> GetHeapContainer(ref Input input)
             {
                 if (_clientSession.inputVariableLengthStruct == default)
@@ -906,12 +918,6 @@ namespace FASTER.core
 
                 return new VarLenHeapContainer<Input>(ref input, _clientSession.inputVariableLengthStruct, _clientSession.fht.hlog.bufferPool);
             }
-
-            public bool SupportsLocking => _clientSession.functions.SupportsLocking;
-
-            public void Lock(ref RecordInfo recordInfo, ref Key key, ref Value value, LockType lockType, ref long context) => _clientSession.functions.Lock(ref recordInfo, ref key, ref value, lockType, ref context);
-
-            public bool Unlock(ref RecordInfo recordInfo, ref Key key, ref Value value, LockType lockType, long context) => _clientSession.functions.Unlock(ref recordInfo, ref key, ref value, lockType, context);
         }
     }
 }

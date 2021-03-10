@@ -408,16 +408,16 @@ namespace FASTER.core
                 _fasterKV._functions.UpsertCompletionCallback(ref key, ref value, ctx);
             }
 
-            public IHeapContainer<Input> GetHeapContainer(ref Input input)
-            {
-                return new StandardHeapContainer<Input>(ref input);
-            }
-
             public bool SupportsLocking => false;
 
             public void Lock(ref RecordInfo recordInfo, ref Key key, ref Value value, LockType lockType, ref long context) { }
 
             public bool Unlock(ref RecordInfo recordInfo, ref Key key, ref Value value, LockType lockType, long context) => true;
+
+            public IHeapContainer<Input> GetHeapContainer(ref Input input)
+            {
+                return new StandardHeapContainer<Input>(ref input);
+            }
         }
     }
 

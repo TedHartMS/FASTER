@@ -908,6 +908,12 @@ namespace FASTER.core
                 _clientSession.functions.UpsertCompletionCallback(ref key, ref value, ctx);
             }
 
+            public bool SupportsLocking => _clientSession.functions.SupportsLocking;
+
+            public void Lock(ref RecordInfo recordInfo, ref Key key, ref Value value, LockType lockType, ref long context) => _clientSession.functions.Lock(ref recordInfo, ref key, ref value, lockType, ref context);
+
+            public bool Unlock(ref RecordInfo recordInfo, ref Key key, ref Value value, LockType lockType, long context) => _clientSession.functions.Unlock(ref recordInfo, ref key, ref value, lockType, context);
+
             public IHeapContainer<Input> GetHeapContainer(ref Input input)
             {
                 if (_clientSession.inputVariableLengthStruct == default)
@@ -915,12 +921,6 @@ namespace FASTER.core
 
                 return new VarLenHeapContainer<Input>(ref input, _clientSession.inputVariableLengthStruct, _clientSession.fht.hlog.bufferPool);
             }
-
-            public bool SupportsLocking => _clientSession.functions.SupportsLocking;
-
-            public void Lock(ref RecordInfo recordInfo, ref Key key, ref Value value, LockType lockType, ref long context) => _clientSession.functions.Lock(ref recordInfo, ref key, ref value, lockType, ref context);
-
-            public bool Unlock(ref RecordInfo recordInfo, ref Key key, ref Value value, LockType lockType, long context) => _clientSession.functions.Unlock(ref recordInfo, ref key, ref value, lockType, context);
         }
     }
 }
