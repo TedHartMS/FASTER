@@ -22,12 +22,23 @@
     Single (or double) quotes are optional and may be omitted if the directory paths do not contain spaces. 
 
 .PARAMETER RunSeconds
+    Number of seconds to run the experiment.
     Used primarily to debug changes to this script or do a quick one-off run; the default is 30 seconds.
 
 .PARAMETER NumThreads
+    Number of threads to use.
+    Used primarily to debug changes to this script or do a quick one-off run; the default is multiple counts as defined in the script.
+
+.PARAMETER IndexMode
+    Indexing mode to use: 0 = None, 1 = Key, 2 = Value, 3 = both.
+    Used primarily to debug changes to this script or do a quick one-off run; the default is multiple counts as defined in the script.
+
+.PARAMETER LockMode
+    Locking mode to use: 0 = No locking, 1 = RecordInfo locking
     Used primarily to debug changes to this script or do a quick one-off run; the default is multiple counts as defined in the script.
 
 .PARAMETER UseRecover
+    Recover the FasterKV from a checkpoint of a previous run rather than loading it from data.
     Used primarily to debug changes to this script or do a quick one-off run; the default is false.
 
 .EXAMPLE
@@ -44,9 +55,11 @@
     Does a quick run (e.g. test changes to this file).
 #>
 param (
-  [Parameter(Mandatory=$true)] [String[]]$ExeDirs,
-  [Parameter(Mandatory=$false)] [uint]$RunSeconds = 30,
-  [Parameter(Mandatory=$false)] [uint]$NumThreads,
+  [Parameter(Mandatory=$true)] [string[]]$ExeDirs,
+  [Parameter(Mandatory=$false)] [int]$RunSeconds = 30,
+  [Parameter(Mandatory=$false)] [int]$ThreadCount = -1,
+  [Parameter(Mandatory=$false)] [int]$IndexMode = -1,
+  [Parameter(Mandatory=$false)] [int]$lockMode = -1,
   [Parameter(Mandatory=$false)] [switch]$UseRecover
 )
 
@@ -65,7 +78,7 @@ Foreach ($exeName in $exeNames) {
     throw "Cannot find: $exeName"
 }
 
-$resultDirs = [String[]]($ExeDirs | ForEach-Object{"./" + (Get-Item $_).Name})
+$resultDirs = [String[]]($ExeDirs | ForEach-Object{"./results_" + (Get-Item $_).Name})
 Foreach ($resultDir in $resultDirs) {
     Write-Host $resultDir
     if (Test-Path $resultDir) {
@@ -74,7 +87,7 @@ Foreach ($resultDir in $resultDirs) {
     New-Item "$resultDir" -ItemType Directory
 }
 
-$iterations = 1
+$iterations = 7
 $distributions = ("uniform", "zipf")
 $readPercents = (0, 100)
 $threadCounts = (1, 16, 32, 48, 64)
@@ -85,14 +98,20 @@ $smallMemories = (0) #, 1)
 $syntheticDatas = (0) #, 1)
 $k = ""
 
-if ($NumThreads) {
-    $threadCounts = ($NumThreads)
+if ($ThreadCount -ge 0) {
+    $threadCounts = ($ThreadCount)
+}
+if ($IndexMode -ge 0) {
+    $indexModes = ($IndexMode)
+}
+if ($LockMode -ge 0) {
+    $lockModes = ($LockMode)
 }
 if ($UseRecover) {
     $k = "-k"
 }
 
-# Numa will always be either 0 or 1, so "Numas.Count" is 1
+# Numa will always be set in the internal loop body to either 0 or 1, so "Numas.Count" is effectively 1
 $permutations = $distributions.Count *
                 $readPercents.Count *
                 $threadCounts.Count *
@@ -123,7 +142,7 @@ foreach ($d in $distributions) {
                                     $resultDir = $resultDirs[$ii]
 
                                     Write-Host
-                                    Write-Host "Generating $($ii + 1) of $($exeNames.Count) results to $resultDir for: -n $n -d $d -r $r -t $t -x $x -z $z -i $iterations --runsec $RunSeconds $k"
+                                    Write-Host "Iteration $permutation/$permutations generating results $($ii + 1)/$($exeNames.Count) to $resultDir for: -n $n -d $d -r $r -t $t -x $x -z $z -i $iterations --runsec $RunSeconds $k"
 
                                     # RunSec and Recover are for one-off operations and are not recorded in the filenames.
                                     & "$exeName" -b 0 -n $n -d $d -r $r -t $t -x $x -z $z -i $iterations --runsec $RunSeconds $k | Tee-Object "$resultDir/results_n-$($n)_d-$($d)_r-$($r)_t-$($t)_x-$($x)_z-$($z).txt"

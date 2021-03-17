@@ -102,7 +102,8 @@ class Result : System.IComparable, System.IEquatable[Object] {
         }
 
         # Sort in descending order
-        return $other.MeanDiffPercent - $this.MeanDiffPercent
+        $cmp = $other.MeanDiffPercent.CompareTo($this.MeanDiffPercent)
+        return ($cmp -eq 0) ? $other.MeanDiff.CompareTo($this.MeanDiff) : $cmp
     }
 
     [bool] Equals($other)
