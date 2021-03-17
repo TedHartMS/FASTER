@@ -168,6 +168,13 @@ namespace FASTER.core
             return (recordSize, recordSize);
         }
 
+        internal override bool TryComplete()
+        {
+            var b1 = objectLogDevice.TryComplete();
+            var b2 = base.TryComplete();
+            return b1 || b2;
+        }
+
         /// <summary>
         /// Dispose memory allocator
         /// </summary>
@@ -570,7 +577,7 @@ namespace FASTER.core
             if (size > int.MaxValue)
                 throw new FasterException("Unable to read object page, total size greater than 2GB: " + size);
 
-            var alignedLength = (size + (sectorSize - 1)) & ~(sectorSize - 1);
+            var alignedLength = (size + (sectorSize - 1)) & ~((long)sectorSize - 1);
             var objBuffer = bufferPool.Get((int)alignedLength);
             result.freeBuffer2 = objBuffer;
 

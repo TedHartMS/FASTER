@@ -130,7 +130,7 @@ namespace FASTER.core
 
             handles[index] = GCHandle.Alloc(tmp, GCHandleType.Pinned);
             long p = (long)handles[index].AddrOfPinnedObject();
-            pointers[index] = (p + (sectorSize - 1)) & ~(sectorSize - 1);
+            pointers[index] = (p + (sectorSize - 1)) & ~((long)sectorSize - 1);
             values[index] = tmp;
         }
 
@@ -311,7 +311,6 @@ namespace FASTER.core
         internal override void PopulatePage(byte* src, int required_bytes, long destinationPage)
         {
             throw new FasterException("BlittableAllocator memory pages are sector aligned - use direct copy");
-            // Buffer.MemoryCopy(src, (void*)pointers[destinationPage % BufferSize], required_bytes, required_bytes);
         }
 
         /// <summary>

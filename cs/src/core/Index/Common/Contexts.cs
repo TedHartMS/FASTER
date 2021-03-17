@@ -129,6 +129,7 @@ namespace FASTER.core
             {
                 key?.Dispose();
                 value?.Dispose();
+                input?.Dispose();
             }
         }
 

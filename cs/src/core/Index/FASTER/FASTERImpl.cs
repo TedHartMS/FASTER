@@ -256,9 +256,9 @@ namespace FASTER.core
 
             return status;
         }
-#endregion
+        #endregion
 
-#region Upsert Operation
+        #region Upsert Operation
 
         private enum LatchDestination
         {
@@ -428,7 +428,8 @@ namespace FASTER.core
             return status;
         }
 
-        private LatchDestination AcquireLatchUpsert<Input, Output, Context>(FasterExecutionContext<Input, Output, Context> sessionCtx, HashBucket* bucket, ref OperationStatus status, ref LatchOperation latchOperation, ref HashBucketEntry entry)
+        private LatchDestination AcquireLatchUpsert<Input, Output, Context>(FasterExecutionContext<Input, Output, Context> sessionCtx, HashBucket* bucket, ref OperationStatus status, 
+                                                                            ref LatchOperation latchOperation, ref HashBucketEntry entry)
         {
             switch (sessionCtx.phase)
             {
@@ -499,7 +500,10 @@ namespace FASTER.core
             return LatchDestination.NormalProcessing;
         }
 
-        private OperationStatus CreateNewRecordUpsert<Input, Output, Context, FasterSession>(ref Key key, ref Value value, ref PendingContext<Input, Output, Context> pendingContext, FasterSession fasterSession, FasterExecutionContext<Input, Output, Context> sessionCtx, HashBucket* bucket, int slot, ushort tag, HashBucketEntry entry, long latestLogicalAddress) where FasterSession : IFasterSession<Key, Value, Input, Output, Context>
+        private OperationStatus CreateNewRecordUpsert<Input, Output, Context, FasterSession>(ref Key key, ref Value value, ref PendingContext<Input, Output, Context> pendingContext, FasterSession fasterSession,
+                                                                                             FasterExecutionContext<Input, Output, Context> sessionCtx, HashBucket* bucket, int slot, ushort tag, HashBucketEntry entry,
+                                                                                             long latestLogicalAddress) 
+            where FasterSession : IFasterSession<Key, Value, Input, Output, Context>
         {
             var (actualSize, allocateSize) = hlog.GetRecordSize(ref key, ref value);
             BlockAllocate(allocateSize, out long newLogicalAddress, sessionCtx, fasterSession);
@@ -721,9 +725,9 @@ namespace FASTER.core
                 status = CreateNewRecordRMW(ref key, ref input, ref pendingContext, fasterSession, sessionCtx, bucket, slot, logicalAddress, physicalAddress, tag, entry, latestLogicalAddress);
                 goto LatchRelease;
             }
-            #endregion
+        #endregion
 
-            #region Create failure context
+        #region Create failure context
             Debug.Assert(latchDestination == LatchDestination.CreatePendingContext, $"RMW CreatePendingContext encountered latchDest == {latchDestination}");
             {
                 pendingContext.type = OperationType.RMW;
@@ -835,7 +839,10 @@ namespace FASTER.core
             return LatchDestination.NormalProcessing;
         }
 
-        private OperationStatus CreateNewRecordRMW<Input, Output, Context, FasterSession>(ref Key key, ref Input input, ref PendingContext<Input, Output, Context> pendingContext, FasterSession fasterSession, FasterExecutionContext<Input, Output, Context> sessionCtx, HashBucket* bucket, int slot, long logicalAddress, long physicalAddress, ushort tag, HashBucketEntry entry, long latestLogicalAddress) where FasterSession : IFasterSession<Key, Value, Input, Output, Context>
+        private OperationStatus CreateNewRecordRMW<Input, Output, Context, FasterSession>(ref Key key, ref Input input, ref PendingContext<Input, Output, Context> pendingContext, FasterSession fasterSession,
+                                                                                          FasterExecutionContext<Input, Output, Context> sessionCtx, HashBucket* bucket, int slot, long logicalAddress, 
+                                                                                          long physicalAddress, ushort tag, HashBucketEntry entry, long latestLogicalAddress) 
+            where FasterSession : IFasterSession<Key, Value, Input, Output, Context>
         {
             if (logicalAddress >= hlog.HeadAddress && !hlog.GetInfo(physicalAddress).Tombstone)
             {
@@ -1068,9 +1075,11 @@ namespace FASTER.core
             if (logicalAddress >= hlog.ReadOnlyAddress)
             {
                 ref RecordInfo recordInfo = ref hlog.GetInfo(physicalAddress);
-
-                // Ignore return value of ConcurrentDeleter; the InternalFasterSession wrappers handle the false return.
-                fasterSession.ConcurrentDeleter(ref hlog.GetKey(physicalAddress), ref hlog.GetValue(physicalAddress), ref recordInfo, logicalAddress);
+                ref Value value = ref hlog.GetValue(physicalAddress);
+                recordInfo.Tombstone = true;
+                fasterSession.ConcurrentDeleter(ref hlog.GetKey(physicalAddress), ref value, ref recordInfo, logicalAddress);
+                if (WriteDefaultOnDelete)
+                    value = default;
 
                 // Try to update hash chain and completely elide record only if previous address points to invalid address
                 if (entry.Address == logicalAddress && recordInfo.PreviousAddress < hlog.BeginAddress)
@@ -1171,14 +1180,6 @@ namespace FASTER.core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal void SetRecordDeleted(ref Value value, ref RecordInfo recordInfo)
-        {
-            recordInfo.Tombstone = true;
-            if (hlog.ValueHasObjects())
-                value = default;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal bool UpdateSIForDelete(ref Key key, long address, bool isNewRecord)
         {
             if (this.SecondaryIndexBroker.MutableKeyIndexCount > 0)
@@ -1196,14 +1197,11 @@ namespace FASTER.core
         internal Status InternalContainsKeyInMemory<Input, Output, Context, FasterSession>(
             ref Key key, 
             FasterExecutionContext<Input, Output, Context> sessionCtx, 
-            FasterSession fasterSession, 
-            long fromAddress = -1)
+            FasterSession fasterSession, out long logicalAddress, long fromAddress = -1)
             where FasterSession : IFasterSession
         {
-            if (fromAddress == -1)
+            if (fromAddress < hlog.HeadAddress)
                 fromAddress = hlog.HeadAddress;
-            else
-                Debug.Assert(fromAddress >= hlog.HeadAddress);
 
             var bucket = default(HashBucket*);
             var slot = default(int);
@@ -1220,7 +1218,7 @@ namespace FASTER.core
 
             if (tagExists)
             {
-                long logicalAddress = entry.Address;
+                logicalAddress = entry.Address;
 
                 if (UseReadCache)
                     SkipReadCache(ref logicalAddress);
@@ -1240,16 +1238,23 @@ namespace FASTER.core
                     }
 
                     if (logicalAddress < fromAddress)
+                    {
+                        logicalAddress = 0;
                         return Status.NOTFOUND;
+                    }
                     else
                         return Status.OK;
                 }
                 else
+                {
+                    logicalAddress = 0;
                     return Status.NOTFOUND;
+                }
             }
             else
             {
                 // no tag found
+                logicalAddress = 0;
                 return Status.NOTFOUND;
             }
         }
@@ -1769,6 +1774,7 @@ namespace FASTER.core
         {
             while ((logicalAddress = hlog.TryAllocate(recordSize)) == 0)
             {
+                hlog.TryComplete();
                 InternalRefresh(ctx, fasterSession);
                 Thread.Yield();
             }
@@ -1808,8 +1814,6 @@ namespace FASTER.core
                 else
                 {
                     foundLogicalAddress = hlog.GetInfo(foundPhysicalAddress).PreviousAddress;
-                    //This makes testing REALLY slow
-                    //Debug.WriteLine("Tracing back");
                     continue;
                 }
             }

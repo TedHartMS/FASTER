@@ -221,13 +221,7 @@ namespace FASTER.core
         }
 
         /// <inheritdoc />
-        public IFasterScanIterator<Key, Value> Iterate(long untilAddress = -1) => _fasterKV.Iterate(untilAddress);
-
-        /// <inheritdoc />
-        public IFasterScanIterator<Key, Value> Iterate<CompactionFunctions>(CompactionFunctions compactionFunctions, long untilAddress = -1)
-            where CompactionFunctions : ICompactionFunctions<Key, Value>
-            => _fasterKV.Iterate(compactionFunctions, untilAddress);
-
+        public IFasterScanIterator<Key, Value> Iterate(long untilAddress = -1) => _fasterKV.Iterate<Input, Output, Context, Functions>(_functions, untilAddress);
 
         private Guid InternalAcquire()
         {
@@ -337,10 +331,7 @@ namespace FASTER.core
                 return _fasterKV._functions.ConcurrentWriter(ref key, ref src, ref dst);
             }
 
-            public bool ConcurrentDeleter(ref Key key, ref Value value, ref RecordInfo recordInfo, long address)
-            {
-                return false;
-            }
+            public void ConcurrentDeleter(ref Key key, ref Value value, ref RecordInfo recordInfo, long address) { }
 
             public bool NeedCopyUpdate(ref Key key, ref Input input, ref Value oldValue)
                 => _fasterKV._functions.NeedCopyUpdate(ref key, ref input, ref oldValue);
@@ -410,9 +401,9 @@ namespace FASTER.core
 
             public bool SupportsLocking => false;
 
-            public void Lock(ref RecordInfo recordInfo, ref Key key, ref Value value, LockType lockType, ref long context) { }
+            public void Lock(ref RecordInfo recordInfo, ref Key key, ref Value value, LockType lockType, ref long lockContext) { }
 
-            public bool Unlock(ref RecordInfo recordInfo, ref Key key, ref Value value, LockType lockType, long context) => true;
+            public bool Unlock(ref RecordInfo recordInfo, ref Key key, ref Value value, LockType lockType, long lockContext) => true;
 
             public IHeapContainer<Input> GetHeapContainer(ref Input input)
             {

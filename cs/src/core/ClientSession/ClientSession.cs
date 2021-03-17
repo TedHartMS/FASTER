@@ -510,14 +510,15 @@ namespace FASTER.core
         /// and tail)
         /// </summary>
         /// <param name="key">Key of the record.</param>
+        /// <param name="logicalAddress">Logical address of record, if found</param>
         /// <param name="fromAddress">Look until this address</param>
         /// <returns>Status</returns>
-        internal Status ContainsKeyInMemory(ref Key key, long fromAddress = -1)
+        internal Status ContainsKeyInMemory(ref Key key, out long logicalAddress, long fromAddress = -1)
         {
             if (SupportAsync) UnsafeResumeThread();
             try
             {
-                return fht.InternalContainsKeyInMemory(ref key, ctx, FasterSession, fromAddress);
+                return fht.InternalContainsKeyInMemory(ref key, ctx, FasterSession, out logicalAddress, fromAddress);
             }
             finally
             {
@@ -684,19 +685,23 @@ namespace FASTER.core
         {
             if (!SupportAsync)
                 throw new FasterException("Do not perform compaction using a threadAffinitized session");
+            return fht.Log.Compact<Input, Output, Context, Functions, CompactionFunctions>(functions, compactionFunctions, untilAddress, shiftBeginAddress);
+        }
 
-            VariableLengthStructSettings<Key, Value> vl = null;
+        /// <summary>
+        /// Iterator for all (distinct) live key-values stored in FASTER
+        /// </summary>
+        /// <param name="untilAddress">Report records until this address (tail by default)</param>
+        /// <returns>FASTER iterator</returns>
+        public IFasterScanIterator<Key, Value> Iterate(long untilAddress = -1)
+        {
+            if (!SupportAsync)
+                throw new FasterException("Do not perform iteration using a threadAffinitized session");
 
-            if (fht.hlog is VariableLengthBlittableAllocator<Key, Value> varLen)
-            {
-                vl = new VariableLengthStructSettings<Key, Value>
-                {
-                    keyLength = varLen.KeyLength,
-                    valueLength = varLen.ValueLength,
-                };
-            }
+            if (untilAddress == -1)
+                untilAddress = fht.Log.TailAddress;
 
-            return fht.Log.Compact(this, functions, compactionFunctions, untilAddress, vl, shiftBeginAddress);
+            return new FasterKVIterator<Key, Value, Input, Output, Context, Functions>(fht, functions, untilAddress);
         }
 
         /// <summary>
@@ -793,32 +798,11 @@ namespace FASTER.core
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public bool ConcurrentDeleter(ref Key key, ref Value value, ref RecordInfo recordInfo, long address)
-                => !this.SupportsLocking
-                    ? ConcurrentDeleterNoLock(ref key, ref value, ref recordInfo, address)
-                    : ConcurrentDeleterLock(ref key, ref value, ref recordInfo, address);
-
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            private bool ConcurrentDeleterNoLock(ref Key key, ref Value value, ref RecordInfo recordInfo, long address)
+            public void ConcurrentDeleter(ref Key key, ref Value value, ref RecordInfo recordInfo, long address)
             {
                 // Non-Advanced IFunctions has no ConcurrentDeleter
-                _clientSession.fht.SetRecordDeleted(ref value, ref recordInfo);
-                return _clientSession.fht.UpdateSIForDelete(ref key, address, isNewRecord: false);
             }
 
-            private bool ConcurrentDeleterLock(ref Key key, ref Value value, ref RecordInfo recordInfo, long address)
-            {
-                long context = 0;
-                this.Lock(ref recordInfo, ref key, ref value, LockType.Exclusive, ref context);
-                try
-                {
-                    return ConcurrentDeleterNoLock(ref key, ref value, ref recordInfo, address);
-                }
-                finally
-                {
-                    this.Unlock(ref recordInfo, ref key, ref value, LockType.Exclusive, context);
-                }
-            }
 
             public bool NeedCopyUpdate(ref Key key, ref Input input, ref Value oldValue)
                 => _clientSession.functions.NeedCopyUpdate(ref key, ref input, ref oldValue);
@@ -910,9 +894,9 @@ namespace FASTER.core
 
             public bool SupportsLocking => _clientSession.functions.SupportsLocking;
 
-            public void Lock(ref RecordInfo recordInfo, ref Key key, ref Value value, LockType lockType, ref long context) => _clientSession.functions.Lock(ref recordInfo, ref key, ref value, lockType, ref context);
+            public void Lock(ref RecordInfo recordInfo, ref Key key, ref Value value, LockType lockType, ref long lockContext) => _clientSession.functions.Lock(ref recordInfo, ref key, ref value, lockType, ref lockContext);
 
-            public bool Unlock(ref RecordInfo recordInfo, ref Key key, ref Value value, LockType lockType, long context) => _clientSession.functions.Unlock(ref recordInfo, ref key, ref value, lockType, context);
+            public bool Unlock(ref RecordInfo recordInfo, ref Key key, ref Value value, LockType lockType, long lockContext) => _clientSession.functions.Unlock(ref recordInfo, ref key, ref value, lockType, lockContext);
 
             public IHeapContainer<Input> GetHeapContainer(ref Input input)
             {

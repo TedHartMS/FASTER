@@ -2,15 +2,8 @@
 // Licensed under the MIT license.
 
 using System;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Collections.Generic;
-using System.Linq;
 using FASTER.core;
 using System.Runtime.CompilerServices;
-using System.IO;
-using System.Diagnostics;
 using NUnit.Framework;
 using System.Runtime.InteropServices;
 

@@ -230,7 +230,7 @@ namespace FASTER.test
             dst.value = src.value;
             return true;
         }
-        
+
         public override void SingleReader(ref int key, ref MyInput input, ref MyValue value, ref MyOutput dst)
         {
             dst.value = value;
@@ -288,7 +288,7 @@ namespace FASTER.test
             Assert.IsTrue(status == Status.OK);
             for (int i = 0; i < output.value.value.Length; i++)
             {
-                Assert.IsTrue(output.value.value[i] == (byte)(output.value.value.Length+i));
+                Assert.IsTrue(output.value.value[i] == (byte)(output.value.value.Length + i));
             }
         }
 

@@ -101,15 +101,15 @@ namespace FASTER.core
         public override bool SupportsLocking => locking;
 
         /// <inheritdoc />
-        public override void Lock(ref RecordInfo recordInfo, ref SpanByte key, ref SpanByte value, LockType lockType, ref long context)
+        public override void Lock(ref RecordInfo recordInfo, ref SpanByte key, ref SpanByte value, LockType lockType, ref long lockContext)
         {
-            if (locking) value.SpinLock();
+            value.SpinLock();
         }
 
         /// <inheritdoc />
-        public override bool Unlock(ref RecordInfo recordInfo, ref SpanByte key, ref SpanByte value, LockType lockType, long context)
+        public override bool Unlock(ref RecordInfo recordInfo, ref SpanByte key, ref SpanByte value, LockType lockType, long lockContext)
         {
-            if (locking) value.Unlock();
+            value.Unlock();
             return true;
         }
     }
@@ -141,15 +141,15 @@ namespace FASTER.core
         public override bool SupportsLocking => locking;
 
         /// <inheritdoc />
-        public override void Lock(ref RecordInfo recordInfo, ref SpanByte key, ref SpanByte value, LockType lockType, ref long context)
+        public override void Lock(ref RecordInfo recordInfo, ref SpanByte key, ref SpanByte value, LockType lockType, ref long lockContext)
         {
-            if (locking) value.SpinLock();
+            value.SpinLock();
         }
 
         /// <inheritdoc />
-        public override bool Unlock(ref RecordInfo recordInfo, ref SpanByte key, ref SpanByte value, LockType lockType, long context)
+        public override bool Unlock(ref RecordInfo recordInfo, ref SpanByte key, ref SpanByte value, LockType lockType, long lockContext)
         {
-            if (locking) value.Unlock();
+            value.Unlock();
             return true;
         }
     }

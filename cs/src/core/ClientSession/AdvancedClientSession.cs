@@ -548,14 +548,15 @@ namespace FASTER.core
         /// and tail)
         /// </summary>
         /// <param name="key">Key of the record.</param>
+        /// <param name="logicalAddress">Logical address of record, if found</param>
         /// <param name="fromAddress">Look until this address</param>
         /// <returns>Status</returns>
-        internal Status ContainsKeyInMemory(ref Key key, long fromAddress = -1)
+        internal Status ContainsKeyInMemory(ref Key key, out long logicalAddress, long fromAddress = -1)
         {
             if (SupportAsync) UnsafeResumeThread();
             try
             {
-                return fht.InternalContainsKeyInMemory(ref key, ctx, FasterSession, fromAddress);
+                return fht.InternalContainsKeyInMemory(ref key, ctx, FasterSession, out logicalAddress, fromAddress);
             }
             finally
             {
@@ -789,26 +790,21 @@ namespace FASTER.core
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public bool ConcurrentDeleter(ref Key key, ref Value value, ref RecordInfo recordInfo, long address)
-                => !this.SupportsLocking
-                    ? ConcurrentDeleterNoLock(ref key, ref value, ref recordInfo, address)
-                    : ConcurrentDeleterLock(ref key, ref value, ref recordInfo, address);
-
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            private bool ConcurrentDeleterNoLock(ref Key key, ref Value value, ref RecordInfo recordInfo, long address)
+            public void ConcurrentDeleter(ref Key key, ref Value value, ref RecordInfo recordInfo, long address)
             {
-                if (!_clientSession.functions.ConcurrentDeleter(ref key, ref value, ref recordInfo, address))
-                    _clientSession.fht.SetRecordDeleted(ref value, ref recordInfo);
-                return _clientSession.fht.UpdateSIForDelete(ref key, address, isNewRecord:false);
+                if (!this.SupportsLocking)
+                    _clientSession.functions.ConcurrentDeleter(ref key, ref value, ref recordInfo, address);
+                else
+                    ConcurrentDeleterLock(ref key, ref value, ref recordInfo, address);
             }
 
-            private bool ConcurrentDeleterLock(ref Key key, ref Value value, ref RecordInfo recordInfo, long address)
+            private void ConcurrentDeleterLock(ref Key key, ref Value value, ref RecordInfo recordInfo, long address)
             {
                 long context = 0;
                 this.Lock(ref recordInfo, ref key, ref value, LockType.Exclusive, ref context);
                 try
                 {
-                    return ConcurrentDeleterNoLock(ref key, ref value, ref recordInfo, address);
+                    _clientSession.functions.ConcurrentDeleter(ref key, ref value, ref recordInfo, address);
                 }
                 finally
                 {
@@ -907,9 +903,9 @@ namespace FASTER.core
 
             public bool SupportsLocking => _clientSession.functions.SupportsLocking;
 
-            public void Lock(ref RecordInfo recordInfo, ref Key key, ref Value value, LockType lockType, ref long context) => _clientSession.functions.Lock(ref recordInfo, ref key, ref value, lockType, ref context);
+            public void Lock(ref RecordInfo recordInfo, ref Key key, ref Value value, LockType lockType, ref long lockContext) => _clientSession.functions.Lock(ref recordInfo, ref key, ref value, lockType, ref lockContext);
 
-            public bool Unlock(ref RecordInfo recordInfo, ref Key key, ref Value value, LockType lockType, long context) => _clientSession.functions.Unlock(ref recordInfo, ref key, ref value, lockType, context);
+            public bool Unlock(ref RecordInfo recordInfo, ref Key key, ref Value value, LockType lockType, long lockContext) => _clientSession.functions.Unlock(ref recordInfo, ref key, ref value, lockType, lockContext);
 
             public IHeapContainer<Input> GetHeapContainer(ref Input input)
             {

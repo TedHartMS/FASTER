@@ -26,6 +26,8 @@ namespace FASTER.core
         /// </summary>
         private int numPending = 0;
 
+        private bool _disposed;
+
         /// <summary>
         /// 
         /// </summary>
@@ -38,11 +40,13 @@ namespace FASTER.core
             : base(filename, GetSectorSize(filename), capacity)
         {
             pool = new SectorAlignedBufferPool(1, 1);
+            ThrottleLimit = 120;
 
             string path = new FileInfo(filename).Directory.FullName;
             if (!Directory.Exists(path))
                 Directory.CreateDirectory(path);
 
+            this._disposed = false;
             this.preallocateFile = preallocateFile;
             this.deleteOnClose = deleteOnClose;
             logHandles = new SafeConcurrentDictionary<int, (FixedPool<Stream>, FixedPool<Stream>)>();
@@ -51,7 +55,7 @@ namespace FASTER.core
         }
 
         /// <inheritdoc />
-        public override bool Throttle() => numPending > 120;
+        public override bool Throttle() => numPending > ThrottleLimit;
 
         private void RecoverFiles()
         {
@@ -259,10 +263,11 @@ namespace FASTER.core
         }
 
         /// <summary>
-        /// 
+        /// Close device
         /// </summary>
         public override void Dispose()
         {
+            _disposed = true;
             foreach (var entry in logHandles)
             {
                 entry.Value.Item1.Dispose();
@@ -342,7 +347,24 @@ namespace FASTER.core
 
         private (FixedPool<Stream>, FixedPool<Stream>) GetOrAddHandle(int _segmentId)
         {
-            return logHandles.GetOrAdd(_segmentId, e => AddHandle(e));
+            if (logHandles.TryGetValue(_segmentId, out var h))
+            {
+                return h;
+            }
+            var result = logHandles.GetOrAdd(_segmentId, e => AddHandle(e));
+
+            if (_disposed)
+            {
+                // If disposed, dispose the fixed pools and return the (disposed) result
+                foreach (var entry in logHandles)
+                {
+                    entry.Value.Item1.Dispose();
+                    entry.Value.Item2.Dispose();
+                    if (deleteOnClose)
+                        File.Delete(GetSegmentName(entry.Key));
+                }
+            }
+            return result;
         }
 
         /// <summary>

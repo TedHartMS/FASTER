@@ -1,11 +1,10 @@
-﻿// Copyright (c) Microsoft Corporation. All rights reserved.
+// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT license.
 
 using FASTER.core;
 using NUnit.Framework;
 using System;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -32,8 +31,8 @@ namespace FASTER.test
             public override bool InPlaceUpdater(ref int key, ref int input, ref int value, ref RecordInfo recordInfo, long address) => Increment(ref value);
 
             public override bool SupportsLocking => true;
-            public override void Lock(ref RecordInfo recordInfo, ref int key, ref int value, LockType lockType, ref long context) => recordInfo.SpinLock();
-            public override bool Unlock(ref RecordInfo recordInfo, ref int key, ref int value, LockType lockType, long context)
+            public override void Lock(ref RecordInfo recordInfo, ref int key, ref int value, LockType lockType, ref long lockContext) => recordInfo.SpinLock();
+            public override bool Unlock(ref RecordInfo recordInfo, ref int key, ref int value, LockType lockType, long lockContext)
             {
                 recordInfo.Unlock();
                 return true;
@@ -64,6 +63,7 @@ namespace FASTER.test
         }
 
         [Test]
+        [Category("FasterKV")]
         public unsafe void RecordInfoLockTest()
         {
             for (var ii = 0; ii < 5; ++ii)
@@ -100,6 +100,7 @@ namespace FASTER.test
         }
 
         [Test]
+        [Category("FasterKV")]
         public void IntExclusiveLockerTest()
         {
             int lockTestValue = 0;
@@ -107,6 +108,7 @@ namespace FASTER.test
         }
 
         [Test]
+        [Category("FasterKV")]
         public void AdvancedFunctionsLockTest()
         {
             // Populate

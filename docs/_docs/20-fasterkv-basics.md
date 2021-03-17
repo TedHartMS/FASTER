@@ -93,12 +93,15 @@ Apart from Key and Value, the IFunctions interface is defined on three additiona
 2. SingleWriter and ConcurrentWriter: These are used to write values to the store, from a source value. Concurrent writer can assume that there are no concurrent operations on the record.
 3. Completion callbacks: Called by FASTER when various operations complete after they have gone "pending" due to requiring IO.
 4. RMW Updaters: There are three updaters that the user specifies, InitialUpdater, InPlaceUpdater, and CopyUpdater. Together, they are used to implement the RMW operation.
+5. Locking: There is one property and two methods; if the SupportsLocking property returns true, then FASTER will call Lock and Unlock within a try/finally in the four concurrent callback methods: ConcurrentReader, ConcurrentWriter, ConcurrentDeleter (new in IAdvancedFunctions), and InPlaceUpdater. FunctionsBase illustrates the default implementation of Lock and Unlock as an exclusive lock using a bit in RecordInfo.
 
 #### IAdvancedFunctions
 
 `IAdvancedFunctions` is a superset of `IFunctions` and provides the same methods with some additional parameters:
 - ReadCompletionCallback receives the `RecordInfo` of the record that was read.
 - Other callbacks receive the logical address of the record, which can be useful for applications such as indexing.
+
+`IAdvancedFunctions` also contains a new method, ConcurrentDeleter, which may be used to implement user-defined post-deletion logic, such as calling object Dispose.
 
 `IAdvancedFunctions` is a separate interface; it does not inherit from `IFunctions`.
 
@@ -124,7 +127,7 @@ You can then perform a sequence of read, upsert, and RMW operations on the sessi
 
 ```cs
 var status = session.Read(ref key, ref output);
-var status = session.Read(ref key, ref input, ref output, ref context, ref serialNo);
+var status = session.Read(ref key, ref input, ref output, context, serialNo);
 await session.ReadAsync(key, input);
 ```
 
@@ -132,15 +135,22 @@ await session.ReadAsync(key, input);
 
 ```cs
 var status = session.Upsert(ref key, ref value);
-var status = session.Upsert(ref key, ref value, ref context, ref serialNo);
+var status = session.Upsert(ref key, ref value, context, serialNo);
 ```
 
 #### RMW
 
 ```cs
 var status = session.RMW(ref key, ref input);
-var status = session.RMW(ref key, ref input, ref context, ref serialNo);
+var status = session.RMW(ref key, ref input, context, serialNo);
 await session.RMWAsync(key, input);
+```
+
+#### Delete
+
+```cs
+var status = session.Delete(ref key);
+var status = session.Delete(ref key, context, serialNo);
 ```
 
 ### Disposing
@@ -197,6 +207,50 @@ Unit tests are a useful resource to see how FASTER is used as well. They are in
 
 All these call be accessed through Visual Studio via the main FASTER.sln solution file at
 [/cs](https://github.com/Microsoft/FASTER/tree/master/cs).
+
+## Key Iteration
+
+FasterKV supports key iteration in order to get the set of distinct keys that are active (not deleted or expired) and indexed by the store. Related pull request is [here](https://github.com/microsoft/FASTER/pull/287). Usage is shown below:
+
+```cs
+using var iter = session.Iterate();
+while (iter.GetNext(out var recordInfo))
+{
+   ref Key key = ref iter.GetKey();
+   ref Value value = ref iter.GetValue();
+}
+```
+
+## Log Scan
+
+Recall that FasterKV is backed by a log of records that spans disk and main memory. We support a scan operation of the records between any two log addresses. Note that unlike key iteration, scan does not check for records with duplicate keys or eliminate deleted records. Instead, it reports all records on the log in sequential fashion. `RecordInfo` can be used to check each record's header whether it is a deleted record (`recordInfo.Tombstone` is true for a deleted record). A start address of `0` is used to denote the beginning of the log. In order to scan all read-only records (not in the mutable region), you can end iteration at `store.Log.SafeReadOnlyAddress`. To include mutable records in memory, you can end iteration at `store.Log.TailAddress`. Related pull request is [here](https://github.com/microsoft/FASTER/pull/90). Usage is shown below:
+
+```cs
+using var iter = store.Log.Scan(0, fht.Log.SafeReadOnlyAddress);
+while (iter.GetNext(out var recordInfo))
+{
+   ref Key key = ref iter.GetKey();
+   ref Value value = ref iter.GetValue();
+}
+```
+
+## Log Operations
+
+FasterKV exposes a Log interface (`store.Log`) to perform different kinds of operations on the log underlying the store. A similar endpoint is exposed for the read cache as well (`store.ReadCache`). The interface supports a rich suite of operations:
+
+* Access various pre-defined address points: `store.Log.BeginAddress`, `store.Log.HeadAddress`, `store.Log.SafeReadOnlyAddress`, `store.Log.TailAddress`
+* Truncate the log until, but not including, untilAddress: `store.Log.ShiftBeginAddress(untilAddress)`
+  * You can use this to delete the database contents in bulk: `store.Log.ShiftBeginAddress(store.Log.TailAddress)`
+  * Deletion of the log on disk only occurs at segment boundary (file) granularity, as per `SegmentSizeBits` defined in log settings.
+* Shift log head address to prune memory foorprint of hybrid log: `store.Log.ShiftHeadAddress(untilAddress, wait: true)`
+* Shift log read-only address to make records immutable and flush them to disk: `store.Log.ShiftReadOnlyAddress(untilAddress, wait: true)`
+* Flush log until current tail (records are still retained in memory): `store.Log.Flush(wait: true)`
+* Flush log and evict all records from memory: `store.Log.FlushAndEvict(wait: true)`
+* Delete log entirely from memory as a synchronous operation (cannot allocate on the log after this point): `store.Log.DisposeFromMemory()`
+* Subscribe to log records as they become read-only: `store.Log.Subscribe(observer)`
+* Subscribe to log records as they are evicted from memory (at HeadAddress): `store.Log.SubscribeEvictions(observer)`
+* Scan the log: see [here](#log-scan) for details
+* Compact the log: see [here](#log-compaction) for details
 
 ## Handling Variable Length Keys and Values
 
