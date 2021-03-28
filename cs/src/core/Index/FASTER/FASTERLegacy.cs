@@ -409,6 +409,8 @@ namespace FASTER.core
             {
                 return new StandardHeapContainer<Input>(ref input);
             }
+
+            public SecondaryIndexSessionBroker SecondaryIndexSessionBroker => null;
         }
     }
 

@@ -68,11 +68,13 @@ namespace FASTER.test.readaddress
 
             public bool IsMutable => true;
 
-            public void Delete(long recordId) { }
+            public void SetSessionSlot(long slot) { }
 
-            public void Insert(ref Value value, long recordId) => lastWriteAddress = recordId;
+            public void Delete(long recordId, SecondaryIndexSessionBroker indexSessionBroker) { }
 
-            public void Upsert(ref Value value, long recordId, bool isMutable) { }
+            public void Insert(ref Value value, long recordId, SecondaryIndexSessionBroker indexSessionBroker) => lastWriteAddress = recordId;
+
+            public void Upsert(ref Value value, long recordId, bool isMutableRecord, SecondaryIndexSessionBroker indexSessionBroker) { }
         }
 
         private static long SetReadOutput(long key, long value) => (key << 32) | value;

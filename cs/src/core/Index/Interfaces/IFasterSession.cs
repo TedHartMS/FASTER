@@ -25,5 +25,7 @@ namespace FASTER.core
     internal interface IFasterSession<Key, Value, Input, Output, Context> : IAdvancedFunctions<Key, Value, Input, Output, Context>, IFasterSession, IVariableLengthStruct<Value, Input>
     {
         IHeapContainer<Input> GetHeapContainer(ref Input input);
+
+        SecondaryIndexSessionBroker SecondaryIndexSessionBroker { get; }
     }
 }
