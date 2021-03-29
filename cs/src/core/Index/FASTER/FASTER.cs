@@ -83,7 +83,7 @@ namespace FASTER.core
         /// <summary>
         /// Manages secondary indexes for this FASTER instance.
         /// </summary>
-        public SecondaryIndexBroker<Key, Value> SecondaryIndexBroker { get; } = new SecondaryIndexBroker<Key, Value>();
+        public SecondaryIndexBroker<Key, Value> SecondaryIndexBroker { get; }
 
         /// <summary>
         /// Create FASTER instance
@@ -221,6 +221,8 @@ namespace FASTER.core
             }
 
             hlog.Initialize();
+
+            this.SecondaryIndexBroker = new SecondaryIndexBroker<Key, Value>(this);
 
             sectorSize = (int)logSettings.LogDevice.SectorSize;
             Initialize(size, sectorSize);

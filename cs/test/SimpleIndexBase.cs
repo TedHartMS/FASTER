@@ -5,18 +5,19 @@ using FASTER.core;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 
 namespace FASTER.test
 {
     class SimpleIndexBase<TKey>
     {
-        protected internal Dictionary<TKey, List<long>> mutableRecords = new Dictionary<TKey, List<long>>();
-        protected internal Dictionary<TKey, List<long>> immutableRecords = new Dictionary<TKey, List<long>>();
-        protected internal Dictionary<long, TKey> reverseLookup = new Dictionary<long, TKey>();
+        protected readonly internal Dictionary<TKey, List<long>> MutableRecords = new Dictionary<TKey, List<long>>();
+        protected readonly internal Dictionary<TKey, List<long>> ImmutableRecords = new Dictionary<TKey, List<long>>();
+        private readonly Dictionary<long, TKey> reverseLookup = new Dictionary<long, TKey>();
 
         protected internal long sessionSlot = 0;
-        private bool isKeyIndex;
+        private readonly bool isKeyIndex;
         private readonly string indexType;
         private Guid sessionId = Guid.Empty;
         readonly Func<TKey, TKey> indexKeyFunc;
@@ -54,9 +55,9 @@ namespace FASTER.test
             var key = this.indexKeyFunc(rawKey);
             VerifyNotImmutable(ref key, recordId);
             VerifySession(indexSessionBroker);
-            if (!mutableRecords.ContainsKey(key))
+            if (!MutableRecords.ContainsKey(key))
                 Assert.Fail($"{indexType} '{key}' not found as index key");
-            mutableRecords.Remove(key);
+            MutableRecords.Remove(key);
 
             Assert.IsTrue(reverseLookup.ContainsKey(recordId));
             reverseLookup.Remove(recordId);
@@ -67,10 +68,10 @@ namespace FASTER.test
             var key = this.indexKeyFunc(rawKey);
             VerifyNotImmutable(ref key, recordId);
             VerifySession(indexSessionBroker);
-            if (!mutableRecords.TryGetValue(key, out var recordIds))
+            if (!MutableRecords.TryGetValue(key, out var recordIds))
             {
                 recordIds = new List<long>();
-                mutableRecords[key] = recordIds;
+                MutableRecords[key] = recordIds;
             }
             else if (recordIds.Contains(recordId))
             {
@@ -92,55 +93,63 @@ namespace FASTER.test
             // Move from mutable to immutable
             var key = this.indexKeyFunc(rawKey);
             VerifyNotImmutable(ref key, recordId);
-            VerifySession(indexSessionBroker);
-            if (mutableRecords.TryGetValue(key, out var recordIds) && recordIds.Contains(recordId))
+            VerifySession(indexSessionBroker, isMutableRecord);
+            if (MutableRecords.TryGetValue(key, out var recordIds) && recordIds.Contains(recordId))
+            {
                 recordIds.Remove(recordId);
+                if (recordIds.Count == 0)
+                    MutableRecords.Remove(key);
+            }
 
-            if (!immutableRecords.TryGetValue(key, out recordIds))
+            if (!ImmutableRecords.TryGetValue(key, out recordIds))
             {
                 recordIds = new List<long>();
-                mutableRecords[key] = recordIds;
+                ImmutableRecords[key] = recordIds;
             }
             recordIds.Add(recordId);
             AddToReverseLookup(ref key, recordId);
         }
 
-        private void VerifySession(SecondaryIndexSessionBroker indexSessionBroker)
+        private void VerifySession(SecondaryIndexSessionBroker indexSessionBroker, bool isMutableRecord = true)
         {
             Assert.IsNotNull(indexSessionBroker);
             var sessionObject = indexSessionBroker.GetSessionObject(this.sessionSlot);
-            Assert.AreEqual(sessionObject is null, this.sessionId == Guid.Empty);
+
+            // For these tests, we will always do all mutable inserts before checkpointing and getting readonly inserts.
+            // The readonly inserts come from a different SecondaryIndexSessionBroker (owned by the SecondaryIndexBroker
+            // for the ReadOnlyObserver), so we expect not to find a session there on the first call.
+            if (isMutableRecord)
+                Assert.AreEqual(sessionObject is null, this.sessionId == Guid.Empty);
 
             if (!(sessionObject is SimpleIndexSession session))
             {
                 if (sessionObject is { })
                     Assert.Fail($"Unexpected session object type {sessionObject.GetType().Name} for {indexType}");
 
-                this.sessionId = Guid.NewGuid();
+                if (this.sessionId == Guid.Empty)
+                    this.sessionId = Guid.NewGuid();
                 session = new SimpleIndexSession() { Id = this.sessionId };
                 indexSessionBroker.SetSessionObject(this.sessionSlot, session);
             }
             Assert.AreEqual(this.sessionId, session.Id);
         }
 
-        private List<long> emptyRecordList = new List<long>();
+        private readonly List<long> emptyRecordList = new List<long>();
 
         internal long[] Query(TKey rawKey)
         {
             var key = this.indexKeyFunc(rawKey);
-            if (!mutableRecords.TryGetValue(key, out var mutableRecordList))
+            if (!MutableRecords.TryGetValue(key, out var mutableRecordList))
                 mutableRecordList = emptyRecordList;
-            if (!immutableRecords.TryGetValue(key, out var immutableRecordList))
+            if (!ImmutableRecords.TryGetValue(key, out var immutableRecordList))
                 immutableRecordList = emptyRecordList;
 
             return mutableRecordList.Concat(immutableRecordList).ToArray();
         }
 
-        internal int DistinctKeyCount => this.mutableRecords.Count + this.immutableRecords.Count;
-
         private void VerifyNotImmutable(ref TKey key, long recordId)
         {
-            if (immutableRecords.TryGetValue(key, out var recordIds) && recordIds.Contains(recordId))
+            if (ImmutableRecords.TryGetValue(key, out var recordIds) && recordIds.Contains(recordId))
                 Assert.Fail($"Unexpected update of recordId {recordId} for {indexType} '{key}'");
         }
 
@@ -156,19 +165,61 @@ namespace FASTER.test
         }
     }
 
-    class SimpleIndexSession
+    internal class SimpleIndexSession
     {
         public Guid Id { get; set; }
     }
 
+    internal class PrimaryFasterKV
+    {
+        private string testPath;
+        internal FasterKV<int, int> fkv;
+        private IDevice log;
+
+        internal void Setup()
+        {
+            testPath = TestContext.CurrentContext.TestDirectory + "/" + Path.GetRandomFileName();
+            if (!Directory.Exists(testPath))
+                Directory.CreateDirectory(testPath);
+
+            log = Devices.CreateLogDevice(testPath + $"/{TestContext.CurrentContext.Test.Name}.log", false);
+
+            fkv = new FasterKV<int, int>(SimpleIndexUtils.KeySpace, new LogSettings { LogDevice = log },
+                    new CheckpointSettings { CheckpointDir = testPath, CheckPointType = CheckpointType.FoldOver }
+            );
+        }
+
+        internal void Populate(bool useAdvancedFunctions, bool useRMW, bool isAsync)
+        {
+            if (useAdvancedFunctions)
+                SimpleIndexUtils.PopulateIntsWithAdvancedFunctions(this.fkv, useRMW, isAsync);
+            else
+                SimpleIndexUtils.PopulateInts(this.fkv, useRMW, isAsync);
+        }
+
+        internal void Checkpoint()
+        {
+            this.fkv.TakeFullCheckpoint(out _);
+            this.fkv.CompleteCheckpointAsync().GetAwaiter().GetResult();
+        }
+
+        internal void TearDown()
+        {
+            fkv.Dispose();
+            fkv = null;
+            log.Dispose();
+            TestUtils.DeleteDirectory(testPath);
+        }
+    }
+
     static class SimpleIndexUtils
     {
-        internal const long NumKeys = 2_000L;
+        internal const int NumKeys = 2_000;
         internal const long KeySpace = 1L << 14;
 
         internal const int ValueStart = 10_000;
 
-        public static void PopulateInts(FasterKV<int, int> fkv, bool useRMW, bool isAsync)
+        internal static void PopulateInts(FasterKV<int, int> fkv, bool useRMW, bool isAsync)
         {
             using var session = fkv.NewSession(new SimpleFunctions<int, int>());
 
@@ -197,7 +248,7 @@ namespace FASTER.test
             session.CompletePending(true);
         }
 
-        public static void PopulateIntsWithAdvancedFunctions(FasterKV<int, int> fkv, bool useRMW, bool isAsync)
+        internal static void PopulateIntsWithAdvancedFunctions(FasterKV<int, int> fkv, bool useRMW, bool isAsync)
         {
             using var session = fkv.NewSession(new AdvancedSimpleFunctions<int, int>());
 
@@ -224,6 +275,52 @@ namespace FASTER.test
 
             // Make sure operations are completed
             session.CompletePending(true);
+        }
+
+        internal static void VerifyMutableIndex(ISecondaryIndex secondaryIndex, int indexKeyDivisor, int queryKeyOffset)
+        {
+            var indexBase = secondaryIndex as SimpleIndexBase<int>;
+            Assert.AreEqual(NumKeys / indexKeyDivisor, indexBase.MutableRecords.Count);
+            Assert.AreEqual(0, indexBase.ImmutableRecords.Count);
+
+            var records = indexBase.Query(42 + queryKeyOffset);
+            Assert.AreEqual(indexKeyDivisor, records.Length);
+        }
+
+        internal static void VerifyImmutableIndex(ISecondaryIndex secondaryIndex, int indexKeyDivisor, int queryKeyOffset, PrimaryFasterKV store)
+        {
+            var indexBase = secondaryIndex as SimpleIndexBase<int>;
+            Assert.AreEqual(0, indexBase.MutableRecords.Count);
+            Assert.AreEqual(0, indexBase.ImmutableRecords.Count);
+
+            store.Checkpoint();
+            Assert.AreEqual(0, indexBase.MutableRecords.Count);
+            Assert.AreEqual(NumKeys / indexKeyDivisor, indexBase.ImmutableRecords.Count);
+
+            var records = indexBase.Query(42 + queryKeyOffset);
+            Assert.AreEqual(indexKeyDivisor, records.Length);
+        }
+
+        internal static void VerifyMixedIndexes(ISecondaryIndex mutableIndex, ISecondaryIndex immutableIndex, int indexKeyDivisor, int queryKeyOffset, PrimaryFasterKV store)
+        {
+            var mutableIndexBase = mutableIndex as SimpleIndexBase<int>;
+            var immutableIndexBase = immutableIndex as SimpleIndexBase<int>;
+            Assert.AreEqual(NumKeys / indexKeyDivisor, mutableIndexBase.MutableRecords.Count);
+            Assert.AreEqual(0, mutableIndexBase.ImmutableRecords.Count);
+            Assert.AreEqual(0, immutableIndexBase.MutableRecords.Count);
+            Assert.AreEqual(0, immutableIndexBase.ImmutableRecords.Count);
+
+            store.Checkpoint();
+            Assert.AreEqual(0, mutableIndexBase.MutableRecords.Count);
+            Assert.AreEqual(NumKeys / indexKeyDivisor, mutableIndexBase.ImmutableRecords.Count);
+            Assert.AreEqual(0, immutableIndexBase.MutableRecords.Count);
+            Assert.AreEqual(NumKeys / indexKeyDivisor, immutableIndexBase.ImmutableRecords.Count);
+
+            var records = mutableIndexBase.Query(42 + queryKeyOffset);
+            Assert.AreEqual(indexKeyDivisor, records.Length);
+
+            records = immutableIndexBase.Query(42 + queryKeyOffset);
+            Assert.AreEqual(indexKeyDivisor, records.Length);
         }
     }
 }

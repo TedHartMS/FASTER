@@ -2,13 +2,14 @@
 // Licensed under the MIT license.
 
 using System;
+using System.Threading;
 
 namespace FASTER.core
 {
     /// <summary>
     /// Allows an index to register its own concept of sessions to be attached to a primary FasterKV session.
     /// </summary>
-    public class SecondaryIndexSessionBroker
+    public class SecondaryIndexSessionBroker : IDisposable
     {
         readonly object sessionLock = new object();
 
@@ -49,6 +50,26 @@ namespace FASTER.core
 
             this.indexSessions[slot] = sessionObject;
             return sessionObject;
+        }
+
+        /// <inheritdoc/>
+        public void Dispose()
+        {
+            var sessions = this.indexSessions;
+            if (sessions == null)
+                return;
+
+            sessions = Interlocked.CompareExchange(ref this.indexSessions, null, sessions);
+            if (sessions == null)
+                return;
+
+            foreach (var session in sessions)
+            {
+                if (session is IDisposable idisp)
+                    idisp.Dispose();
+            }
+
+            GC.SuppressFinalize(this);
         }
     }
 }

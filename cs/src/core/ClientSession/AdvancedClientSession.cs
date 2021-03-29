@@ -147,6 +147,7 @@ namespace FASTER.core
         {
             CompletePending(true);
             fht.DisposeClientSession(ID);
+            SecondaryIndexSessionBroker.Dispose();
 
             // Session runs on a single thread
             if (!SupportAsync)

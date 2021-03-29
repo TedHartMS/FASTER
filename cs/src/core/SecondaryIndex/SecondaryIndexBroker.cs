@@ -14,7 +14,8 @@ namespace FASTER.core
     /// </summary>
     public class SecondaryIndexBroker<TKVKey, TKVValue>
     {
-        private readonly Dictionary<string, ISecondaryIndex> indexes = new Dictionary<string, ISecondaryIndex>();
+        private ISecondaryKeyIndex<TKVKey>[] allKeyIndexes;
+        private ISecondaryValueIndex<TKVValue>[] allValueIndexes;
 
         // Use arrays for faster traversal.
         private ISecondaryKeyIndex<TKVKey>[] mutableKeyIndexes = Array.Empty<ISecondaryKeyIndex<TKVKey>>();
@@ -24,6 +25,11 @@ namespace FASTER.core
         internal int MutableValueIndexCount => mutableValueIndexes.Length;
 
         readonly object membershipLock = new object();
+        
+        readonly FasterKV<TKVKey, TKVValue> primaryFkv;
+        IDisposable logSubscribeDisposable; // Used if we implement index removal, if we go to zero indexes.
+
+        internal SecondaryIndexBroker(FasterKV<TKVKey, TKVValue> pFkv) => this.primaryFkv = pFkv;
 
         /// <summary>
         /// Adds a secondary index to the list.
@@ -33,52 +39,51 @@ namespace FASTER.core
         {
             bool isMutable = false;
 
-            bool addSpecific<TIndex>(TIndex idx, ref TIndex[] vec)
+            void AppendToArray<TIndex>(ref TIndex[] vec, TIndex idx)
+            {
+                var resizedVec = new TIndex[vec is null ? 1 : vec.Length + 1];
+                if (vec is { })
+                    Array.Copy(vec, resizedVec, vec.Length);
+                resizedVec[resizedVec.Length - 1] = idx;
+                vec = resizedVec;
+            }
+
+            bool addSpecific<TIndex>(ref TIndex[] allVec, ref TIndex[] mutableVec, TIndex idx)
                 where TIndex : ISecondaryIndex
             {
                 if (idx is null)
                     return false;
                 if (idx.IsMutable)
                 {
-                    Array.Resize(ref vec, vec.Length + 1);
-                    vec[vec.Length - 1] = idx;
+                    AppendToArray(ref mutableVec, idx);
                     isMutable = true;
                 }
+                AppendToArray(ref allVec, idx);
                 return true;
             }
 
             lock (membershipLock)
             {
-                if (!addSpecific(index as ISecondaryKeyIndex<TKVKey>, ref mutableKeyIndexes)
-                    && !addSpecific(index as ISecondaryValueIndex<TKVValue>, ref mutableValueIndexes))
+                if (!addSpecific(ref allKeyIndexes, ref mutableKeyIndexes, index as ISecondaryKeyIndex<TKVKey>)
+                    && !addSpecific(ref allValueIndexes, ref mutableValueIndexes, index as ISecondaryValueIndex<TKVValue>))
                     throw new SecondaryIndexException("Object is not a KeyIndex or ValueIndex");
-                this.HasMutableIndexes |= isMutable;
-                indexes[index.Name] = index;
+                this.HasMutableIndexes |= isMutable;    // Note: removing indexes will have to recalculate this
                 index.SetSessionSlot(SecondaryIndexSessionBroker.NextSessionSlot++);
+
+                if (logSubscribeDisposable is null)
+                    logSubscribeDisposable = primaryFkv.Log.Subscribe(new ReadOnlyObserver<TKVKey, TKVValue>(primaryFkv.SecondaryIndexBroker));
             }
         }
 
         /// <summary>
         /// The number of indexes registered.
         /// </summary>
-        public int Count => indexes.Count;
+        public int Count => allKeyIndexes.Length + allValueIndexes.Length;
 
         /// <summary>
         /// The number of indexes registered.
         /// </summary>
         public bool HasMutableIndexes { get; private set; }
-
-        /// <summary>
-        /// Enumerates the list of indexes.
-        /// </summary>
-        /// <returns></returns>
-        public IEnumerable<ISecondaryIndex> GetIndexes() => indexes.Values;
-
-        /// <summary>
-        /// Returns the index with the specified name.
-        /// </summary>
-        /// <param name="name"></param>
-        public ISecondaryIndex GetIndex(string name) => indexes[name];
 
         // On failure of an operation, a SecondaryIndexException is thrown by the Index
 
@@ -157,12 +162,16 @@ namespace FASTER.core
         /// </summary>
         public void UpsertReadOnly(ref TKVKey key, ref TKVValue value, long recordId, SecondaryIndexSessionBroker indexSessionBroker)
         {
-            var idxs = this.indexes;
-            foreach (var index in idxs)
+            var ki = this.allKeyIndexes;
+            var vi = this.allValueIndexes;
+            if (ki is { })
             {
-                if (index is ISecondaryKeyIndex<TKVKey> keyIndex)
+                foreach (var keyIndex in ki)
                     keyIndex.Upsert(ref key, recordId, isMutableRecord: false, indexSessionBroker);
-                else if (index is ISecondaryValueIndex<TKVValue> valueIndex)
+            }
+            if (vi is { })
+            {
+                foreach (var valueIndex in vi)
                     valueIndex.Upsert(ref value, recordId, isMutableRecord: false, indexSessionBroker);
             }
         }
