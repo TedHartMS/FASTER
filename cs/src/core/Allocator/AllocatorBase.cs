@@ -226,12 +226,16 @@ namespace FASTER.core
         /// <summary>
         /// Observer for records entering read-only region
         /// </summary>
-        internal IObserver<IFasterScanIterator<Key, Value>> OnReadOnlyObserver;
+        internal IObserver<IFasterScanIterator<Key, Value>>[] OnReadOnlyObservers = Array.Empty<IObserver<IFasterScanIterator<Key, Value>>>();
 
         /// <summary>
         /// Observer for records getting evicted from memory (page closed)
         /// </summary>
-        internal IObserver<IFasterScanIterator<Key, Value>> OnEvictionObserver;
+        internal IObserver<IFasterScanIterator<Key, Value>>[] OnEvictionObservers = Array.Empty<IObserver<IFasterScanIterator<Key, Value>>>();
+
+        // Observer membership locks
+        private readonly object readOnlyObserverLock = new object();
+        private readonly object evictionObserverLock = new object();
 
         #region Abstract methods
         /// <summary>
@@ -645,8 +649,7 @@ namespace FASTER.core
                 epoch.Dispose();
             bufferPool.Free();
 
-            OnReadOnlyObserver?.OnCompleted();
-            OnEvictionObserver?.OnCompleted();
+            this.OnCompleted();
         }
 
         /// <summary>
@@ -654,6 +657,86 @@ namespace FASTER.core
         /// </summary>
         internal abstract void DeleteFromMemory();
 
+        internal void AddReadOnlyObserver(IObserver<IFasterScanIterator<Key, Value>> observer)
+            => AddObserver(ref OnReadOnlyObservers, observer, readOnlyObserverLock);
+        internal void RemoveReadOnlyObserver(IObserver<IFasterScanIterator<Key, Value>> observer)
+            => RemoveObserver(ref OnReadOnlyObservers, observer, readOnlyObserverLock);
+
+        internal void AddEvictionObserver(IObserver<IFasterScanIterator<Key, Value>> observer)
+            => AddObserver(ref OnEvictionObservers, observer, evictionObserverLock);
+        internal void RemoveEvictionObserver(IObserver<IFasterScanIterator<Key, Value>> observer)
+            => RemoveObserver(ref OnEvictionObservers, observer, evictionObserverLock);
+
+        internal static void AddObserver(ref IObserver<IFasterScanIterator<Key, Value>>[] observers, IObserver<IFasterScanIterator<Key, Value>> observer, object lockObject)
+        {
+            lock (lockObject)
+            {
+                if (observers.Length == 0)
+                {
+                    observers = new[] { observer };
+                    return;
+                }
+                var equatable = observer as IEquatable<IObserver<IFasterScanIterator<Key, Value>>>;
+                foreach (var existing in observers)
+                {
+                    bool found = equatable is { } && existing is IEquatable<IObserver<IFasterScanIterator<Key, Value>>> existingEquatable
+                        ? equatable.Equals(existingEquatable)
+                        : observer.Equals(existing);
+                    if (found)
+                        return;
+                }
+                var vec = new IObserver<IFasterScanIterator<Key, Value>>[observers.Length + 1];
+                Array.Copy(observers, vec, observers.Length);
+                vec[observers.Length] = observer;
+                observers = vec;
+            }
+        }
+
+        internal static void RemoveObserver(ref IObserver<IFasterScanIterator<Key, Value>>[] observers, IObserver<IFasterScanIterator<Key, Value>> observer, object lockObject)
+        {
+            lock (lockObject)
+            {
+                if (observers.Length == 0)
+                    return;
+                var equatable = observer as IEquatable<IObserver<IFasterScanIterator<Key, Value>>>;
+                for (var ii = 0; ii < observers.Length; ++ii)
+                {
+                    var existing = observers[ii];
+                    bool found = equatable is { } && existing is IEquatable<IObserver<IFasterScanIterator<Key, Value>>> existingEquatable
+                        ? equatable.Equals(existingEquatable)
+                        : observer.Equals(existing);
+                    if (found)
+                    {
+                        if (observers.Length == 1)
+                        {
+                            observers = Array.Empty<IObserver<IFasterScanIterator<Key, Value>>>();
+                            return;
+                        }
+                        var vec = new IObserver<IFasterScanIterator<Key, Value>>[observers.Length - 1];
+                        if (ii > 0)
+                            Array.Copy(observers, vec, ii);
+                        if (ii < observers.Length - 1)
+                            Array.Copy(observers, ii + 1, vec, ii, observers.Length - ii - 1);
+                        observers = vec;
+                    }
+                }
+            }
+        }
+
+        void OnCompleted()
+        {
+            OnCompleted(this.OnReadOnlyObservers);
+            OnCompleted(this.OnEvictionObservers);
+        }
+
+        internal static void OnCompleted(IObserver<IFasterScanIterator<Key, Value>>[] observers)
+        {
+            if (observers is null)
+                return;
+            var localObservers = observers;
+            foreach (var observer in localObservers)
+                observer.OnCompleted();
+        }
 
         /// <summary>
         /// Segment size
@@ -930,10 +1013,12 @@ namespace FASTER.core
             if (Utility.MonotonicUpdate(ref SafeReadOnlyAddress, newSafeReadOnlyAddress, out long oldSafeReadOnlyAddress))
             {
                 Debug.WriteLine("SafeReadOnly shifted from {0:X} to {1:X}", oldSafeReadOnlyAddress, newSafeReadOnlyAddress);
-                if (OnReadOnlyObserver != null)
+
+                var localObservers = this.OnReadOnlyObservers;
+                foreach (var observer in localObservers)
                 {
                     using var iter = Scan(oldSafeReadOnlyAddress, newSafeReadOnlyAddress, ScanBufferingMode.NoBuffering);
-                    OnReadOnlyObserver?.OnNext(iter);
+                    observer.OnNext(iter);
                 }
                 AsyncFlushPages(oldSafeReadOnlyAddress, newSafeReadOnlyAddress);
             }
@@ -1433,12 +1518,27 @@ namespace FASTER.core
                 // ongoing adjacent flush is completed to ensure correctness
                 if (GetOffsetInPage(asyncResult.fromAddress) > 0)
                 {
-                    // Enqueue work in shared queue
                     var index = GetPageIndexForAddress(asyncResult.fromAddress);
-                    PendingFlush[index].Add(asyncResult);
-                    if (PendingFlush[index].RemoveAdjacent(FlushedUntilAddress, out PageAsyncFlushResult<Empty> request))
+
+                    // Try to merge request with existing adjacent (earlier) pending requests
+                    while (PendingFlush[index].RemovePreviousAdjacent(asyncResult.fromAddress, out var existingRequest))
                     {
-                        WriteAsync(request.fromAddress >> LogPageSizeBits, AsyncFlushPageCallback, request);
+                        asyncResult.fromAddress = existingRequest.fromAddress;
+                    }
+
+                    // Enqueue work in shared queue
+                    if (PendingFlush[index].Add(asyncResult))
+                    {
+                        // Perform work from shared queue if possible
+                        if (PendingFlush[index].RemoveNextAdjacent(FlushedUntilAddress, out PageAsyncFlushResult<Empty> request))
+                        {
+                            WriteAsync(request.fromAddress >> LogPageSizeBits, AsyncFlushPageCallback, request);
+                        }
+                    }
+                    else
+                    {
+                        // Could not add to pending flush list, treat as a failed write
+                        AsyncFlushPageCallback(1, 0, asyncResult);
                     }
                 }
                 else
@@ -1628,7 +1728,7 @@ namespace FASTER.core
                 }
 
                 var _flush = FlushedUntilAddress;
-                if (GetOffsetInPage(_flush) > 0 && PendingFlush[GetPage(_flush) % BufferSize].RemoveAdjacent(_flush, out PageAsyncFlushResult<Empty> request))
+                if (GetOffsetInPage(_flush) > 0 && PendingFlush[GetPage(_flush) % BufferSize].RemoveNextAdjacent(_flush, out PageAsyncFlushResult<Empty> request))
                 {
                     WriteAsync(request.fromAddress >> LogPageSizeBits, AsyncFlushPageCallback, request);
                 }

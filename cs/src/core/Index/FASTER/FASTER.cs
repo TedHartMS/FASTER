@@ -87,7 +87,7 @@ namespace FASTER.core
         /// <summary>
         /// Manages secondary indexes for this FASTER instance.
         /// </summary>
-        public SecondaryIndexBroker<Key, Value> SecondaryIndexBroker { get; } = new SecondaryIndexBroker<Key, Value>();
+        public SecondaryIndexBroker<Key, Value> SecondaryIndexBroker { get; }
 
         /// <summary>
         /// Create FASTER instance
@@ -225,6 +225,8 @@ namespace FASTER.core
             }
 
             hlog.Initialize();
+
+            this.SecondaryIndexBroker = new SecondaryIndexBroker<Key, Value>(this);
 
             sectorSize = (int)logSettings.LogDevice.SectorSize;
             Initialize(size, sectorSize);
@@ -611,11 +613,11 @@ namespace FASTER.core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal bool UpdateSIForIPU(ref Value value, long address)
+        internal bool UpdateSIForIPU(ref Value value, long address, SecondaryIndexSessionBroker indexSessionBroker)
         {
             // KeyIndexes do not need notification of in-place updates because the key does not change.
             if (this.SecondaryIndexBroker.MutableValueIndexCount > 0)
-                this.SecondaryIndexBroker.Upsert(ref value, address);
+                this.SecondaryIndexBroker.Upsert(ref value, address, indexSessionBroker);
             return true;
         }
 
@@ -624,20 +626,20 @@ namespace FASTER.core
             where FasterSession : IFasterSession<Key, Value, Input, Output, Context>
         {
             if (!fasterSession.SupportsLocking)
-                UpdateSIForInsertNoLock(ref key, ref value, ref recordInfo, address);
+                UpdateSIForInsertNoLock(ref key, ref value, ref recordInfo, address, fasterSession.SecondaryIndexSessionBroker);
             else
                 UpdateSIForInsertLock<Input, Output, Context, FasterSession>(ref key, ref value, ref recordInfo, address, fasterSession);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void UpdateSIForInsertNoLock(ref Key key, ref Value value, ref RecordInfo recordInfo, long address)
+        private void UpdateSIForInsertNoLock(ref Key key, ref Value value, ref RecordInfo recordInfo, long address, SecondaryIndexSessionBroker indexSessionBroker)
         {
             if (!recordInfo.Invalid && !recordInfo.Tombstone)
             {
                 if (this.SecondaryIndexBroker.MutableKeyIndexCount > 0)
-                    this.SecondaryIndexBroker.Insert(ref key);
+                    this.SecondaryIndexBroker.Insert(ref key, address, indexSessionBroker);
                 if (this.SecondaryIndexBroker.MutableValueIndexCount > 0)
-                    this.SecondaryIndexBroker.Insert(ref value, address);
+                    this.SecondaryIndexBroker.Insert(ref value, address, indexSessionBroker);
             }
         }
 
@@ -648,7 +650,7 @@ namespace FASTER.core
             fasterSession.Lock(ref recordInfo, ref key, ref value, LockType.Exclusive, ref context);
             try
             {
-                UpdateSIForInsertNoLock(ref key, ref value, ref recordInfo, address);
+                UpdateSIForInsertNoLock(ref key, ref value, ref recordInfo, address, fasterSession.SecondaryIndexSessionBroker);
             }
             finally
             {
@@ -724,7 +726,7 @@ namespace FASTER.core
 
                 // No need to lock here; we have just written a new record with a tombstone, so it will not be changed
                 // TODO - but this can race with an INSERT...
-                this.UpdateSIForDelete(ref key, pcontext.logicalAddress, isNewRecord: true);
+                this.UpdateSIForDelete(ref key, pcontext.logicalAddress, isNewRecord: true, fasterSession.SecondaryIndexSessionBroker);
             }
 
             Debug.Assert(serialNo >= sessionCtx.serialNum, "Operation serial numbers must be non-decreasing");

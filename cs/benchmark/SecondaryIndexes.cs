@@ -11,11 +11,13 @@ namespace FASTER.benchmark
 
         public bool IsMutable => true;
 
-        public void Delete(ref Key key) { }
+        public void SetSessionSlot(long slot) { }
 
-        public void Insert(ref Key key) { }
+        public void Delete(ref Key key, long recordId, SecondaryIndexSessionBroker indexSessionBroker) { }
 
-        public void Upsert(ref Key key, bool isMutable) { }
+        public void Insert(ref Key key, long recordId, SecondaryIndexSessionBroker indexSessionBroker) { }
+
+        public void Upsert(ref Key key, long recordId, bool isMutableRecord, SecondaryIndexSessionBroker indexSessionBroker) { }
     }
 
     class NullValueIndex<Value> : ISecondaryValueIndex<Value>
@@ -24,10 +26,12 @@ namespace FASTER.benchmark
 
         public bool IsMutable => true;
 
-        public void Delete(long recordId) { }
+        public void SetSessionSlot(long slot) { }
 
-        public void Insert(ref Value value, long recordId) { }
+        public void Delete(long recordId, SecondaryIndexSessionBroker indexSessionBroker) { }
 
-        public void Upsert(ref Value value, long recordId, bool isMutable) { }
+        public void Insert(ref Value value, long recordId, SecondaryIndexSessionBroker indexSessionBroker) { }
+
+        public void Upsert(ref Value value, long recordId, bool isMutableRecord, SecondaryIndexSessionBroker indexSessionBroker) { }
     }
 }

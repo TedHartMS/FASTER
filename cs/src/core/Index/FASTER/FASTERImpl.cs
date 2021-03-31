@@ -1076,7 +1076,6 @@ namespace FASTER.core
             {
                 ref RecordInfo recordInfo = ref hlog.GetInfo(physicalAddress);
                 ref Value value = ref hlog.GetValue(physicalAddress);
-                recordInfo.Tombstone = true;
                 fasterSession.ConcurrentDeleter(ref hlog.GetKey(physicalAddress), ref value, ref recordInfo, logicalAddress);
                 if (WriteDefaultOnDelete)
                     value = default;
@@ -1180,12 +1179,12 @@ namespace FASTER.core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal bool UpdateSIForDelete(ref Key key, long address, bool isNewRecord)
+        internal bool UpdateSIForDelete(ref Key key, long address, bool isNewRecord, SecondaryIndexSessionBroker indexSessionBroker)
         {
             if (this.SecondaryIndexBroker.MutableKeyIndexCount > 0)
-                this.SecondaryIndexBroker.Delete(ref key);
+                this.SecondaryIndexBroker.Delete(ref key, address, indexSessionBroker);
             if (!isNewRecord && this.SecondaryIndexBroker.MutableValueIndexCount > 0)
-                this.SecondaryIndexBroker.Delete(address);
+                this.SecondaryIndexBroker.Delete(address, indexSessionBroker);
             return true;
         }
 
