@@ -118,8 +118,8 @@ namespace FASTER.core
         /// <param name="readOnlyObserver">Observer to which scan iterator is pushed</param>
         public IDisposable Subscribe(IObserver<IFasterScanIterator<Key, Value>> readOnlyObserver)
         {
-            allocator.OnReadOnlyObserver = readOnlyObserver;
-            return new LogSubscribeDisposable(allocator, true);
+            allocator.AddReadOnlyObserver(readOnlyObserver);
+            return new LogSubscribeDisposable(allocator, readOnlyObserver, true);
         }
 
         /// <summary>
@@ -131,8 +131,8 @@ namespace FASTER.core
         /// <param name="evictionObserver">Observer to which scan iterator is pushed</param>
         public IDisposable SubscribeEvictions(IObserver<IFasterScanIterator<Key, Value>> evictionObserver)
         {
-            allocator.OnEvictionObserver = evictionObserver;
-            return new LogSubscribeDisposable(allocator, false);
+            allocator.AddEvictionObserver(evictionObserver);
+            return new LogSubscribeDisposable(allocator, evictionObserver, false);
         }
 
         /// <summary>
@@ -141,20 +141,22 @@ namespace FASTER.core
         class LogSubscribeDisposable : IDisposable
         {
             private readonly AllocatorBase<Key, Value> allocator;
+            private readonly IObserver<IFasterScanIterator<Key, Value>> observer;
             private readonly bool readOnly;
 
-            public LogSubscribeDisposable(AllocatorBase<Key, Value> allocator, bool readOnly)
+            public LogSubscribeDisposable(AllocatorBase<Key, Value> allocator, IObserver<IFasterScanIterator<Key, Value>> observer, bool readOnly)
             {
                 this.allocator = allocator;
+                this.observer = observer;
                 this.readOnly = readOnly;
             }
 
             public void Dispose()
             {
                 if (readOnly)
-                    allocator.OnReadOnlyObserver = null;
+                    allocator.RemoveReadOnlyObserver(observer);
                 else
-                    allocator.OnEvictionObserver = null;
+                    allocator.RemoveEvictionObserver(observer);
             }
         }
 

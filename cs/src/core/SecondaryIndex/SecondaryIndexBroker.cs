@@ -27,7 +27,7 @@ namespace FASTER.core
         readonly object membershipLock = new object();
         
         readonly FasterKV<TKVKey, TKVValue> primaryFkv;
-        IDisposable logSubscribeDisposable; // Used if we implement index removal, if we go to zero indexes.
+        IDisposable logSubscribeDisposable; // Used if we implement index removal, if we go to zero indexes; Dispose() and null this then.
 
         internal SecondaryIndexBroker(FasterKV<TKVKey, TKVValue> pFkv) => this.primaryFkv = pFkv;
 
