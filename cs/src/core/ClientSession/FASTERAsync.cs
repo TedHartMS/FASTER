@@ -270,7 +270,7 @@ namespace FASTER.core
             return SlowReadAsync(this, fasterSession, currentCtx, pcontext, diskRequest, token);
         }
 
-        private static async ValueTask<ReadAsyncResult<Input, Output, Context>> SlowReadAsync<Input, Output, Context>(
+        internal static async ValueTask<ReadAsyncResult<Input, Output, Context>> SlowReadAsync<Input, Output, Context>(
             FasterKV<Key, Value> @this,
             IFasterSession<Key, Value, Input, Output, Context> fasterSession,
             FasterExecutionContext<Input, Output, Context> currentCtx,

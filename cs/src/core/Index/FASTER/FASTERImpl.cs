@@ -1747,7 +1747,7 @@ namespace FASTER.core
             HashBucket.ReleaseSharedLatch(bucket);
         }
 
-        private void HeavyEnter<Input, Output, Context, FasterSession>(long hash, FasterExecutionContext<Input, Output, Context> ctx, FasterSession session)
+        private protected void HeavyEnter<Input, Output, Context, FasterSession>(long hash, FasterExecutionContext<Input, Output, Context> ctx, FasterSession session)
             where FasterSession : IFasterSession
         {
             if (ctx.phase == Phase.PREPARE_GROW)
@@ -1765,7 +1765,7 @@ namespace FASTER.core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void BlockAllocate<Input, Output, Context, FasterSession>(
+        private protected void BlockAllocate<Input, Output, Context, FasterSession>(
             int recordSize, 
             out long logicalAddress, 
             FasterExecutionContext<Input, Output, Context> ctx, 
@@ -2196,7 +2196,7 @@ namespace FASTER.core
             }
         }
 
-        private long GetLatestRecordVersion(ref HashBucketEntry entry, long defaultVersion)
+        private protected long GetLatestRecordVersion(ref HashBucketEntry entry, long defaultVersion)
         {
             if (UseReadCache && entry.ReadCache)
             {

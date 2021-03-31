@@ -31,7 +31,11 @@ namespace FASTER.core
     {
         internal readonly AllocatorBase<Key, Value> hlog;
         private readonly AllocatorBase<Key, Value> readcache;
-        private readonly IFasterEqualityComparer<Key> comparer;
+
+        /// <summary>
+        /// Compares two keys
+        /// </summary>
+        protected readonly IFasterEqualityComparer<Key> comparer;
 
         internal readonly bool UseReadCache;
         private readonly CopyReadsToTail CopyReadsToTail;
