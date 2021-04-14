@@ -33,11 +33,18 @@ param (
 )
 
 class Result : System.IComparable, System.IEquatable[Object] {
-    # To make things work in one class, name the properties "Diff"--they aren't displayed until the Diff is calculated.
+    # To make things work in one class, name the properties "Left", "Right", and "Diff"--they aren't displayed until the Diff is calculated.
+    [double]$BaselineMean
+    [double]$BaselineStdDev
+    [double]$CurrentMean
+    [double]$CurrentStdDev
     [double]$MeanDiff
     [double]$MeanDiffPercent
     [double]$StdDevDiff
     [double]$StdDevDiffPercent
+    [double]$Overlap
+    [double]$OverlapPercent
+    [double]$Separation
     [uint]$Numa
     [string]$Distribution
     [int]$ReadPercent
@@ -55,9 +62,9 @@ class Result : System.IComparable, System.IEquatable[Object] {
             $arg, $value = $field.Split(':')
             $value = $value.Trim()
             switch ($arg.Trim()) {
-                "ins/sec" { $this.MeanDiff = $value }
-                "ops/sec" { $this.MeanDiff = $value }
-                "stdev" { $this.StdDevDiff = $value }
+                "ins/sec" { $this.MeanDiff = $this.BaselineMean = $value }
+                "ops/sec" { $this.MeanDiff = $this.BaselineMean = $value }
+                "stdev" { $this.StdDevDiff = $this.BaselineStdDev = $value }
                 "stdev%" { $this.StdDevDiffPercent = $value }
                 "n" { $this.Numa = $value }
                 "d" { $this.Distribution = $value }
@@ -89,9 +96,35 @@ class Result : System.IComparable, System.IEquatable[Object] {
     [Result] CalculateDifference([Result]$newResult) {
         $result = [Result]::new($newResult)
         $result.MeanDiff = $newResult.MeanDiff - $this.MeanDiff
-        $result.MeanDiffPercent = ($result.MeanDiff / $this.MeanDiff) * 100
+        $result.MeanDiffPercent = [System.Math]::Round(($result.MeanDiff / $this.MeanDiff) * 100, 1)
         $result.StdDevDiff = $newResult.StdDevDiff - $this.StdDevDiff
         $result.StdDevDiffPercent = $newResult.StdDevDiffPercent - $this.StdDevDiffPercent
+        $result.BaselineMean = $this.BaselineMean
+        $result.BaselineStdDev = $this.BaselineStdDev
+        $result.CurrentMean = $newResult.BaselineMean
+        $result.CurrentStdDev = $newResult.BaselineStdDev
+        
+        $oldMin = $result.BaselineMean - $result.BaselineStdDev
+        $oldMax = $result.BaselineMean + $result.BaselineStdDev
+        $newMin = $result.CurrentMean - $result.CurrentStdDev
+        $newMax = $result.CurrentMean + $result.CurrentStdDev
+        
+        $lowestMax = [System.Math]::Min($oldMax, $newMax)
+        $highestMin = [System.Math]::Max($oldMin, $newMin)
+        $result.Overlap = $lowestMax - $highestMin
+        
+        # Overlap % is the percentage of the new stddev range covered by the overlap, or 0 if there is no overlap.
+        # Separation is how many new stddevs separates the two stddev spaces (positive for perf gain, negative for
+        # perf loss), or 0 if they overlap. TODO: Calculate significance.
+        if ($result.Overlap -le 0) {
+            $result.OverlapPercent = 0
+            $adjustedOverlap = ($oldMax -lt $newMin) ? -$result.Overlap : $result.Overlap
+            $result.Separation = [System.Math]::Round($adjustedOverlap / $result.CurrentStdDev, 1)
+        } else {
+            $result.OverlapPercent = [System.Math]::Round(($result.Overlap / ($result.CurrentStdDev * 2)) * 100, 1)
+            $result.Separation = 0
+        }
+        
         return $result
     }
 
@@ -201,5 +234,31 @@ if ($oldOnlyFileNames.Count -gt 0 -or $newOnlyFileNames.Count -gt 0) {
 
 $LoadResults.Sort()
 $RunResults.Sort()
-$LoadResults | Out-GridView -Title "Loading Comparison (Inserts Per Second): $OldDir -vs- $NewDir"
-$RunResults | Out-GridView -Title "Experiment Run Comparison(Operations Per Second): $OldDir -vs- $NewDir"
+
+function RenameProperties([System.Object[]]$results) {
+    # Use this to rename "Percent" suffix to "%"
+    $results | Select-Object `
+                BaselineMean,
+                BaselineStdDev,
+                CurrentMean,
+                CurrentStdDev,
+                MeanDiff,
+                @{N='MeanDiff %';E={$_.MeanDiffPercent}},
+                StdDevDiff,
+                @{N='StdDevDiff %';E={$_.StdDevDiffPercent}},
+                Overlap,
+                @{N='Overlap %';E={$_.OverlapPercent}},
+                Separation,
+                Numa,
+                Distribution,
+                ReadPercent,
+                ThreadCount,
+                LockMode,
+                Iterations,
+                SmallData,
+                SmallMemory,
+                SyntheticData
+}
+
+RenameProperties $LoadResults | Out-GridView -Title "Loading Comparison (Inserts Per Second): $OldDir -vs- $NewDir"
+RenameProperties $RunResults | Out-GridView  -Title "Experiment Run Comparison(Operations Per Second): $OldDir -vs- $NewDir"
