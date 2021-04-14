@@ -126,7 +126,7 @@ namespace FASTER.indexes.HashValueIndex
 
             public void ConcurrentDeleter(ref TPKey key, ref long value, ref RecordInfo recordInfo, long address) { }
 
-            public bool SupportsLocking => throw new System.NotImplementedException();
+            public bool SupportsLocking => false;
 
             public void Lock(ref RecordInfo recordInfo, ref TPKey key, ref long value, LockType lockType, ref long lockContext) { }
 

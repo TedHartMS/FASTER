@@ -16,6 +16,8 @@ namespace BasicPredicateSample
         {
             store = new Store();
             store.RunInitialInserts();
+            store.FlushAndEvict();
+
             QueryPredicate();
             Console.WriteLine("Press <enter> to exit");
             Console.ReadLine();

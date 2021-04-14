@@ -33,13 +33,13 @@ namespace FASTER.indexes.HashValueIndex
         private long sessionSlot;
 
         internal Predicate<TKVKey, TKVValue, TPKey>[] predicates;
-        private int PredicateCount => this.predicates.Length;
+        private int PredicateCount => this.predicates is { } ? this.predicates.Length : 0;
         private readonly ConcurrentDictionary<string, Guid> predicateNames = new ConcurrentDictionary<string, Guid>();
 
         internal FasterKVHVI<TPKey> secondaryFkv;
 
         private readonly IFasterEqualityComparer<TPKey> userKeyComparer;
-        private readonly KeyAccessor<TPKey> keyAccessor;
+        private KeyAccessor<TPKey> keyAccessor;
 
         /// <summary>
         /// Retrieves the key container for the key from the underlying hybrid log
@@ -84,7 +84,6 @@ namespace FASTER.indexes.HashValueIndex
             this.RegistrationSettings = registrationSettings;
             VerifyRegistrationSettings();
             this.userKeyComparer = GetUserKeyComparer();
-            this.keyAccessor = new KeyAccessor<TPKey>(this.userKeyComparer, this.PredicateCount, this.keyPointerSize);
         }
 
         private IFasterEqualityComparer<TPKey> GetUserKeyComparer()
@@ -140,7 +139,13 @@ namespace FASTER.indexes.HashValueIndex
                     Array.Copy(newPredicates, 0, extendedPredicates, this.predicates.Length, newPredicates.Length);
                     this.predicates = extendedPredicates;
                 }
+
+                foreach (var pred in newPredicates)
+                    this.predicateNames[pred.Name] = pred.Id;
             }
+
+            // Now we have a predicate count. Note: If we allow adding/removing predicates, we'll have to update this.
+            this.keyAccessor = new KeyAccessor<TPKey>(this.userKeyComparer, this.PredicateCount, this.keyPointerSize);
         }
 
         /// <summary>
@@ -167,13 +172,6 @@ namespace FASTER.indexes.HashValueIndex
 
         /// <inheritdoc/>
         public void Delete(long recordId, SecondaryIndexSessionBroker sessionBroker) { /* Currently unsupported for HVI */ }
-
-        private async ValueTask WhenAll(IEnumerable<ValueTask> tasks)
-        {
-            // Sequential to avoid allocating Tasks as there is no Task.WhenAll for ValueTask
-            foreach (var task in tasks.Where(task => !task.IsCompletedSuccessfully))
-                await task;
-        }
 
         /// <summary>
         /// Obtains a list of registered Predicate names organized by the groups defined in previous Register calls. TODO: Replace with GetMetadata()

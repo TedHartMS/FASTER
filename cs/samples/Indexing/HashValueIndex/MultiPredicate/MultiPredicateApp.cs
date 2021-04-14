@@ -14,6 +14,8 @@ namespace MultiPredicateSample
         {
             using var store = new Store();
             store.RunInitialInserts();
+            store.FlushAndEvict();
+
             var catsOfAge = QueryPredicates(store);
             store.UpdateCats(catsOfAge);
             QueryPredicates(store);

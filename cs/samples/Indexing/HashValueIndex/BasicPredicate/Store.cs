@@ -16,6 +16,7 @@ namespace BasicPredicateSample
         {
             this.index = new HashValueIndex<Key, Value, int>(base.AppName, base.FasterKV, 
                                                            CreateRegistrationSettings(0, new IntKeyComparer()), nameof(this.PetPred), v => v.SpeciesInt);
+            this.AddIndex(this.index);
             this.PetPred = this.index.GetPredicate(nameof(this.PetPred));
         }
     }

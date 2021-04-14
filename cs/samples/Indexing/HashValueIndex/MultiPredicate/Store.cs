@@ -18,6 +18,7 @@ namespace MultiPredicateSample
                                         CreateRegistrationSettings(0, new AgeOrPetKey.Comparer()),
                                          (nameof(this.CombinedPetPred), v => new AgeOrPetKey(v.Species)),
                                          (nameof(this.CombinedAgePred), v => new AgeOrPetKey(v.Age)));
+            this.AddIndex(this.index);
             this.CombinedPetPred = this.index.GetPredicate(nameof(this.CombinedPetPred));
             this.CombinedAgePred = this.index.GetPredicate(nameof(this.CombinedAgePred));
         }

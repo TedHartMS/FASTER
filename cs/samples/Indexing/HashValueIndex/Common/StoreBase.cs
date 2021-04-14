@@ -17,7 +17,7 @@ namespace HashValueIndexSampleCommon
         internal StoreBase(int numGroups, string appName) 
         {
             this.logFiles = new LogFiles(numGroups, appName);
-
+            this.AppName = appName;
             this.FasterKV = new FasterKV<Key, Value>(
                                 1L << 20, this.logFiles.LogSettings,
                                 null, // No checkpoints in this sample
@@ -36,6 +36,8 @@ namespace HashValueIndexSampleCommon
 
             return regSettings;
         }
+
+        internal void AddIndex(ISecondaryIndex index) => this.FasterKV.SecondaryIndexBroker.AddIndex(index);
 
         internal void RunInitialInserts()
         {
@@ -63,6 +65,9 @@ namespace HashValueIndexSampleCommon
 
             Console.WriteLine($"Inserted {Constants.KeyCount:N0} elements; {statusPending:N0} pending");
         }
+
+        // This causes the ReadOnlyObserver to be called
+        internal void FlushAndEvict() => this.FasterKV.Log.FlushAndEvict(wait: true);
 
         internal void UpdateCats(QueryRecord<Key, Value>[] catsOfAge)
         {

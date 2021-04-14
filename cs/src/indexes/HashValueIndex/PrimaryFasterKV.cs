@@ -2,6 +2,7 @@
 // Licensed under the MIT license.
 
 using FASTER.core;
+using System;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 
@@ -16,7 +17,7 @@ namespace FASTER.indexes.HashValueIndex
             internal AllocatorBase<TKVKey, TKVValue> hlog;
         }
 
-        internal struct PrimaryOutput
+        internal struct PrimaryOutput : IDisposable
         {
             private IHeapContainer<TKVKey> keyContainer;
             private IHeapContainer<TKVValue> valueContainer;
@@ -43,12 +44,13 @@ namespace FASTER.indexes.HashValueIndex
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             internal void Set(ref PrimaryOutput other)
             {
+                this.Dispose();
                 other.DetachHeapContainers(out this.keyContainer, out this.valueContainer);
                 this.currentAddress = other.currentAddress;
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            internal void Dispose()
+            public void Dispose()
             {
                 if (this.keyContainer is { })
                 {
@@ -101,7 +103,10 @@ namespace FASTER.indexes.HashValueIndex
                 {
                     session.CompletePendingWithOutputs(out var completedOutputs, wait: true);
                     if (completedOutputs.Next())
+                    {
                         status = Status.OK; // TODO completedOutputs.Current.Status;
+                        output.Set(ref completedOutputs.Current.Output);
+                    }
                     completedOutputs.Dispose();
                 }
 

@@ -47,6 +47,7 @@ namespace FASTER.indexes.HashValueIndex
                     // Thus, Status.NOTFOUND should only be returned if the key was not found.
                     if (status != Status.OK)
                         yield break;
+                    yield return output.RecordId;
 
                     recordInfo.PreviousAddress = output.PreviousAddress;
                 } while (recordInfo.PreviousAddress != core.Constants.kInvalidAddress);
@@ -80,6 +81,7 @@ namespace FASTER.indexes.HashValueIndex
                     // Thus, Status.NOTFOUND should only be returned if the key was not found.
                     if (status != Status.OK)
                         yield break;
+                    yield return output.RecordId;
 
                     recordInfo.PreviousAddress = output.PreviousAddress;
                 } while (recordInfo.PreviousAddress != core.Constants.kInvalidAddress);
