@@ -819,7 +819,14 @@ namespace FASTER.core
 
                 if (internalStatus == OperationStatus.SUCCESS || internalStatus == OperationStatus.NOTFOUND)
                 {
-                    status = (Status)internalStatus;
+                    if (pcontext.IsNewRecord)
+                    {
+                        long physicalAddress = this.hlog.GetPhysicalAddress(pcontext.logicalAddress);
+                        ref RecordInfo recordInfo = ref this.hlog.GetInfo(physicalAddress);
+                        ref Value value = ref this.hlog.GetValue(physicalAddress);
+                        UpdateSIForInsert<Input, Output, Context, IFasterSession<Key, Value, Input, Output, Context>>(ref key, ref value, ref recordInfo, pcontext.logicalAddress, fasterSession);
+                    }
+                    return new ValueTask<RmwAsyncResult<Input, Output, Context>>(new RmwAsyncResult<Input, Output, Context>((Status)internalStatus, default));
                 }
                 else if (internalStatus != OperationStatus.ALLOCATE_FAILED)
                 {

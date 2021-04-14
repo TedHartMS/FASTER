@@ -121,7 +121,7 @@ namespace FASTER.test.readaddress
             internal IDevice logDevice;
             internal string testDir;
             private readonly bool flush;
-            InsertValueIndex insertValueIndex = new InsertValueIndex();
+            readonly InsertValueIndex insertValueIndex = new InsertValueIndex();
 
             internal long[] InsertAddresses = new long[numKeys];
 
@@ -193,6 +193,7 @@ namespace FASTER.test.readaddress
                     if (status == Status.PENDING)
                         await session.CompletePendingAsync();
 
+                    Assert.IsTrue(insertValueIndex.lastWriteAddress > 0);
                     InsertAddresses[ii] = insertValueIndex.lastWriteAddress;
                     //Assert.IsTrue(session.ctx.HasNoPendingRequests);
 

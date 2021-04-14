@@ -1359,8 +1359,7 @@ namespace FASTER.core
             var logicalAddress = Constants.kInvalidAddress;
             var physicalAddress = default(long);
 
-            // If NoKey, we do not have the key in the initial call and must use the key from the satisfied request.
-            ref Key key = ref pendingContext.NoKey ? ref hlog.GetContextRecordKey(ref request) : ref pendingContext.key.Get();
+            ref Key key = ref pendingContext.key.Get();
 
             var hash = comparer.GetHashCode64(ref key);
 

@@ -160,7 +160,6 @@ foreach ($d in $distributions) {
                         foreach ($sy in $syntheticDatas) {
                             Write-Host
                             Write-Host "Permutation $permutation of $permutations"
-                                ++$permutation
 
                             # Only certain combinations of Numa/Threads are supported
                             $n = ($t -lt 48) ? 0 : 1;
@@ -173,8 +172,7 @@ foreach ($d in $distributions) {
                                 Write-Host "Permutation $permutation/$permutations generating results $($ii + 1)/$($exeNames.Count) to $resultDir for: -n $n -d $d -r $r -t $t -z $z -i $iterations --runsec $RunSeconds $k"
 
                                 # RunSec and Recover are for one-off operations and are not recorded in the filenames.
-                                    & "$exeName" -b 0 -n $n -d $d -r $r -t $t -x $x -z $z -i $iterations --runsec $RunSeconds $k | Tee-Object "$resultDir/results_n-$($n)_d-$($d)_r-$($r)_t-$($t)_x-$($x)_z-$($z).txt"
-                                }
+                                & "$exeName" -b 0 -n $n -d $d -r $r -t $t -x $x -z $z -i $iterations --runsec $RunSeconds $k | Tee-Object "$resultDir/results_n-$($n)_d-$($d)_r-$($r)_t-$($t)_x-$($x)_z-$($z).txt"
                             }
                             ++$permutation
                         }

@@ -33,7 +33,7 @@ param (
 )
 
 class Result : System.IComparable, System.IEquatable[Object] {
-    # To make things work in one class, name the properties "Left", "Right", and "Diff"--they aren't displayed until the Diff is calculated.
+    # To make things work in one class, name the properties "Baseline", "Current", and "Diff"--they aren't displayed until the Diff is calculated.
     [double]$BaselineMean
     [double]$BaselineStdDev
     [double]$CurrentMean
