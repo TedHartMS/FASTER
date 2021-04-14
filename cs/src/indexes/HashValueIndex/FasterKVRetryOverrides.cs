@@ -24,7 +24,7 @@ namespace FASTER.indexes.HashValueIndex
                     break;
                 case OperationType.UPSERT:
                     internalStatus = this.IndexInternalInsert(ref pendingContext.key.Get(),
-                                         ref pendingContext.value.Get(),
+                                         pendingContext.value.Get(),
                                          ref pendingContext.input.Get(),
                                          ref pendingContext.userContext,
                                          ref pendingContext, fasterSession, currentCtx, pendingContext.serialNum);

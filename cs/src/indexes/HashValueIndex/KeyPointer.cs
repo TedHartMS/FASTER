@@ -20,7 +20,7 @@ namespace FASTER.indexes.HashValueIndex
         private ushort offsetToStartOfKeys; // TODOperf: Make this a byte; key length is constant (pass KeySize to OffsetToStartOfKeys()). The extra byte could be "reserved" for now
 
         /// <summary>
-        /// The ordinal of the current <see cref="Predicate{TKVValue, TPKey}"/>.
+        /// The ordinal of the current <see cref="Predicate{TKVKey, TKVValue, TPKey}"/>.
         /// </summary>
         private byte predOrdinal;            // Note: 'byte' is consistent with Constants.kInvalidPredicateOrdinal
 
@@ -30,7 +30,7 @@ namespace FASTER.indexes.HashValueIndex
         private byte flags;
 
         /// <summary>
-        /// The Key returned by the <see cref="Predicate{TKVValue, TPKey}"/> execution.
+        /// The Key returned by the <see cref="Predicate{TKVKey, TKVValue, TPKey}"/> execution.
         /// </summary>
         internal TPKey Key;               // TODOperf: for Key size > 4, reinterpret this an offset to the actual value (after the KeyPointer list)
         #endregion Fields

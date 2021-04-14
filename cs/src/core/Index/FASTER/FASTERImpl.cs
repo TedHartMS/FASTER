@@ -1633,34 +1633,7 @@ namespace FASTER.core
                 var internalStatus = default(OperationStatus);
                 do
                 {
-                    switch (pendingContext.type)
-                    {
-                        case OperationType.READ:
-                            internalStatus = InternalRead(ref pendingContext.key.Get(),
-                                                          ref pendingContext.input.Get(),
-                                                          ref pendingContext.output,
-                                                          pendingContext.recordInfo.PreviousAddress,
-                                                          ref pendingContext.userContext,
-                                                          ref pendingContext, fasterSession, currentCtx, pendingContext.serialNum);
-                            break;
-                        case OperationType.UPSERT:
-                            internalStatus = InternalUpsert(ref pendingContext.key.Get(),
-                                                            ref pendingContext.value.Get(),
-                                                            ref pendingContext.userContext,
-                                                            ref pendingContext, fasterSession, currentCtx, pendingContext.serialNum);
-                            break;
-                        case OperationType.DELETE:
-                            internalStatus = InternalDelete(ref pendingContext.key.Get(),
-                                                            ref pendingContext.userContext,
-                                                            ref pendingContext, fasterSession, currentCtx, pendingContext.serialNum);
-                            break;
-                        case OperationType.RMW:
-                            internalStatus = InternalRMW(ref pendingContext.key.Get(),
-                                                         ref pendingContext.input.Get(),
-                                                         ref pendingContext.userContext,
-                                                         ref pendingContext, fasterSession, currentCtx, pendingContext.serialNum);
-                            break;
-                    }
+                    internalStatus = RetryOperationStatus(currentCtx, ref pendingContext, fasterSession);
                     Debug.Assert(internalStatus != OperationStatus.CPR_SHIFT_DETECTED);
                 } while (internalStatus == OperationStatus.RETRY_NOW || ((asyncOp || RelaxedCPR) && internalStatus == OperationStatus.RETRY_LATER));
                 // Note that we spin in case of { async op + strict CPR } which is fine as this combination is rare/discouraged
@@ -1705,6 +1678,42 @@ namespace FASTER.core
             {
                 return Status.ERROR;
             }
+        }
+
+        internal virtual OperationStatus RetryOperationStatus<Input, Output, Context, FasterSession>(FasterExecutionContext<Input, Output, Context> currentCtx,
+                                                                                               ref PendingContext<Input, Output, Context> pendingContext, FasterSession fasterSession)
+            where FasterSession : IFasterSession<Key, Value, Input, Output, Context>
+        {
+            var internalStatus = default(OperationStatus);
+            switch (pendingContext.type)
+            {
+                case OperationType.READ:
+                    internalStatus = InternalRead(ref pendingContext.key.Get(),
+                                                  ref pendingContext.input.Get(),
+                                                  ref pendingContext.output,
+                                                  pendingContext.recordInfo.PreviousAddress,
+                                                  ref pendingContext.userContext,
+                                                  ref pendingContext, fasterSession, currentCtx, pendingContext.serialNum);
+                    break;
+                case OperationType.UPSERT:
+                    internalStatus = InternalUpsert(ref pendingContext.key.Get(),
+                                                    ref pendingContext.value.Get(),
+                                                    ref pendingContext.userContext,
+                                                    ref pendingContext, fasterSession, currentCtx, pendingContext.serialNum);
+                    break;
+                case OperationType.DELETE:
+                    internalStatus = InternalDelete(ref pendingContext.key.Get(),
+                                                    ref pendingContext.userContext,
+                                                    ref pendingContext, fasterSession, currentCtx, pendingContext.serialNum);
+                    break;
+                case OperationType.RMW:
+                    internalStatus = InternalRMW(ref pendingContext.key.Get(),
+                                                 ref pendingContext.input.Get(),
+                                                 ref pendingContext.userContext,
+                                                 ref pendingContext, fasterSession, currentCtx, pendingContext.serialNum);
+                    break;
+            }
+            return internalStatus;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

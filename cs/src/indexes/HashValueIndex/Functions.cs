@@ -24,7 +24,7 @@ namespace FASTER.indexes.HashValueIndex
 
             #region IInputAccessor
 
-            public bool IsDelete(ref Input input) => input.IsDelete;
+            public bool IsDelete(ref Input input) => input.IsDelete;    // TODO needed?
             public bool SetDelete(ref Input input, bool value) => input.IsDelete = value;
 
             #endregion IInputAccessor

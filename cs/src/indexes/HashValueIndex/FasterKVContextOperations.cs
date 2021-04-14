@@ -18,13 +18,18 @@ namespace FASTER.indexes.HashValueIndex
         {
         }
 
+        internal AdvancedClientSession<TPKey, long, Input, Output, Context, Functions> NewSession(KeyAccessor<TPKey> keyAccessor)
+        {
+            return this.For(new Functions(this, keyAccessor)).NewSession<Functions>(threadAffinitized: false);
+        }
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal Status ContextIndexRead<TInput, TOutput, TContext, FasterSession>(ref TPKey key, ref TInput input, ref TOutput output, ref RecordInfo recordInfo, ref TContext context,
-                                        FasterSession fasterSession, long serialNo, FasterExecutionContext<TInput, TOutput, TContext> sessionCtx)
+                                        FasterSession fasterSession, FasterExecutionContext<TInput, TOutput, TContext> sessionCtx)
             where FasterSession : IFasterSession<TPKey, long, TInput, TOutput, TContext>
         {
             var pcontext = default(PendingContext<TInput, TOutput, TContext>);
-            var internalStatus = this.IndexInternalRead(ref key, ref input, ref output, recordInfo.PreviousAddress, ref context, ref pcontext, fasterSession, sessionCtx, serialNo);
+            var internalStatus = this.IndexInternalRead(ref key, ref input, ref output, recordInfo.PreviousAddress, ref context, ref pcontext, fasterSession, sessionCtx, sessionCtx.serialNum);
             Debug.Assert(internalStatus != OperationStatus.RETRY_NOW);
 
             Status status;
@@ -38,8 +43,6 @@ namespace FASTER.indexes.HashValueIndex
                 recordInfo = default;
                 status = HandleOperationStatus(sessionCtx, sessionCtx, ref pcontext, fasterSession, internalStatus, asyncOp: false, out _);
             }
-
-            sessionCtx.serialNum = serialNo;
             return status;
         }
 
@@ -80,39 +83,19 @@ namespace FASTER.indexes.HashValueIndex
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal Status ContextIndexInsert<Input, Output, Context, FasterSession>(ref TPKey key, ref long value, 
+        internal Status ContextIndexInsert<Input, Output, Context, FasterSession>(ref TPKey key, long recordId, 
                                          ref Input input, ref Context context,
-                                         FasterSession fasterSession, long serialNo,
+                                         FasterSession fasterSession,
                                          FasterExecutionContext<Input, Output, Context> sessionCtx)
             where FasterSession : IFasterSession<TPKey, long, Input, Output, Context>
         {
             var pcontext = default(PendingContext<Input, Output, Context>);
-            var internalStatus = this.IndexInternalInsert(ref key, ref value, ref input, ref context,
-                                                      ref pcontext, fasterSession, sessionCtx, serialNo);
+            var internalStatus = this.IndexInternalInsert(ref key, recordId, ref input, ref context,
+                                                      ref pcontext, fasterSession, sessionCtx, sessionCtx.serialNum);
             var status = internalStatus == OperationStatus.SUCCESS || internalStatus == OperationStatus.NOTFOUND
                 ? (Status)internalStatus
                 : HandleOperationStatus(sessionCtx, sessionCtx, ref pcontext, fasterSession, internalStatus, asyncOp: false, out _);
 
-            sessionCtx.serialNum = serialNo;
-            return status;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal Status ContextIndexDelete<Input, Output, Context, FasterSession>(ref TPKey key, ref long value, ref Input input, 
-                                                                   ref Context context, FasterSession fasterSession,
-                                                                   FasterExecutionContext<Input, Output, Context> sessionCtx, long serialNo)
-            where FasterSession : IFasterSession<TPKey, long, Input, Output, Context>
-        {
-            var pcontext = default(PendingContext<Input, Output, Context>);
-
-            ((context as FasterKVHVI<TPKey>.Context).Functions as IInputAccessor<Input>).SetDelete(ref input, false);
-
-            var internalStatus = this.IndexInternalInsert(ref key, ref value, ref input, ref context, ref pcontext, fasterSession, sessionCtx, serialNo);
-            Status status = internalStatus == OperationStatus.SUCCESS || internalStatus == OperationStatus.NOTFOUND
-                ? (Status)internalStatus
-                : HandleOperationStatus(sessionCtx, sessionCtx, ref pcontext, fasterSession, internalStatus, asyncOp: false, out _);
-
-            sessionCtx.serialNum = serialNo;
             return status;
         }
     }

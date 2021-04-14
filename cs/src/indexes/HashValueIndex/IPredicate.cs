@@ -4,12 +4,12 @@
 namespace FASTER.indexes.HashValueIndex
 {
     /// <summary>
-    /// A base interface for <see cref="Predicate{TKVValue, TPKey}"/> to decouple the generic type parameters.
+    /// A base interface for <see cref="Predicate{TKVKey, TKVValue, TPKey}"/> to decouple the generic type parameters.
     /// </summary>
     public interface IPredicate
     {
         /// <summary>
-        /// The name of the <see cref="Predicate{TKVValue, TPKey}"/>; must be unique in the <see cref="HashValueIndex"/>.
+        /// The name of the <see cref="Predicate{TKVKey, TKVValue, TPKey}"/>; must be unique in the <see cref="HashValueIndex"/>.
         /// </summary>
         string Name { get; }
     }

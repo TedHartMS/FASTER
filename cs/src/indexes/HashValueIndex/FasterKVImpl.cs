@@ -9,8 +9,6 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Threading;
 
-#pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
-
 namespace FASTER.indexes.HashValueIndex
 {
     // Internal function implementations for the secondary FasterKV implementing the SubsetIndex; these correspond to the similarly-named
@@ -270,7 +268,7 @@ namespace FASTER.indexes.HashValueIndex
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal OperationStatus IndexInternalInsert<TInput, TOutput, TContext, FasterSession>(
-                        ref TPKey inputFirstKeyPointerRefAsKeyRef, ref long value, ref TInput input, ref TContext context,
+                        ref TPKey inputFirstKeyPointerRefAsKeyRef, long recordId, ref TInput input, ref TContext context,
                         ref PendingContext<TInput, TOutput, TContext> pendingContext,
                         FasterSession fasterSession,
                         FasterExecutionContext<TInput, TOutput, TContext> sessionCtx, long lsn)
@@ -291,7 +289,7 @@ namespace FASTER.indexes.HashValueIndex
             int startOfKeysOffset = 0;
             var inputAccessor = (context as Context).Functions as IInputAccessor<TInput>;
 
-            InsertTrace($"Insert: {this.KeyAccessor.GetString(ref inputCompositeKey)} | rId {value} |");
+            InsertTrace($"Insert: {this.KeyAccessor.GetString(ref inputCompositeKey)} | rId {recordId} |");
             for (var predOrdinal = 0; predOrdinal < predCount; ++predOrdinal)
             {
                 ref KeyPointer<TPKey> inputKeyPointer = ref KeyAccessor.GetKeyPointerRef(ref inputCompositeKey, predOrdinal);
@@ -375,7 +373,7 @@ namespace FASTER.indexes.HashValueIndex
             {
                 // Create the new record. Because we are updating multiple hash buckets, mark the record as invalid to start,
                 // so it is not visible until we have successfully updated all chains.
-                var (actualSize, allocateSize) = hlog.GetRecordSize(ref inputFirstKeyPointerRefAsKeyRef, ref value);
+                var (actualSize, allocateSize) = hlog.GetRecordSize(ref inputFirstKeyPointerRefAsKeyRef, ref recordId);
                 BlockAllocate(allocateSize, out long newLogicalAddress, sessionCtx, fasterSession);
                 var newPhysicalAddress = hlog.GetPhysicalAddress(newLogicalAddress);
                 RecordInfo.WriteInfo(ref hlog.GetInfo(newPhysicalAddress), sessionCtx.version,
@@ -384,7 +382,7 @@ namespace FASTER.indexes.HashValueIndex
                                      core.Constants.kInvalidAddress);  // We manage all prev addresses within CompositeKey
                 ref CompositeKey<TPKey> storedCompositeKey = ref CompositeKey<TPKey>.CastFromFirstKeyPointerRefAsKeyRef(ref hlog.GetKey(newPhysicalAddress));
                 hlog.Serialize(ref inputFirstKeyPointerRefAsKeyRef, newPhysicalAddress);
-                hlog.Serialize(ref value, newPhysicalAddress);
+                hlog.Serialize(ref recordId, newPhysicalAddress);
 
                 IndexTraceLine();
                 newLogicalAddress += RecordInfo.GetLength();
@@ -451,7 +449,7 @@ namespace FASTER.indexes.HashValueIndex
             {
                 pendingContext.type = OperationType.UPSERT;
                 pendingContext.key = hlog.GetKeyContainer(ref inputFirstKeyPointerRefAsKeyRef);  // The Insert key has the full PredicateCount of KeyPointers
-                pendingContext.value = hlog.GetValueContainer(ref value);
+                pendingContext.value = hlog.GetValueContainer(ref recordId);
                 pendingContext.input = fasterSession.GetHeapContainer(ref input);
                 pendingContext.userContext = default;
                 pendingContext.entry.word = default;
@@ -467,7 +465,7 @@ namespace FASTER.indexes.HashValueIndex
 #endregion
 
             return status == OperationStatus.RETRY_NOW
-                ? IndexInternalInsert(ref inputFirstKeyPointerRefAsKeyRef, ref value, ref input, ref context, ref pendingContext, fasterSession, sessionCtx, lsn)
+                ? IndexInternalInsert(ref inputFirstKeyPointerRefAsKeyRef, recordId, ref input, ref context, ref pendingContext, fasterSession, sessionCtx, lsn)
                 : status;
         }
    }

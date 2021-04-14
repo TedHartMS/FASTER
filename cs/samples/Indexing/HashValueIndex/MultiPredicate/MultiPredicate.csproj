@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <RootNamespace>MultiPredicateSample</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\src\core\FASTER.core.csproj" />
+    <ProjectReference Include="..\..\..\..\src\indexes\HashValueIndex\FASTER.indexes.HashValueIndex.csproj" />
+  </ItemGroup>
+
+  <Import Project="..\Common\Common.projitems" Label="Shared" />
+
+</Project>

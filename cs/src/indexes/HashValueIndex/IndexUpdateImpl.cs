@@ -29,10 +29,10 @@ namespace FASTER.indexes.HashValueIndex
             this.bufferPool = this.secondaryFkv.hlog.bufferPool;
         }
 
-        private unsafe Status ExecuteAndStore(ref TKVValue kvValue, long recordId)
+        private unsafe Status ExecuteAndStore(AdvancedClientSession<TPKey, long, FasterKVHVI<TPKey>.Input, FasterKVHVI<TPKey>.Output, FasterKVHVI<TPKey>.Context, FasterKVHVI<TPKey>.Functions> session,
+                ref TKVValue kvValue, long recordId)
         {
-            // Note: stackalloc is safe because PendingContext or ChangeTracker will copy it to the bufferPool
-            // if needed. On the Insert fast path, we don't want any allocations otherwise; changeTracker is null.
+            // Note: stackalloc is safe because it's copied to a HeapContainer in PendingContext if the operation goes pending.
             var keyMemLen = this.keyPointerSize * this.PredicateCount;
             var keyBytes = stackalloc byte[keyMemLen];
             var anyMatch = false;
@@ -58,12 +58,11 @@ namespace FASTER.indexes.HashValueIndex
             if (!anyMatch)
                 return Status.OK;
 
-            var session = TODO();
             ref CompositeKey<TPKey> compositeKey = ref Unsafe.AsRef<CompositeKey<TPKey>>(keyBytes);
             var input = new FasterKVHVI<TPKey>.Input(0);
             var value = recordId;
             var context = new FasterKVHVI<TPKey>.Context { Functions = session.functions };
-            return session.IndexInsert(this.secondaryFkv, ref compositeKey.CastToFirstKeyPointerRefAsKeyRef(), ref value, ref input, ref context);
+            return session.IndexInsert(this.secondaryFkv, ref compositeKey.CastToFirstKeyPointerRefAsKeyRef(), value, ref input, ref context);
         }
     }
 }

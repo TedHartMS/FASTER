@@ -5,13 +5,11 @@ using FASTER.core;
 using System;
 using System.Runtime.CompilerServices;
 
-#pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
-
 namespace FASTER.indexes.HashValueIndex
 {
     internal unsafe partial class FasterKVHVI<TPKey> : FasterKV<TPKey, long>
     {
-        internal interface IInputAccessor<TInput>
+        internal interface IInputAccessor<TInput>       // TODO needed?
         {
             bool IsDelete(ref TInput input);
             bool SetDelete(ref TInput input, bool value);
@@ -40,7 +38,7 @@ namespace FASTER.indexes.HashValueIndex
             }
 
             /// <summary>
-            /// The ordinal of the <see cref="Predicate{TKVValue, TPKey}"/> in the <see cref="HashValueIndex"/>.
+            /// The ordinal of the <see cref="Predicate{TKVKey, TKVValue, TPKey}"/> in the <see cref="HashValueIndex"/>.
             /// </summary>
             public int PredicateOrdinal { get; set; }
 

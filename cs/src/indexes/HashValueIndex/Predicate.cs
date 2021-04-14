@@ -9,9 +9,10 @@ namespace FASTER.indexes.HashValueIndex
     /// <summary>
     /// The implementation of the Predicate Subset Function.
     /// </summary>
+    /// <typeparam name="TKVKey">The type of the key in the <see cref="FasterKV{TKVKey, TKVValue}"/> instance.</typeparam>
     /// <typeparam name="TKVValue">The type of the value in the <see cref="FasterKV{TKVKey, TKVValue}"/> instance.</typeparam>
     /// <typeparam name="TPKey">The type of the key returned by the Predicate and store in the secondary FasterKV instance. TODO: What is the return type if this is varlen?</typeparam>
-    internal class Predicate<TKVValue, TPKey> : IPredicate
+    internal class Predicate<TKVKey, TKVValue, TPKey> : IPredicate
      {
         /// <summary>
         /// The definition of the delegate used to obtain a new key matching the Value for this Predicate definition.
@@ -32,13 +33,17 @@ namespace FASTER.indexes.HashValueIndex
         // a Predicate from a different Index.
         internal Guid Id { get; }
 
+        // The containing index
+        internal HashValueIndex<TKVKey, TKVValue, TPKey> Index { get; }
+
         /// <inheritdoc/>
         public string Name { get; }
 
-        internal Predicate(int predOrdinal, string name, Func<TKVValue, TPKey> predicate)
+        internal Predicate(HashValueIndex<TKVKey, TKVValue, TPKey> index, int predOrdinal, string name, Func<TKVValue, TPKey> predicate)
         {
-            TPKey wrappedPredicate(ref TKVValue value) => predicate(key, value);
+            TPKey wrappedPredicate(ref TKVValue value) => predicate(value);
 
+            this.Index = index;
             this.Ordinal = predOrdinal;
             this.Name = name;
             this.Id = Guid.NewGuid();
