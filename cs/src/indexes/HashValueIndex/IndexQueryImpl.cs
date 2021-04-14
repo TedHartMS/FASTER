@@ -41,7 +41,7 @@ namespace FASTER.indexes.HashValueIndex
                     {
                         // Because we traverse the chain, we must wait for any pending read operations to complete.
                         // TODOperf: extend the queue for multiple sync+pending operations rather than spinWaiting in CompletePending for each pending record.
-                        session.CompletePending(spinWait: true);
+                        session.CompletePending(wait: true);
                         // TODO: am I getting the output passed back to Query? Maybe I need to use Context
                         status = output.PendingResultStatus;
                     }
