@@ -24,9 +24,6 @@ namespace FASTER.indexes.HashValueIndex
         private IEnumerable<long> Query(AdvancedClientSession<TPKey, long, FasterKVHVI<TPKey>.Input, FasterKVHVI<TPKey>.Output, FasterKVHVI<TPKey>.Context, FasterKVHVI<TPKey>.Functions> session,
                 FasterKVHVI<TPKey>.Input input, QuerySettings querySettings)
         {
-            // TODOperf: if there are multiple Predicates within this group we can step through in parallel and return them
-            // as a single merged stream; will require multiple TPKeys and their indexes in queryKeyPtr. Also consider
-            // having TPKeys[] for a single Predicate walk through in parallel, so the FHT log memory access is sequential.
             var context = new FasterKVHVI<TPKey>.Context { Functions = session.functions };
             RecordInfo recordInfo = default;
             try
@@ -40,10 +37,10 @@ namespace FASTER.indexes.HashValueIndex
                     if (status == Status.PENDING)
                     {
                         // Because we traverse the chain, we must wait for any pending read operations to complete.
-                        // TODOperf: extend the queue for multiple sync+pending operations rather than spinWaiting in CompletePending for each pending record.
-                        session.CompletePending(wait: true);
-                        // TODO: am I getting the output passed back to Query? Maybe I need to use Context
-                        status = output.PendingResultStatus;
+                        session.CompletePendingWithOutputs(out var completedOutputs, wait: true);
+                        if (completedOutputs.Next())
+                            status = output.PendingResultStatus;
+                        completedOutputs.Dispose();
                     }
 
                     // ConcurrentReader and SingleReader are not called for tombstoned records, so instead we keep that state in the keyPointer.
@@ -67,9 +64,6 @@ namespace FASTER.indexes.HashValueIndex
         private async IAsyncEnumerable<long> QueryAsync(AdvancedClientSession<TPKey, long, FasterKVHVI<TPKey>.Input, FasterKVHVI<TPKey>.Output, FasterKVHVI<TPKey>.Context, FasterKVHVI<TPKey>.Functions> session,
                 FasterKVHVI<TPKey>.Input input, QuerySettings querySettings)
         {
-            // TODOperf: if there are multiple Predicates within this group we can step through in parallel and return them
-            // as a single merged stream; will require multiple TPKeys and their indexes in queryKeyPtr. Also consider
-            // having TPKeys[] for a single Predicate walk through in parallel, so the FHT log memory access is sequential.
             var context = new FasterKVHVI<TPKey>.Context { Functions = session.functions };
             RecordInfo recordInfo = default;
             try

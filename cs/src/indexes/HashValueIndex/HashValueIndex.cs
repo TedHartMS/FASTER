@@ -37,7 +37,6 @@ namespace FASTER.indexes.HashValueIndex
         private readonly ConcurrentDictionary<string, Guid> predicateNames = new ConcurrentDictionary<string, Guid>();
 
         internal FasterKVHVI<TPKey> secondaryFkv;
-        internal FasterKV<TKVKey, TKVValue> primaryFkv;
 
         private readonly IFasterEqualityComparer<TPKey> userKeyComparer;
         private readonly KeyAccessor<TPKey> keyAccessor;
@@ -149,12 +148,10 @@ namespace FASTER.indexes.HashValueIndex
         /// </summary>
         public IPredicate GetPredicate(string name) => this.predicates.First(pred => pred.Name == name);
 
-        AdvancedClientSession<TPKey, long, FasterKVHVI<TPKey>.Input, FasterKVHVI<TPKey>.Output, FasterKVHVI<TPKey>.Context, FasterKVHVI<TPKey>.Functions> GetSession(SecondaryIndexSessionBroker sessionBroker)
+        private Sessions GetSessions(SecondaryIndexSessionBroker sessionBroker)
         {
-            var session = sessionBroker.GetSessionObject(this.sessionSlot);
-            return session is null
-                ? this.secondaryFkv.NewSession(this.keyAccessor)
-                : session as AdvancedClientSession<TPKey, long, FasterKVHVI<TPKey>.Input, FasterKVHVI<TPKey>.Output, FasterKVHVI<TPKey>.Context, FasterKVHVI<TPKey>.Functions>;
+            var sessions = sessionBroker.GetSessionObject(this.sessionSlot) as Sessions;
+            return sessions ?? Sessions.CreateNew(sessionBroker, this.sessionSlot, this.primaryFkv, this.secondaryFkv, this.keyAccessor);
         }
 
         /// <inheritdoc/>
@@ -165,7 +162,7 @@ namespace FASTER.indexes.HashValueIndex
         {
             if (isMutable)  // Currently unsupported for HVI
                 return;
-            ExecuteAndStore(GetSession(sessionBroker), ref value, recordId);
+            ExecuteAndStore(GetSessions(sessionBroker).SecondarySession, ref value, recordId);
         }
 
         /// <inheritdoc/>
@@ -195,44 +192,35 @@ namespace FASTER.indexes.HashValueIndex
             return pred;
         }
 
-        private int GetPredicateOrdinal(IPredicate iPred)
-        {
-            var predImpl = this.GetImplementingPredicate(iPred);
-            return predImpl.Ordinal;
-        }
-
-        private bool ResolveRecord(long recordId, out QueryRecord<TKVKey, TKVValue> record)
-        {
-            record = default;
-            throw new NotImplementedException("TODO: merge master and use the new CompletePendingWithOutputs");
-        }
+        private int GetPredicateOrdinal(IPredicate iPred) => this.GetImplementingPredicate(iPred).Ordinal;
 
         internal IEnumerable<QueryRecord<TKVKey, TKVValue>> Query(IPredicate predicate, ref TPKey key, SecondaryIndexSessionBroker sessionBroker, QuerySettings querySettings)
             => Query(this.MakeQueryInput(this.GetPredicateOrdinal(predicate), ref key), sessionBroker, querySettings ?? QuerySettings.Default);
 
         private IEnumerable<QueryRecord<TKVKey, TKVValue>> Query(FasterKVHVI<TPKey>.Input input, SecondaryIndexSessionBroker sessionBroker, QuerySettings querySettings)
         {
-            foreach (var recordId in Query(GetSession(sessionBroker), input, querySettings))
+            var sessions = GetSessions(sessionBroker);
+            foreach (var recordId in Query(sessions.SecondarySession, input, querySettings))
             {
                 if (querySettings.IsCanceled)
                     yield break;
-                if (ResolveRecord(recordId, out var record))
+                if (ResolveRecord(sessions.PrimarySession, recordId, out var record))
                     yield return record;
             }
         }
 
         internal IAsyncEnumerable<QueryRecord<TKVKey, TKVValue>> QueryAsync(IPredicate predicate, ref TPKey key, SecondaryIndexSessionBroker sessionBroker, QuerySettings querySettings)
-        {
-            return QueryAsync(this.MakeQueryInput(this.GetPredicateOrdinal(predicate), ref key), sessionBroker, querySettings ?? QuerySettings.Default);
-        }
+            => QueryAsync(this.MakeQueryInput(this.GetPredicateOrdinal(predicate), ref key), sessionBroker, querySettings ?? QuerySettings.Default);
 
         private async IAsyncEnumerable<QueryRecord<TKVKey, TKVValue>> QueryAsync(FasterKVHVI<TPKey>.Input input, SecondaryIndexSessionBroker sessionBroker, QuerySettings querySettings)
         {
-            await foreach (var recordId in QueryAsync(GetSession(sessionBroker), input, querySettings))
+            var sessions = GetSessions(sessionBroker);
+            await foreach (var recordId in QueryAsync(sessions.SecondarySession, input, querySettings))
             {
                 if (querySettings.IsCanceled)
                     yield break;
-                if (ResolveRecord(recordId, out var record))
+                var record = await ResolveRecordAsync(sessions.PrimarySession, recordId, querySettings);
+                if (record is { })
                     yield return record;
             }
         }
