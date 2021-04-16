@@ -1208,12 +1208,12 @@ namespace FASTER.core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal bool UpdateSIForDelete(ref Key key, long address, bool isNewRecord, SecondaryIndexSessionBroker indexSessionBroker)
+        internal bool UpdateSIForDelete(ref Key key, RecordId recordId, bool isNewRecord, SecondaryIndexSessionBroker indexSessionBroker)
         {
             if (this.SecondaryIndexBroker.MutableKeyIndexCount > 0)
-                this.SecondaryIndexBroker.Delete(ref key, address, indexSessionBroker);
+                this.SecondaryIndexBroker.Delete(ref key, indexSessionBroker);
             if (!isNewRecord && this.SecondaryIndexBroker.MutableValueIndexCount > 0)
-                this.SecondaryIndexBroker.Delete(address, indexSessionBroker);
+                this.SecondaryIndexBroker.Delete(recordId, indexSessionBroker);
             return true;
         }
 

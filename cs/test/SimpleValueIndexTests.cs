@@ -9,17 +9,17 @@ namespace FASTER.test.SubsetIndex.SimpleIndexTests
 {
     class SimpleValueIndexTests
     {
-        class SimpleValueIndex<TValue> : SimpleIndexBase<TValue>, ISecondaryValueIndex<TValue>
+        class SimpleValueIndex<TValue> : SimpleValueIndexBase<TValue>, ISecondaryValueIndex<TValue>
         {
-            internal SimpleValueIndex(string name, Func<TValue, TValue> indexKeyFunc, bool isMutableIndex) : base(name, isKeyIndex: false, indexKeyFunc, isMutableIndex: isMutableIndex) { }
+            internal SimpleValueIndex(string name, Func<TValue, TValue> indexKeyFunc, bool isMutableIndex) : base(name, indexKeyFunc, isMutableIndex: isMutableIndex) { }
 
-            public void Delete(long recordId, SecondaryIndexSessionBroker indexSessionBroker)
+            public void Delete(RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker)
                 => BaseDelete(recordId, indexSessionBroker);
 
-            public void Insert(ref TValue value, long recordId, SecondaryIndexSessionBroker indexSessionBroker)
+            public void Insert(ref TValue value, RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker)
                 => BaseInsert(ref value, recordId, indexSessionBroker);
 
-            public void Upsert(ref TValue value, long recordId, bool isMutableRecord, SecondaryIndexSessionBroker indexSessionBroker)
+            public void Upsert(ref TValue value, RecordId recordId, bool isMutableRecord, SecondaryIndexSessionBroker indexSessionBroker)
                 => BaseUpsert(ref value, recordId, isMutableRecord, indexSessionBroker);
         }
 
@@ -36,27 +36,27 @@ namespace FASTER.test.SubsetIndex.SimpleIndexTests
             => new SimpleValueIndex<int>($"{TestContext.CurrentContext.Test.Name}_mutable_{(isAsync ? "async" : "sync")}", indexKeyFunc, isMutable);
 
         [Test]
-        [Category("FasterKV")]
+        [Category("FasterKV"), Category("Index")]
         public void MutableInsertTest([Values] bool useAdvancedFunctions, [Values] bool useRMW, [Values] bool isAsync)
         {
             var secondaryIndex = CreateIndex(isMutable: true, isAsync, rawValue => (rawValue - SimpleIndexUtils.ValueStart) / valueDivisor);
             store.fkv.SecondaryIndexBroker.AddIndex(secondaryIndex);
             store.Populate(useAdvancedFunctions, useRMW, isAsync);
-            SimpleIndexUtils.VerifyMutableIndex(secondaryIndex, valueDivisor, SimpleIndexUtils.ValueStart);
+            SimpleValueIndexBase<int>.VerifyMutableIntIndex(secondaryIndex, valueDivisor, SimpleIndexUtils.ValueStart);
         }
 
         [Test]
-        [Category("FasterKV")]
+        [Category("FasterKV"), Category("Index")]
         public void ImmutableInsertTest([Values] bool useAdvancedFunctions, [Values] bool useRMW, [Values] bool isAsync)
         {
             var secondaryIndex = CreateIndex(isMutable: false, isAsync, rawValue => (rawValue - SimpleIndexUtils.ValueStart) / valueDivisor);
             store.fkv.SecondaryIndexBroker.AddIndex(secondaryIndex);
             store.Populate(useAdvancedFunctions, useRMW, isAsync);
-            SimpleIndexUtils.VerifyImmutableIndex(secondaryIndex, valueDivisor, SimpleIndexUtils.ValueStart, store);
+            SimpleValueIndexBase<int>.VerifyImmutableIntIndex(secondaryIndex, valueDivisor, SimpleIndexUtils.ValueStart, store);
         }
 
         [Test]
-        [Category("FasterKV")]
+        [Category("FasterKV"), Category("Index")]
         public void MixedInsertTest([Values] bool useAdvancedFunctions, [Values] bool useRMW, [Values] bool isAsync)
         {
             var mutableIndex = CreateIndex(isMutable: true, isAsync, rawValue => (rawValue - SimpleIndexUtils.ValueStart) / valueDivisor);
@@ -64,7 +64,7 @@ namespace FASTER.test.SubsetIndex.SimpleIndexTests
             store.fkv.SecondaryIndexBroker.AddIndex(mutableIndex);
             store.fkv.SecondaryIndexBroker.AddIndex(immutableIndex);
             store.Populate(useAdvancedFunctions, useRMW, isAsync);
-            SimpleIndexUtils.VerifyMixedIndexes(mutableIndex, immutableIndex, valueDivisor, SimpleIndexUtils.ValueStart, store);
+            SimpleValueIndexBase<int>.VerifyMixedIntIndexes(mutableIndex, immutableIndex, valueDivisor, SimpleIndexUtils.ValueStart, store);
         }
     }
 }

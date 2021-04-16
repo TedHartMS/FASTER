@@ -540,7 +540,12 @@ namespace FASTER.core
                 } while (internalStatus == OperationStatus.RETRY_NOW);
 
                 if (internalStatus == OperationStatus.SUCCESS || internalStatus == OperationStatus.NOTFOUND)
+                {
+                    long physicalAddress = this.hlog.GetPhysicalAddress(pcontext.logicalAddress);
+                    UpdateSIForInsert<Input, Output, Context, IFasterSession<Key, Value, Input, Output, Context>>(ref key, ref this.hlog.GetValue(physicalAddress),
+                                        ref this.hlog.GetInfo(physicalAddress), pcontext.logicalAddress, fasterSession);
                     return new ValueTask<UpsertAsyncResult<Input, Output, Context>>(new UpsertAsyncResult<Input, Output, Context>(internalStatus));
+                }
                 Debug.Assert(internalStatus == OperationStatus.ALLOCATE_FAILED);
             }
             finally
@@ -822,9 +827,8 @@ namespace FASTER.core
                     if (pcontext.IsNewRecord)
                     {
                         long physicalAddress = this.hlog.GetPhysicalAddress(pcontext.logicalAddress);
-                        ref RecordInfo recordInfo = ref this.hlog.GetInfo(physicalAddress);
-                        ref Value value = ref this.hlog.GetValue(physicalAddress);
-                        UpdateSIForInsert<Input, Output, Context, IFasterSession<Key, Value, Input, Output, Context>>(ref key, ref value, ref recordInfo, pcontext.logicalAddress, fasterSession);
+                        UpdateSIForInsert<Input, Output, Context, IFasterSession<Key, Value, Input, Output, Context>>(ref key, ref this.hlog.GetValue(physicalAddress),
+                                            ref this.hlog.GetInfo(physicalAddress), pcontext.logicalAddress, fasterSession);
                     }
                     return new ValueTask<RmwAsyncResult<Input, Output, Context>>(new RmwAsyncResult<Input, Output, Context>((Status)internalStatus, default));
                 }
@@ -839,9 +843,8 @@ namespace FASTER.core
                         {
                             Debug.Assert(status == Status.OK || status == Status.NOTFOUND);
                             long physicalAddress = this.hlog.GetPhysicalAddress(pcontext.logicalAddress);
-                            ref RecordInfo recordInfo = ref this.hlog.GetInfo(physicalAddress);
-                            ref Value value = ref this.hlog.GetValue(physicalAddress);
-                            UpdateSIForInsert<Input, Output, Context, IFasterSession<Key, Value, Input, Output, Context>>(ref key, ref value, ref recordInfo, pcontext.logicalAddress, fasterSession);
+                            UpdateSIForInsert<Input, Output, Context, IFasterSession<Key, Value, Input, Output, Context>>(ref key, ref this.hlog.GetValue(physicalAddress),
+                                            ref this.hlog.GetInfo(physicalAddress), pcontext.logicalAddress, fasterSession);
                         }
                         return new ValueTask<RmwAsyncResult<Input, Output, Context>>(new RmwAsyncResult<Input, Output, Context>(status, default));
                     }

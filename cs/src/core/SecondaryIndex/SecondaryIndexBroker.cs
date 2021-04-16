@@ -92,33 +92,33 @@ namespace FASTER.core
         /// Inserts a mutable key into all mutable secondary key indexes.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Insert(ref TKVKey key, long recordId, SecondaryIndexSessionBroker indexSessionBroker)
+        public void Insert(ref TKVKey key, SecondaryIndexSessionBroker indexSessionBroker)
         {
             var mki = this.mutableKeyIndexes;
             foreach (var keyIndex in mki)
-                keyIndex.Insert(ref key, recordId, indexSessionBroker);
+                keyIndex.Insert(ref key, indexSessionBroker);
         }
 
         /// <summary>
         /// Upserts a mutable key into all mutable secondary key indexes.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Upsert(ref TKVKey key, long recordId, SecondaryIndexSessionBroker indexSessionBroker)
+        public void Upsert(ref TKVKey key, SecondaryIndexSessionBroker indexSessionBroker)
         {
             var mki = this.mutableKeyIndexes;
             foreach (var keyIndex in mki)
-                keyIndex.Upsert(ref key, recordId, isMutableRecord: true, indexSessionBroker);
+                keyIndex.Upsert(ref key, isMutableRecord: true, indexSessionBroker);
         }
 
         /// <summary>
         /// Deletes recordId for a key from all mutable secondary key indexes.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Delete(ref TKVKey key, long recordId, SecondaryIndexSessionBroker indexSessionBroker)
+        public void Delete(ref TKVKey key, SecondaryIndexSessionBroker indexSessionBroker)
         {
             var mki = this.mutableKeyIndexes;
             foreach (var keyIndex in mki)
-                keyIndex.Delete(ref key, recordId, indexSessionBroker);
+                keyIndex.Delete(ref key, indexSessionBroker);
         }
         #endregion Mutable KeyIndexes
 
@@ -127,7 +127,7 @@ namespace FASTER.core
         /// Inserts a recordId keyed by a mutable value into all mutable secondary value indexes.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Insert(ref TKVValue value, long recordId, SecondaryIndexSessionBroker indexSessionBroker)
+        public void Insert(ref TKVValue value, RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker)
         {
             var mvi = this.mutableValueIndexes;
             foreach (var valueIndex in mvi)
@@ -138,7 +138,7 @@ namespace FASTER.core
         /// Upserts a recordId keyed by a mutable value into all mutable secondary value indexes.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Upsert(ref TKVValue value, long recordId, SecondaryIndexSessionBroker indexSessionBroker)
+        public void Upsert(ref TKVValue value, RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker)
         {
             var mvi = this.mutableValueIndexes;
             foreach (var valueIndex in mvi)
@@ -149,7 +149,7 @@ namespace FASTER.core
         /// Deletes a recordId keyed by a mutable value from all mutable secondary value indexes.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Delete(long recordId, SecondaryIndexSessionBroker indexSessionBroker)
+        public void Delete(RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker)
         {
             var mvi = this.mutableValueIndexes;
             foreach (var valueIndex in mvi)
@@ -160,14 +160,14 @@ namespace FASTER.core
         /// <summary>
         /// Upserts a readonly key into all secondary key indexes and readonly values into secondary value indexes.
         /// </summary>
-        public void UpsertReadOnly(ref TKVKey key, ref TKVValue value, long recordId, SecondaryIndexSessionBroker indexSessionBroker)
+        public void UpsertReadOnly(ref TKVKey key, ref TKVValue value, RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker)
         {
             var ki = this.allKeyIndexes;
             var vi = this.allValueIndexes;
             if (ki is { })
             {
                 foreach (var keyIndex in ki)
-                    keyIndex.Upsert(ref key, recordId, isMutableRecord: false, indexSessionBroker);
+                    keyIndex.Upsert(ref key, isMutableRecord: false, indexSessionBroker);
             }
             if (vi is { })
             {

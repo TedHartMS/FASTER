@@ -609,11 +609,11 @@ namespace FASTER.core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal bool UpdateSIForIPU(ref Value value, long address, SecondaryIndexSessionBroker indexSessionBroker)
+        internal bool UpdateSIForIPU(ref Value value, RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker)
         {
             // KeyIndexes do not need notification of in-place updates because the key does not change.
             if (this.SecondaryIndexBroker.MutableValueIndexCount > 0)
-                this.SecondaryIndexBroker.Upsert(ref value, address, indexSessionBroker);
+                this.SecondaryIndexBroker.Upsert(ref value, recordId, indexSessionBroker);
             return true;
         }
 
@@ -633,9 +633,9 @@ namespace FASTER.core
             if (!recordInfo.Invalid && !recordInfo.Tombstone)
             {
                 if (this.SecondaryIndexBroker.MutableKeyIndexCount > 0)
-                    this.SecondaryIndexBroker.Insert(ref key, address, indexSessionBroker);
+                    this.SecondaryIndexBroker.Insert(ref key, indexSessionBroker);
                 if (this.SecondaryIndexBroker.MutableValueIndexCount > 0)
-                    this.SecondaryIndexBroker.Insert(ref value, address, indexSessionBroker);
+                    this.SecondaryIndexBroker.Insert(ref value, new RecordId(address, recordInfo), indexSessionBroker);
             }
         }
 
@@ -722,7 +722,7 @@ namespace FASTER.core
 
                 // No need to lock here; we have just written a new record with a tombstone, so it will not be changed
                 // TODO - but this can race with an INSERT...
-                this.UpdateSIForDelete(ref key, pcontext.logicalAddress, isNewRecord: true, fasterSession.SecondaryIndexSessionBroker);
+                this.UpdateSIForDelete(ref key, new RecordId(pcontext.logicalAddress, pcontext.recordInfo), isNewRecord: true, fasterSession.SecondaryIndexSessionBroker);
             }
 
             Debug.Assert(serialNo >= sessionCtx.serialNum, "Operation serial numbers must be non-decreasing");

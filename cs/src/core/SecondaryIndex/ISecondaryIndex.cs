@@ -30,38 +30,36 @@ namespace FASTER.core
     public interface ISecondaryKeyIndex<TKVKey> : ISecondaryIndex
     {
         /// <summary>
-        /// Inserts a key into the secondary index. Called only for mutable indexes, on the initial insert of a Key.
+        /// Inserts a key into the secondary index. Called only for mutable indexes, on the initial insert of a Key. KeyIndexes do not take RecordIds
+        /// because they reflect the current value of the primary FasterKV Key.
         /// </summary>
         /// <param name="key">The key to be inserted; always mutable</param>
-        /// <param name="recordId">The identifier of the record containing the <paramref name="key"/></param>
         /// <param name="indexSessionBroker">The <see cref="SecondaryIndexSessionBroker"/> for the primary FasterKV session making this call</param>
         /// <remarks>
         /// If the index is mutable and the <paramref name="key"/> is already there, this call should be ignored, because it is the result
         /// of a race in which the record in the primary FasterKV was updated after the initial insert but before this method
         /// was called.
         /// </remarks>
-        void Insert(ref TKVKey key, long recordId, SecondaryIndexSessionBroker indexSessionBroker);
+        void Insert(ref TKVKey key, SecondaryIndexSessionBroker indexSessionBroker);
 
         /// <summary>
         /// Upserts a key into the secondary index. This may be called either immediately during a FasterKV operation, or when the page containing a record goes ReadOnly.
         /// </summary>
         /// <param name="key">The key to be inserted</param>
-        /// <param name="recordId">The identifier of the record containing the <paramref name="key"/></param>
         /// <param name="isMutableRecord">Whether the recordId was in the mutable region of FASTER. If true, the record may subsequently be Upserted or Deleted.</param>
         /// <param name="indexSessionBroker">The <see cref="SecondaryIndexSessionBroker"/> for the primary FasterKV session making this call</param>
         /// <remarks>
         /// For an immutable index, this is the only call made on the interface, when the page containing the <paramref name="key"/> has moved to ReadOnly.
         /// In this case, <paramref name="isMutableRecord"/> is false, and the index may move the <paramref name="key"/> to an immutable storage area.
         /// </remarks>
-        void Upsert(ref TKVKey key, long recordId, bool isMutableRecord, SecondaryIndexSessionBroker indexSessionBroker);
+        void Upsert(ref TKVKey key, bool isMutableRecord, SecondaryIndexSessionBroker indexSessionBroker);
 
         /// <summary>
         /// Removes a key from the secondary index. Called only for mutable indexes.
         /// </summary>
         /// <param name="key">The key to be removed</param>
-        /// <param name="recordId">The identifier of the record containing the <paramref name="key"/></param>
         /// <param name="indexSessionBroker">The <see cref="SecondaryIndexSessionBroker"/> for the primary FasterKV session making this call</param>
-        void Delete(ref TKVKey key, long recordId, SecondaryIndexSessionBroker indexSessionBroker);
+        void Delete(ref TKVKey key, SecondaryIndexSessionBroker indexSessionBroker);
     }
 
     /// <summary>
@@ -82,7 +80,7 @@ namespace FASTER.core
         /// updated after the initial insert but before this method was called, so the <paramref name="value"/> on this call
         /// would overwrite it with an obsolete value.
         /// </remarks>
-        void Insert(ref TKVValue value, long recordId, SecondaryIndexSessionBroker indexSessionBroker);
+        void Insert(ref TKVValue value, RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker);
 
         /// <summary>
         /// Upserts a recordId into the secondary index, with the associated value from which the index derives its key(s).
@@ -96,13 +94,13 @@ namespace FASTER.core
         /// For an immutable index, this is the only call made on the interface, when the page containing the <paramref name="recordId"/> has moved to ReadOnly.
         /// In this case, <paramref name="isMutableRecord"/> is false, and the index may move the <paramref name="recordId"/> to an immutable storage area.
         /// </remarks>
-        void Upsert(ref TKVValue value, long recordId, bool isMutableRecord, SecondaryIndexSessionBroker indexSessionBroker);
+        void Upsert(ref TKVValue value, RecordId recordId, bool isMutableRecord, SecondaryIndexSessionBroker indexSessionBroker);
 
         /// <summary>
         /// Removes a recordId from the secondary index. Called only for mutable indexes.
         /// </summary>
         /// <param name="recordId">The recordId to be removed</param>
         /// <param name="indexSessionBroker">The <see cref="SecondaryIndexSessionBroker"/> for the primary FasterKV session making this call</param>
-        void Delete(long recordId, SecondaryIndexSessionBroker indexSessionBroker);
+        void Delete(RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker);
     }
 }

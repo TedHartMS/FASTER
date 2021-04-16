@@ -9,21 +9,21 @@ namespace FASTER.test.SubsetIndex.SimpleIndexTests
 {
     class SimpleKeyIndexTests
     {
-        class SimpleKeyIndex<TKey> : SimpleIndexBase<TKey>, ISecondaryKeyIndex<TKey>
+        class SimpleKeyIndex<TKey> : SimpleKeyIndexBase<TKey>, ISecondaryKeyIndex<TKey>
+            where TKey : IComparable
         {
-            internal SimpleKeyIndex(string name, Func<TKey, TKey> indexKeyFunc, bool isMutableIndex) : base(name, isKeyIndex: true, indexKeyFunc, isMutableIndex: isMutableIndex) { }
+            internal SimpleKeyIndex(string name, bool isMutableIndex) : base(name, isMutableIndex: isMutableIndex) { }
 
-            public void Delete(ref TKey key, long recordId, SecondaryIndexSessionBroker indexSessionBroker)
-                => BaseDelete(ref key, recordId, indexSessionBroker);
+            public void Delete(ref TKey key, SecondaryIndexSessionBroker indexSessionBroker)
+                => BaseDelete(ref key, indexSessionBroker);
 
-            public void Insert(ref TKey key, long recordId, SecondaryIndexSessionBroker indexSessionBroker)
-                => BaseInsert(ref key, recordId, indexSessionBroker);
+            public void Insert(ref TKey key, SecondaryIndexSessionBroker indexSessionBroker)
+                => BaseInsert(ref key, indexSessionBroker);
 
-            public void Upsert(ref TKey key, long recordId, bool isMutableRecord, SecondaryIndexSessionBroker indexSessionBroker)
-                => BaseUpsert(ref key, recordId, isMutableRecord, indexSessionBroker);
+            public void Upsert(ref TKey key, bool isMutableRecord, SecondaryIndexSessionBroker indexSessionBroker)
+                => BaseUpsert(ref key, isMutableRecord, indexSessionBroker);
         }
 
-        private const int keyDivisor = 20;
         readonly PrimaryFasterKV store = new PrimaryFasterKV();
 
         [SetUp]
@@ -32,39 +32,39 @@ namespace FASTER.test.SubsetIndex.SimpleIndexTests
         [TearDown]
         public void TearDown() => store.TearDown();
 
-        private ISecondaryIndex CreateIndex(bool isMutable, bool isAsync, Func<int, int> indexKeyFunc)
-            => new SimpleKeyIndex<int>($"{TestContext.CurrentContext.Test.Name}_mutable_{(isAsync ? "async" : "sync")}", indexKeyFunc, isMutable);
+        private ISecondaryIndex CreateIndex(bool isMutable, bool isAsync)
+            => new SimpleKeyIndex<int>($"{TestContext.CurrentContext.Test.Name}_mutable_{(isAsync ? "async" : "sync")}", isMutable);
 
         [Test]
-        [Category("FasterKV")]
+        [Category("FasterKV"), Category("Index")]
         public void MutableInsertTest([Values] bool useAdvancedFunctions, [Values] bool useRMW, [Values] bool isAsync)
         {
-            var secondaryIndex = CreateIndex(isMutable: true, isAsync, rawKey => rawKey / keyDivisor);
+            var secondaryIndex = CreateIndex(isMutable: true, isAsync);
             store.fkv.SecondaryIndexBroker.AddIndex(secondaryIndex);
             store.Populate(useAdvancedFunctions, useRMW, isAsync);
-            SimpleIndexUtils.VerifyMutableIndex(secondaryIndex, keyDivisor, 0);
+            SimpleKeyIndexBase<int>.VerifyIntIndex(secondaryIndex, store: null);
         }
 
         [Test]
-        [Category("FasterKV")]
+        [Category("FasterKV"), Category("Index")]
         public void ImmutableInsertTest([Values] bool useAdvancedFunctions, [Values] bool useRMW, [Values] bool isAsync)
         {
-            var secondaryIndex = CreateIndex(isMutable: false, isAsync, rawKey => rawKey / keyDivisor);
+            var secondaryIndex = CreateIndex(isMutable: false, isAsync);
             store.fkv.SecondaryIndexBroker.AddIndex(secondaryIndex);
             store.Populate(useAdvancedFunctions, useRMW, isAsync);
-            SimpleIndexUtils.VerifyImmutableIndex(secondaryIndex, keyDivisor, 0, store);
+            SimpleKeyIndexBase<int>.VerifyIntIndex(secondaryIndex, store);
         }
 
         [Test]
-        [Category("FasterKV")]
+        [Category("FasterKV"), Category("Index")]
         public void MixedInsertTest([Values] bool useAdvancedFunctions, [Values] bool useRMW, [Values] bool isAsync)
         {
-            var mutableIndex = CreateIndex(isMutable: true, isAsync, rawKey => rawKey / keyDivisor);
-            var immutableIndex = CreateIndex(isMutable: false, isAsync, rawKey => rawKey / keyDivisor);
+            var mutableIndex = CreateIndex(isMutable: true, isAsync);
+            var immutableIndex = CreateIndex(isMutable: false, isAsync);
             store.fkv.SecondaryIndexBroker.AddIndex(mutableIndex);
             store.fkv.SecondaryIndexBroker.AddIndex(immutableIndex);
             store.Populate(useAdvancedFunctions, useRMW, isAsync);
-            SimpleIndexUtils.VerifyMixedIndexes(mutableIndex, immutableIndex, keyDivisor, 0, store);
+            SimpleKeyIndexBase<int>.VerifyMixedIntIndexes(mutableIndex, immutableIndex, store);
         }
     }
 }
