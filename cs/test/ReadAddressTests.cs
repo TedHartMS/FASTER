@@ -70,11 +70,11 @@ namespace FASTER.test.readaddress
 
             public void SetSessionSlot(long slot) { }
 
-            public void Delete(long recordId, SecondaryIndexSessionBroker indexSessionBroker) { }
+            public void Delete(RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker) { }
 
-            public void Insert(ref Value value, long recordId, SecondaryIndexSessionBroker indexSessionBroker) => lastWriteAddress = recordId;
+            public void Insert(ref Value value, RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker) => lastWriteAddress = recordId.Address;
 
-            public void Upsert(ref Value value, long recordId, bool isMutableRecord, SecondaryIndexSessionBroker indexSessionBroker) { }
+            public void Upsert(ref Value value, RecordId recordId, bool isMutableRecord, SecondaryIndexSessionBroker indexSessionBroker) { }
         }
 
         private static long SetReadOutput(long key, long value) => (key << 32) | value;

@@ -8,13 +8,16 @@ namespace FASTER.core
     class ReadOnlyObserver<TKVKey, TKVValue> : IObserver<IFasterScanIterator<TKVKey, TKVValue>>
     {
         readonly SecondaryIndexBroker<TKVKey, TKVValue> secondaryIndexBroker;
+
+        // We're not operating in the context of a FasterKV session, so we need our own sessionBroker.
         readonly SecondaryIndexSessionBroker indexSessionBroker = new SecondaryIndexSessionBroker();
 
         internal ReadOnlyObserver(SecondaryIndexBroker<TKVKey, TKVValue> sib) => this.secondaryIndexBroker = sib;
 
         public void OnCompleted()
         {
-            // Called when AllocatorBase is Disposed; nothing to do here.
+            // Called when AllocatorBase is Disposed
+            indexSessionBroker.Dispose();
         }
 
         public void OnError(Exception error)
@@ -24,9 +27,9 @@ namespace FASTER.core
 
         public void OnNext(IFasterScanIterator<TKVKey, TKVValue> iter)
         {
-            while (iter.GetNext(out _, out TKVKey key, out TKVValue value))
+            while (iter.GetNext(out var recordInfo, out TKVKey key, out TKVValue value))
             {
-                secondaryIndexBroker.UpsertReadOnly(ref key, ref value, iter.CurrentAddress, indexSessionBroker);
+                secondaryIndexBroker.UpsertReadOnly(ref key, ref value, new RecordId(iter.CurrentAddress, recordInfo), indexSessionBroker);
             }
         }
     }
