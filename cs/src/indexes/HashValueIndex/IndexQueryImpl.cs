@@ -21,7 +21,7 @@ namespace FASTER.indexes.HashValueIndex
             return input;
         }
 
-        private IEnumerable<long> Query(AdvancedClientSession<TPKey, long, FasterKVHVI<TPKey>.Input, FasterKVHVI<TPKey>.Output, FasterKVHVI<TPKey>.Context, FasterKVHVI<TPKey>.Functions> session,
+        private IEnumerable<RecordId> Query(AdvancedClientSession<TPKey, RecordId, FasterKVHVI<TPKey>.Input, FasterKVHVI<TPKey>.Output, FasterKVHVI<TPKey>.Context, FasterKVHVI<TPKey>.Functions> session,
                 FasterKVHVI<TPKey>.Input input, QuerySettings querySettings)
         {
             var context = new FasterKVHVI<TPKey>.Context { Functions = session.functions };
@@ -58,11 +58,11 @@ namespace FASTER.indexes.HashValueIndex
             }
         }
 
-        internal unsafe IAsyncEnumerable<long> QueryAsync(AdvancedClientSession<TPKey, long, FasterKVHVI<TPKey>.Input, FasterKVHVI<TPKey>.Output, FasterKVHVI<TPKey>.Context, FasterKVHVI<TPKey>.Functions> session,
+        internal unsafe IAsyncEnumerable<RecordId> QueryAsync(AdvancedClientSession<TPKey, RecordId, FasterKVHVI<TPKey>.Input, FasterKVHVI<TPKey>.Output, FasterKVHVI<TPKey>.Context, FasterKVHVI<TPKey>.Functions> session,
                 int predOrdinal, ref TPKey key, QuerySettings querySettings)
             => QueryAsync(session, MakeQueryInput(predOrdinal, ref key), querySettings);
 
-        private async IAsyncEnumerable<long> QueryAsync(AdvancedClientSession<TPKey, long, FasterKVHVI<TPKey>.Input, FasterKVHVI<TPKey>.Output, FasterKVHVI<TPKey>.Context, FasterKVHVI<TPKey>.Functions> session,
+        private async IAsyncEnumerable<RecordId> QueryAsync(AdvancedClientSession<TPKey, RecordId, FasterKVHVI<TPKey>.Input, FasterKVHVI<TPKey>.Output, FasterKVHVI<TPKey>.Context, FasterKVHVI<TPKey>.Functions> session,
                 FasterKVHVI<TPKey>.Input input, QuerySettings querySettings)
         {
             var context = new FasterKVHVI<TPKey>.Context { Functions = session.functions };

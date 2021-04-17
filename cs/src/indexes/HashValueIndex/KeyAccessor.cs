@@ -16,7 +16,7 @@ namespace FASTER.indexes.HashValueIndex
     internal unsafe class KeyAccessor<TPKey> : IFasterEqualityComparer<TPKey>
     {
         private readonly IFasterEqualityComparer<TPKey> userComparer;
-        private AllocatorBase<TPKey, long> hlog;
+        private AllocatorBase<TPKey, RecordId> hlog;
 
         internal KeyAccessor(IFasterEqualityComparer<TPKey> userComparer, int keyCount, int keyPointerSize)
         {
@@ -25,10 +25,10 @@ namespace FASTER.indexes.HashValueIndex
             this.KeyPointerSize = keyPointerSize;
         }
 
-        internal void SetLog(AllocatorBase<TPKey, long> hlog)
+        internal void SetLog(AllocatorBase<TPKey, RecordId> hlog)
         {
             // Some logic here assumes we are using VarLenBlittableAllocator.
-            Debug.Assert(hlog is VariableLengthBlittableAllocator<TPKey, long>, "Expected allocator type not found");
+            Debug.Assert(hlog is VariableLengthBlittableAllocator<TPKey, RecordId>, "Expected allocator type not found");
             this.hlog = hlog;
         }
 
@@ -91,7 +91,7 @@ namespace FASTER.indexes.HashValueIndex
             => address - KeyPointer<TPKey>.CastFromPhysicalAddress(address).OffsetToStartOfKeys - RecordInfo.GetLength();
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public long GetRecordAddressFromValueRef(ref long valueRef)
+        public long GetRecordAddressFromValueRef(ref RecordId valueRef)
             // This assumes we are using VarLenBlittableAllocator, because it's called by Functions.SingleReader out of InternalCompletePendingRead,
             // and VarLenBlittableAllocator allocates a context record of the same layout as in the log.
             => (long)(byte*)Unsafe.AsPointer(ref valueRef) - this.TotalKeySize - RecordInfo.GetLength();

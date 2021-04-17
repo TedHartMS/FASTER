@@ -160,10 +160,10 @@ namespace FASTER.indexes.HashValueIndex
         }
 
         /// <inheritdoc/>
-        public void Insert(ref TKVValue value, long recordId, SecondaryIndexSessionBroker sessionBroker) { /* Currently unsupported for HVI */ }
+        public void Insert(ref TKVValue value, RecordId recordId, SecondaryIndexSessionBroker sessionBroker) { /* Currently unsupported for HVI */ }
 
         /// <inheritdoc/>
-        public void Upsert(ref TKVValue value, long recordId, bool isMutable, SecondaryIndexSessionBroker sessionBroker)
+        public void Upsert(ref TKVValue value, RecordId recordId, bool isMutable, SecondaryIndexSessionBroker sessionBroker)
         {
             if (isMutable)  // Currently unsupported for HVI
                 return;
@@ -171,7 +171,7 @@ namespace FASTER.indexes.HashValueIndex
         }
 
         /// <inheritdoc/>
-        public void Delete(long recordId, SecondaryIndexSessionBroker sessionBroker) { /* Currently unsupported for HVI */ }
+        public void Delete(RecordId recordId, SecondaryIndexSessionBroker sessionBroker) { /* Currently unsupported for HVI */ }
 
         /// <summary>
         /// Obtains a list of registered Predicate names organized by the groups defined in previous Register calls. TODO: Replace with GetMetadata()
@@ -232,7 +232,7 @@ namespace FASTER.indexes.HashValueIndex
             var predicates = queryPredicates.Select(pk => (GetImplementingPredicate(pk.pred), pk.key)).ToArray();
             querySettings ??= QuerySettings.Default;
 #if false   // TODO
-            return new QueryRecordIterator<long>(new[] { predicatesAndKeys.Select(tup => ((IPredicate)tup.pred, this.Query(tup.pred, tup.key, querySettings))) },
+            return new QueryRecordIterator<RecordId>(new[] { predicatesAndKeys.Select(tup => ((IPredicate)tup.pred, this.Query(tup.pred, tup.key, querySettings))) },
                                                       matchIndicators => matchPredicate(matchIndicators[0]), querySettings).Run();
 #else
             return null;
@@ -248,7 +248,7 @@ namespace FASTER.indexes.HashValueIndex
             var predicates = queryPredicates.Select(pk => (GetImplementingPredicate(pk.pred), pk.key)).ToArray();
             querySettings ??= QuerySettings.Default;
 #if false   // TODO
-            return new AsyncQueryRecordIterator<long>(new[] { predicatesAndKeys.Select(tup => ((IPredicate)tup.pred, this.QueryAsync(tup.pred, tup.key, querySettings))) },
+            return new AsyncQueryRecordIterator<RecordId>(new[] { predicatesAndKeys.Select(tup => ((IPredicate)tup.pred, this.QueryAsync(tup.pred, tup.key, querySettings))) },
                                                       matchIndicators => matchPredicate(matchIndicators[0]), querySettings).Run();
 #else
             return null;

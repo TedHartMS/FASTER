@@ -11,14 +11,14 @@ namespace FASTER.indexes.HashValueIndex
         private SectorAlignedBufferPool bufferPool;        // TODO: Look at SpanByte etc. instead
 
         private readonly int keyPointerSize = Utility.GetSize(default(KeyPointer<TPKey>));
-        private readonly int recordIdSize = Utility.GetSize(sizeof(long));
+        private readonly int recordIdSize = Utility.GetSize(default(RecordId));
 
         void CreateSecondaryFkv()
         {
             this.secondaryFkv = new FasterKVHVI<TPKey>(
                     this.RegistrationSettings.HashTableSize, this.RegistrationSettings.LogSettings, this.RegistrationSettings.CheckpointSettings, null /*SerializerSettings*/,
                     this.keyAccessor,
-                    new VariableLengthStructSettings<TPKey, long>
+                    new VariableLengthStructSettings<TPKey, RecordId>
                     {
                         keyLength = new CompositeKey<TPKey>.VarLenLength(this.keyPointerSize, this.PredicateCount)
                     }
@@ -29,8 +29,8 @@ namespace FASTER.indexes.HashValueIndex
             this.bufferPool = this.secondaryFkv.hlog.bufferPool;
         }
 
-        private unsafe Status ExecuteAndStore(AdvancedClientSession<TPKey, long, FasterKVHVI<TPKey>.Input, FasterKVHVI<TPKey>.Output, FasterKVHVI<TPKey>.Context, FasterKVHVI<TPKey>.Functions> session,
-                ref TKVValue kvValue, long recordId)
+        private unsafe Status ExecuteAndStore(AdvancedClientSession<TPKey, RecordId, FasterKVHVI<TPKey>.Input, FasterKVHVI<TPKey>.Output, FasterKVHVI<TPKey>.Context, FasterKVHVI<TPKey>.Functions> session,
+                ref TKVValue kvValue, RecordId recordId)
         {
             // Note: stackalloc is safe because it's copied to a HeapContainer in PendingContext if the operation goes pending.
             var keyMemLen = this.keyPointerSize * this.PredicateCount;

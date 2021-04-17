@@ -7,7 +7,7 @@ using System.Runtime.CompilerServices;
 
 namespace FASTER.indexes.HashValueIndex
 {
-    internal unsafe partial class FasterKVHVI<TPKey> : FasterKV<TPKey, long>
+    internal unsafe partial class FasterKVHVI<TPKey> : FasterKV<TPKey, RecordId>
     {
         internal interface IInputAccessor<TInput>       // TODO needed?
         {

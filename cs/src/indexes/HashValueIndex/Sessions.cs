@@ -10,7 +10,7 @@ namespace FASTER.indexes.HashValueIndex
         class Sessions
         {
             internal AdvancedClientSession<TKVKey, TKVValue, PrimaryInput, PrimaryOutput, Empty, PrimaryFunctions> PrimarySession;
-            internal AdvancedClientSession<TPKey, long, FasterKVHVI<TPKey>.Input, FasterKVHVI<TPKey>.Output, FasterKVHVI<TPKey>.Context, FasterKVHVI<TPKey>.Functions> SecondarySession;
+            internal AdvancedClientSession<TPKey, RecordId, FasterKVHVI<TPKey>.Input, FasterKVHVI<TPKey>.Output, FasterKVHVI<TPKey>.Context, FasterKVHVI<TPKey>.Functions> SecondarySession;
 
             internal static Sessions CreateNew(SecondaryIndexSessionBroker sessionBroker, long slot, FasterKV<TKVKey, TKVValue> primaryFkv, FasterKVHVI<TPKey> secondaryFkv, KeyAccessor<TPKey> keyAccessor)
             {

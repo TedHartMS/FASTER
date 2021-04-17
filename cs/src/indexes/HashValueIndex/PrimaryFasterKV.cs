@@ -88,10 +88,11 @@ namespace FASTER.indexes.HashValueIndex
             }
         }
 
-        private bool ResolveRecord(AdvancedClientSession<TKVKey, TKVValue, PrimaryInput, PrimaryOutput, Empty, PrimaryFunctions> session, long recordId, out QueryRecord<TKVKey, TKVValue> record)
+        private bool ResolveRecord(AdvancedClientSession<TKVKey, TKVValue, PrimaryInput, PrimaryOutput, Empty, PrimaryFunctions> session, RecordId recordId, out QueryRecord<TKVKey, TKVValue> record)
         {
             record = default;
             var output = new PrimaryOutput();
+            RecordInfo recordInfo;
 
             try
             {
@@ -104,13 +105,14 @@ namespace FASTER.indexes.HashValueIndex
                     session.CompletePendingWithOutputs(out var completedOutputs, wait: true);
                     if (completedOutputs.Next())
                     {
-                        status = Status.OK; // TODO completedOutputs.Current.Status;
+                        status = completedOutputs.Current.Status;
                         output.Set(ref completedOutputs.Current.Output);
+                        recordInfo = completedOutputs.Current.RecordInfo;
                     }
                     completedOutputs.Dispose();
                 }
 
-                Status status = session.ReadAtAddress(recordId, ref input, ref output, ReadFlags.SkipReadCache);
+                Status status = session.ReadAtAddress(recordId.Address, ref input, ref output, ReadFlags.SkipReadCache);
                 if (status == Status.PENDING)
                     GetPendingStatus(ref status);
                 if (status != Status.OK)
@@ -119,15 +121,15 @@ namespace FASTER.indexes.HashValueIndex
                 // Now prepare to confirm liveness: Look up the key and see if the address matches (it must be the highest non-readCache address for the key).
                 // Setting input.hlog to null switches Concurrent/SingleReader mode from "get the key and value at this address" to "traverse the liveness chain".
                 input.hlog = null;
-                RecordInfo recordInfo = default;
 
                 while (true)
                 {
+                    recordInfo = default;
                     status = session.Read(ref output.GetKey(), ref input, ref output, ref recordInfo, ReadFlags.SkipReadCache);
                     if (status == Status.PENDING)
                         GetPendingStatus(ref status);
 
-                    if (status != Status.OK || output.currentAddress != recordId)
+                    if (status != Status.OK || !recordId.Equals(output.currentAddress, recordInfo.Version))
                         return false;
 
                     output.DetachHeapContainers(out IHeapContainer<TKVKey> keyContainer, out IHeapContainer<TKVValue> valueContainer);
@@ -141,7 +143,7 @@ namespace FASTER.indexes.HashValueIndex
             }
         }
 
-        private async ValueTask<QueryRecord<TKVKey, TKVValue>> ResolveRecordAsync(AdvancedClientSession<TKVKey, TKVValue, PrimaryInput, PrimaryOutput, Empty, PrimaryFunctions> session, long recordId, QuerySettings querySettings)
+        private async ValueTask<QueryRecord<TKVKey, TKVValue>> ResolveRecordAsync(AdvancedClientSession<TKVKey, TKVValue, PrimaryInput, PrimaryOutput, Empty, PrimaryFunctions> session, RecordId recordId, QuerySettings querySettings)
         {
             PrimaryOutput initialOutput = default;
 
@@ -152,7 +154,7 @@ namespace FASTER.indexes.HashValueIndex
 
                 //  We ignore the updated previousAddress here; we're just looking for the key.
                 Status status;
-                var readAsyncResult = await session.ReadAtAddressAsync(recordId, ref input, ReadFlags.SkipReadCache, cancellationToken: querySettings.CancellationToken);
+                var readAsyncResult = await session.ReadAtAddressAsync(recordId.Address, ref input, ReadFlags.SkipReadCache, cancellationToken: querySettings.CancellationToken);
                 if (querySettings.IsCanceled)
                     return null;
                 (status, initialOutput) = readAsyncResult.Complete();
@@ -172,7 +174,7 @@ namespace FASTER.indexes.HashValueIndex
                     PrimaryOutput output = default;
                     (status, output) = readAsyncResult.Complete(out recordInfo);
 
-                    if (status != Status.OK || output.currentAddress != recordId)
+                    if (status != Status.OK || !recordId.Equals(output.currentAddress, recordInfo.Version))
                         return default;
 
                     initialOutput.DetachHeapContainers(out IHeapContainer<TKVKey> keyContainer, out IHeapContainer<TKVValue> valueContainer);

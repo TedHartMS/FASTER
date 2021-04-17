@@ -1,19 +1,17 @@
 ﻿// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT license.
 
-#pragma warning disable IDE0060 // Remove unused parameter
-
 using FASTER.core;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
 namespace FASTER.indexes.HashValueIndex
 {
-    internal unsafe partial class FasterKVHVI<TPKey> : FasterKV<TPKey, long>
+    internal unsafe partial class FasterKVHVI<TPKey> : FasterKV<TPKey, RecordId>
     {
-        internal class Functions : IAdvancedFunctions<TPKey, long, Input, Output, Context>, IInputAccessor<Input>
+        internal class Functions : IAdvancedFunctions<TPKey, RecordId, Input, Output, Context>, IInputAccessor<Input>
         {
-            FasterKVHVI<TPKey> fkv;
+            readonly FasterKVHVI<TPKey> fkv;
             readonly KeyAccessor<TPKey> keyAccessor;
 
             internal Functions(FasterKVHVI<TPKey> fkv, KeyAccessor<TPKey> keyAcc)
@@ -34,15 +32,15 @@ namespace FASTER.indexes.HashValueIndex
             private const string NotUsedForHVI = "HashValueIndex-implementing FasterKVs should not use this IFunctions method";
 
             #region Upserts
-            public bool ConcurrentWriter(ref TPKey _, ref long src, ref long dst, ref RecordInfo recordInfo, long logicalAddress) => throw new InternalErrorExceptionHVI(NotUsedForHVI);
+            public bool ConcurrentWriter(ref TPKey _, ref RecordId src, ref RecordId dst, ref RecordInfo recordInfo, long logicalAddress) => throw new InternalErrorExceptionHVI(NotUsedForHVI);
 
-            public void SingleWriter(ref TPKey _, ref long src, ref long dst) => throw new InternalErrorExceptionHVI(NotUsedForHVI);
+            public void SingleWriter(ref TPKey _, ref RecordId src, ref RecordId dst) => throw new InternalErrorExceptionHVI(NotUsedForHVI);
 
-            public void UpsertCompletionCallback(ref TPKey _, ref long value, Context ctx) => throw new InternalErrorExceptionHVI(NotUsedForHVI);
+            public void UpsertCompletionCallback(ref TPKey _, ref RecordId value, Context ctx) => throw new InternalErrorExceptionHVI(NotUsedForHVI);
             #endregion Upserts
 
             #region Reads
-            public void ConcurrentReader(ref TPKey queryKeyPointerRefAsKeyRef, ref Input input, ref long value, ref Output output, ref RecordInfo recordInfo, long logicalAddress)
+            public void ConcurrentReader(ref TPKey queryKeyPointerRefAsKeyRef, ref Input input, ref RecordId value, ref Output output, ref RecordInfo recordInfo, long logicalAddress)
             {
                 // Note: ConcurrentReader is not called for ReadCache, even if we eventually support ReadCache in SubsetIndex secondary KVs.
                 Debug.Assert(logicalAddress > FASTER.core.Constants.kTempInvalidAddress);
@@ -50,7 +48,7 @@ namespace FASTER.indexes.HashValueIndex
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            private void CopyInMemoryDataToOutput(ref TPKey queryKeyPointerRefAsKeyRef, ref Input input, ref long value, ref Output output, long logicalAddress)
+            private void CopyInMemoryDataToOutput(ref TPKey queryKeyPointerRefAsKeyRef, ref Input input, ref RecordId value, ref Output output, long logicalAddress)
             {
                 ref KeyPointer<TPKey> storedKeyPointer = ref this.keyAccessor.GetKeyPointerRefFromKeyPointerLogicalAddress(logicalAddress);
                 Debug.Assert(input.PredicateOrdinal == storedKeyPointer.PredicateOrdinal, "Mismatched input and stored Predicate ordinal");
@@ -66,7 +64,7 @@ namespace FASTER.indexes.HashValueIndex
 #endif
             }
 
-            public unsafe void SingleReader(ref TPKey queryKeyPointerRefAsKeyRef, ref Input input, ref long value, ref Output output, long logicalAddress)
+            public unsafe void SingleReader(ref TPKey queryKeyPointerRefAsKeyRef, ref Input input, ref RecordId value, ref Output output, long logicalAddress)
             {
                 if (logicalAddress <= FASTER.core.Constants.kTempInvalidAddress)
                 {
@@ -103,16 +101,16 @@ namespace FASTER.indexes.HashValueIndex
             #endregion Reads
 
             #region RMWs
-            public bool NeedCopyUpdate(ref TPKey _, ref Input input, ref long value)
+            public bool NeedCopyUpdate(ref TPKey _, ref Input input, ref RecordId value)
                 => throw new InternalErrorExceptionHVI(NotUsedForHVI);
 
-            public void CopyUpdater(ref TPKey _, ref Input input, ref long oldValue, ref long newValue)
+            public void CopyUpdater(ref TPKey _, ref Input input, ref RecordId oldValue, ref RecordId newValue)
                 => throw new InternalErrorExceptionHVI(NotUsedForHVI);
 
-            public void InitialUpdater(ref TPKey _, ref Input input, ref long value)
+            public void InitialUpdater(ref TPKey _, ref Input input, ref RecordId value)
                 => throw new InternalErrorExceptionHVI(NotUsedForHVI);
 
-            public bool InPlaceUpdater(ref TPKey _, ref Input input, ref long value, ref RecordInfo recordInfo, long logicalAddress)
+            public bool InPlaceUpdater(ref TPKey _, ref Input input, ref RecordId value, ref RecordInfo recordInfo, long logicalAddress)
                 => throw new InternalErrorExceptionHVI(NotUsedForHVI);
 
             public void RMWCompletionCallback(ref TPKey _, ref Input input, Context ctx, Status status)
@@ -124,13 +122,13 @@ namespace FASTER.indexes.HashValueIndex
 
             public void CheckpointCompletionCallback(string sessionId, CommitPoint commitPoint) { }
 
-            public void ConcurrentDeleter(ref TPKey key, ref long value, ref RecordInfo recordInfo, long address) { }
+            public void ConcurrentDeleter(ref TPKey key, ref RecordId value, ref RecordInfo recordInfo, long address) { }
 
             public bool SupportsLocking => false;
 
-            public void Lock(ref RecordInfo recordInfo, ref TPKey key, ref long value, LockType lockType, ref long lockContext) { }
+            public void Lock(ref RecordInfo recordInfo, ref TPKey key, ref RecordId value, LockType lockType, ref long lockContext) { }
 
-            public bool Unlock(ref RecordInfo recordInfo, ref TPKey key, ref long value, LockType lockType, long lockContext) => true;
+            public bool Unlock(ref RecordInfo recordInfo, ref TPKey key, ref RecordId value, LockType lockType, long lockContext) => true;
             #endregion IFunctions implementation
         }
     }

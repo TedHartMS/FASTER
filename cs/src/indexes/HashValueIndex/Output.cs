@@ -5,14 +5,14 @@ using FASTER.core;
 
 namespace FASTER.indexes.HashValueIndex
 {
-    internal unsafe partial class FasterKVHVI<TPKey> : FasterKV<TPKey, long>
+    internal unsafe partial class FasterKVHVI<TPKey> : FasterKV<TPKey, RecordId>
     {
         /// <summary>
         /// Output from Reads on the secondary FasterKV instance (stores Predicate key chains).
         /// </summary>
         internal struct Output
         {
-            internal long RecordId;
+            internal RecordId RecordId;
 
             internal long PreviousAddress;
 
@@ -21,7 +21,7 @@ namespace FASTER.indexes.HashValueIndex
             // Used only for ReadCompletionCallback.
             internal Status PendingResultStatus;
 
-            public override string ToString() => $"rId {this.RecordId}, prevAddr {this.PreviousAddress}";
+            public override string ToString() => $"rId ({this.RecordId}), prevAddr {this.PreviousAddress}";
         }
     }
 }

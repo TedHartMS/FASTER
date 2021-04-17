@@ -327,7 +327,7 @@ namespace FASTER.indexes.HashValueIndex
 
         #region Internal Context operations
 
-        internal static Status IndexRead<TPKey>(this AdvancedClientSession<TPKey, long, FasterKVHVI<TPKey>.Input, FasterKVHVI<TPKey>.Output, FasterKVHVI<TPKey>.Context, FasterKVHVI<TPKey>.Functions> session,
+        internal static Status IndexRead<TPKey>(this AdvancedClientSession<TPKey, RecordId, FasterKVHVI<TPKey>.Input, FasterKVHVI<TPKey>.Output, FasterKVHVI<TPKey>.Context, FasterKVHVI<TPKey>.Functions> session,
                                                 FasterKVHVI<TPKey> fkv, ref TPKey key,
                                                 ref FasterKVHVI<TPKey>.Input input, ref FasterKVHVI<TPKey>.Output output, ref RecordInfo recordInfo, ref FasterKVHVI<TPKey>.Context context)
         {
@@ -343,16 +343,16 @@ namespace FASTER.indexes.HashValueIndex
         }
 
         internal static ValueTask<FasterKVHVI<TPKey>.ReadAsyncResult<FasterKVHVI<TPKey>.Input, FasterKVHVI<TPKey>.Output, FasterKVHVI<TPKey>.Context>> IndexReadAsync<TPKey>(
-                                    this AdvancedClientSession<TPKey, long, FasterKVHVI<TPKey>.Input, FasterKVHVI<TPKey>.Output, FasterKVHVI<TPKey>.Context, FasterKVHVI<TPKey>.Functions> session,
+                                    this AdvancedClientSession<TPKey, RecordId, FasterKVHVI<TPKey>.Input, FasterKVHVI<TPKey>.Output, FasterKVHVI<TPKey>.Context, FasterKVHVI<TPKey>.Functions> session,
                                     FasterKVHVI<TPKey> fkv, ref TPKey key, ref FasterKVHVI<TPKey>.Input input, long startAddress,
                                     ref FasterKVHVI<TPKey>.Context context, long serialNo, QuerySettings querySettings)
         {
             return fkv.ContextIndexReadAsync(session.FasterSession, session.ctx, ref key, ref input, startAddress, ref context, serialNo, querySettings);
         }
 
-        internal static Status IndexInsert<TPKey>(this AdvancedClientSession<TPKey, long, FasterKVHVI<TPKey>.Input, FasterKVHVI<TPKey>.Output, FasterKVHVI<TPKey>.Context, FasterKVHVI<TPKey>.Functions> session,
+        internal static Status IndexInsert<TPKey>(this AdvancedClientSession<TPKey, RecordId, FasterKVHVI<TPKey>.Input, FasterKVHVI<TPKey>.Output, FasterKVHVI<TPKey>.Context, FasterKVHVI<TPKey>.Functions> session,
                                     FasterKVHVI<TPKey> fkv,
-                                    ref TPKey key, long recordId, ref FasterKVHVI<TPKey>.Input input, ref FasterKVHVI<TPKey>.Context context)
+                                    ref TPKey key, RecordId recordId, ref FasterKVHVI<TPKey>.Input input, ref FasterKVHVI<TPKey>.Context context)
         {
             // Called on the secondary FasterKV
             if (session.SupportAsync) session.UnsafeResumeThread();

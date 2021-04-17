@@ -52,8 +52,16 @@ namespace FASTER.core
         }
 
         /// <summary>
+        /// Check that the passed record address and version matches this RecordInfo
+        /// </summary>
+        public bool Equals(long address, int version) => this.Address == address && this.Version == version;
+
+        /// <summary>
         /// Whether this is a default instance of RecordId
         /// </summary>
         public bool IsDefault => this.Address == Constants.kInvalidAddress;
+
+        /// <inheritdoc/>
+        public override string ToString() => $"address {this.Address}, version {this.Version}";
     }
 }

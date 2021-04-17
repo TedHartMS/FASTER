@@ -8,17 +8,17 @@ using System.Threading.Tasks;
 
 namespace FASTER.indexes.HashValueIndex
 {
-    internal partial class FasterKVHVI<TPKey> : FasterKV<TPKey, long>
+    internal partial class FasterKVHVI<TPKey> : FasterKV<TPKey, RecordId>
     {
         internal FasterKVHVI(long size, LogSettings logSettings,
-            CheckpointSettings checkpointSettings = null, SerializerSettings<TPKey, long> serializerSettings = null,
+            CheckpointSettings checkpointSettings = null, SerializerSettings<TPKey, RecordId> serializerSettings = null,
             IFasterEqualityComparer<TPKey> comparer = null,
-            VariableLengthStructSettings<TPKey, long> variableLengthStructSettings = null)
+            VariableLengthStructSettings<TPKey, RecordId> variableLengthStructSettings = null)
             : base (size, logSettings, checkpointSettings, serializerSettings, comparer, variableLengthStructSettings)
         {
         }
 
-        internal AdvancedClientSession<TPKey, long, Input, Output, Context, Functions> NewSession(KeyAccessor<TPKey> keyAccessor)
+        internal AdvancedClientSession<TPKey, RecordId, Input, Output, Context, Functions> NewSession(KeyAccessor<TPKey> keyAccessor)
         {
             return this.For(new Functions(this, keyAccessor)).NewSession<Functions>(threadAffinitized: false);
         }
@@ -26,7 +26,7 @@ namespace FASTER.indexes.HashValueIndex
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal Status ContextIndexRead<TInput, TOutput, TContext, FasterSession>(ref TPKey key, ref TInput input, ref TOutput output, ref RecordInfo recordInfo, ref TContext context,
                                         FasterSession fasterSession, FasterExecutionContext<TInput, TOutput, TContext> sessionCtx)
-            where FasterSession : IFasterSession<TPKey, long, TInput, TOutput, TContext>
+            where FasterSession : IFasterSession<TPKey, RecordId, TInput, TOutput, TContext>
         {
             var pcontext = default(PendingContext<TInput, TOutput, TContext>);
             var internalStatus = this.IndexInternalRead(ref key, ref input, ref output, recordInfo.PreviousAddress, ref context, ref pcontext, fasterSession, sessionCtx, sessionCtx.serialNum);
@@ -49,10 +49,10 @@ namespace FASTER.indexes.HashValueIndex
         internal ValueTask<ReadAsyncResult<TInput, TOutput, TContext>> ContextIndexReadAsync<TInput, TOutput, TContext, FasterSession>(
                                         FasterSession fasterSession, FasterExecutionContext<TInput, TOutput, TContext> sessionCtx,
                                         ref TPKey key, ref TInput input, long startAddress, ref TContext context, long serialNo, QuerySettings querySettings)
-            where FasterSession : IFasterSession<TPKey, long, TInput, TOutput, TContext>
+            where FasterSession : IFasterSession<TPKey, RecordId, TInput, TOutput, TContext>
         {
             var pcontext = default(PendingContext<TInput, TOutput, TContext>);
-            var diskRequest = default(AsyncIOContext<TPKey, long>);
+            var diskRequest = default(AsyncIOContext<TPKey, RecordId>);
             var output = default(TOutput);
 
             fasterSession.UnsafeResumeThread();
@@ -83,11 +83,11 @@ namespace FASTER.indexes.HashValueIndex
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal Status ContextIndexInsert<Input, Output, Context, FasterSession>(ref TPKey key, long recordId, 
+        internal Status ContextIndexInsert<Input, Output, Context, FasterSession>(ref TPKey key, RecordId recordId, 
                                          ref Input input, ref Context context,
                                          FasterSession fasterSession,
                                          FasterExecutionContext<Input, Output, Context> sessionCtx)
-            where FasterSession : IFasterSession<TPKey, long, Input, Output, Context>
+            where FasterSession : IFasterSession<TPKey, RecordId, Input, Output, Context>
         {
             var pcontext = default(PendingContext<Input, Output, Context>);
             var internalStatus = this.IndexInternalInsert(ref key, recordId, ref input, ref context,

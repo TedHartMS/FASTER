@@ -13,7 +13,7 @@ namespace FASTER.indexes.HashValueIndex
 {
     // Internal function implementations for the secondary FasterKV implementing the SubsetIndex; these correspond to the similarly-named
     // functions in FasterImpl.cs.
-    internal unsafe partial class FasterKVHVI<TPKey> : FasterKV<TPKey, long>
+    internal unsafe partial class FasterKVHVI<TPKey> : FasterKV<TPKey, RecordId>
     {
         internal KeyAccessor<TPKey> KeyAccessor => (KeyAccessor<TPKey>)this.comparer;
 
@@ -28,7 +28,7 @@ namespace FASTER.indexes.HashValueIndex
                                     FasterSession fasterSession,
                                     FasterExecutionContext<TInput, TOutput, TContext> sessionCtx,
                                     long lsn)
-            where FasterSession : IFasterSession<TPKey, long, TInput, TOutput, TContext>
+            where FasterSession : IFasterSession<TPKey, RecordId, TInput, TOutput, TContext>
         {
             var bucket = default(HashBucket*);
             var slot = default(int);
@@ -268,11 +268,11 @@ namespace FASTER.indexes.HashValueIndex
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal OperationStatus IndexInternalInsert<TInput, TOutput, TContext, FasterSession>(
-                        ref TPKey inputFirstKeyPointerRefAsKeyRef, long recordId, ref TInput input, ref TContext context,
+                        ref TPKey inputFirstKeyPointerRefAsKeyRef, RecordId recordId, ref TInput input, ref TContext context,
                         ref PendingContext<TInput, TOutput, TContext> pendingContext,
                         FasterSession fasterSession,
                         FasterExecutionContext<TInput, TOutput, TContext> sessionCtx, long lsn)
-            where FasterSession : IFasterSession<TPKey, long, TInput, TOutput, TContext>
+            where FasterSession : IFasterSession<TPKey, RecordId, TInput, TOutput, TContext>
         {
             var status = default(OperationStatus);
             var latestRecordVersion = -1;

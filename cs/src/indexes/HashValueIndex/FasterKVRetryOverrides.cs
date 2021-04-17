@@ -6,7 +6,7 @@ using System.Diagnostics;
 
 namespace FASTER.indexes.HashValueIndex
 {
-    internal partial class FasterKVHVI<TPKey> : FasterKV<TPKey, long>
+    internal partial class FasterKVHVI<TPKey> : FasterKV<TPKey, RecordId>
     {
         internal override OperationStatus RetryOperationStatus<Input, Output, Context, FasterSession>(FasterExecutionContext<Input, Output, Context> currentCtx,
                                                                         ref PendingContext<Input, Output, Context> pendingContext, FasterSession fasterSession)
