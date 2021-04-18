@@ -8,16 +8,8 @@ using System.Threading.Tasks;
 
 namespace FASTER.indexes.HashValueIndex
 {
-    internal partial class FasterKVHVI<TPKey> : FasterKV<TPKey, RecordId>
+    internal partial class SecondaryFasterKV<TPKey> : FasterKV<TPKey, RecordId>
     {
-        internal FasterKVHVI(long size, LogSettings logSettings,
-            CheckpointSettings checkpointSettings = null, SerializerSettings<TPKey, RecordId> serializerSettings = null,
-            IFasterEqualityComparer<TPKey> comparer = null,
-            VariableLengthStructSettings<TPKey, RecordId> variableLengthStructSettings = null)
-            : base (size, logSettings, checkpointSettings, serializerSettings, comparer, variableLengthStructSettings)
-        {
-        }
-
         internal AdvancedClientSession<TPKey, RecordId, Input, Output, Context, Functions> NewSession(KeyAccessor<TPKey> keyAccessor) 
             => this.For(new Functions(this, keyAccessor)).NewSession<Functions>(threadAffinitized: false);
 

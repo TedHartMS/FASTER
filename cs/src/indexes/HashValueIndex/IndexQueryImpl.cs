@@ -12,25 +12,25 @@ namespace FASTER.indexes.HashValueIndex
         // TODO: compare to NullIndicator using IEquatable (hold a value indicating the key type supports that)
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private unsafe FasterKVHVI<TPKey>.Input MakeQueryInput(int predOrdinal, ref TPKey key)
+        private unsafe SecondaryFasterKV<TPKey>.Input MakeQueryInput(int predOrdinal, ref TPKey key)
         {
             // Putting the query key in Input is necessary because iterator functions cannot contain unsafe code or have
             // byref args, and bufferPool is needed here because the stack goes away as part of the iterator operation.
-            var input = new FasterKVHVI<TPKey>.Input(predOrdinal);
+            var input = new SecondaryFasterKV<TPKey>.Input(predOrdinal);
             input.SetQueryKey(this.bufferPool, this.keyAccessor, ref key);
             return input;
         }
 
-        private IEnumerable<RecordId> Query(AdvancedClientSession<TPKey, RecordId, FasterKVHVI<TPKey>.Input, FasterKVHVI<TPKey>.Output, FasterKVHVI<TPKey>.Context, FasterKVHVI<TPKey>.Functions> session,
-                FasterKVHVI<TPKey>.Input input, QuerySettings querySettings)
+        private IEnumerable<RecordId> Query(AdvancedClientSession<TPKey, RecordId, SecondaryFasterKV<TPKey>.Input, SecondaryFasterKV<TPKey>.Output, SecondaryFasterKV<TPKey>.Context, SecondaryFasterKV<TPKey>.Functions> session,
+                SecondaryFasterKV<TPKey>.Input input, QuerySettings querySettings)
         {
-            var context = new FasterKVHVI<TPKey>.Context { Functions = session.functions };
+            var context = new SecondaryFasterKV<TPKey>.Context { Functions = session.functions };
             RecordInfo recordInfo = default;
             try
             {
                 do
                 {
-                    var output = new FasterKVHVI<TPKey>.Output();
+                    var output = new SecondaryFasterKV<TPKey>.Output();
                     Status status = session.IndexRead(this.secondaryFkv, ref input.QueryKeyRef, ref input, ref output, ref recordInfo, ref context);
                     if (querySettings.IsCanceled)
                         yield break;
@@ -67,14 +67,14 @@ namespace FASTER.indexes.HashValueIndex
             }
         }
 
-        internal unsafe IAsyncEnumerable<RecordId> QueryAsync(AdvancedClientSession<TPKey, RecordId, FasterKVHVI<TPKey>.Input, FasterKVHVI<TPKey>.Output, FasterKVHVI<TPKey>.Context, FasterKVHVI<TPKey>.Functions> session,
+        internal unsafe IAsyncEnumerable<RecordId> QueryAsync(AdvancedClientSession<TPKey, RecordId, SecondaryFasterKV<TPKey>.Input, SecondaryFasterKV<TPKey>.Output, SecondaryFasterKV<TPKey>.Context, SecondaryFasterKV<TPKey>.Functions> session,
                 int predOrdinal, ref TPKey key, QuerySettings querySettings)
             => QueryAsync(session, MakeQueryInput(predOrdinal, ref key), querySettings);
 
-        private async IAsyncEnumerable<RecordId> QueryAsync(AdvancedClientSession<TPKey, RecordId, FasterKVHVI<TPKey>.Input, FasterKVHVI<TPKey>.Output, FasterKVHVI<TPKey>.Context, FasterKVHVI<TPKey>.Functions> session,
-                FasterKVHVI<TPKey>.Input input, QuerySettings querySettings)
+        private async IAsyncEnumerable<RecordId> QueryAsync(AdvancedClientSession<TPKey, RecordId, SecondaryFasterKV<TPKey>.Input, SecondaryFasterKV<TPKey>.Output, SecondaryFasterKV<TPKey>.Context, SecondaryFasterKV<TPKey>.Functions> session,
+                SecondaryFasterKV<TPKey>.Input input, QuerySettings querySettings)
         {
-            var context = new FasterKVHVI<TPKey>.Context { Functions = session.functions };
+            var context = new SecondaryFasterKV<TPKey>.Context { Functions = session.functions };
             RecordInfo recordInfo = default;
             try
             {

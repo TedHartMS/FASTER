@@ -6,7 +6,7 @@ using System.Diagnostics;
 
 namespace FASTER.indexes.HashValueIndex
 {
-    internal partial class FasterKVHVI<TPKey> : FasterKV<TPKey, RecordId>
+    internal partial class SecondaryFasterKV<TPKey> : FasterKV<TPKey, RecordId>
     {
         internal override OperationStatus RetryOperationStatus<TInput, TOutput, TContext, FasterSession>(FasterExecutionContext<TInput, TOutput, TContext> currentCtx,
                                                                         ref PendingContext<TInput, TOutput, TContext> pendingContext, FasterSession fasterSession)
@@ -32,7 +32,7 @@ namespace FASTER.indexes.HashValueIndex
                     Debug.Assert(internalStatus != OperationStatus.RETRY_LATER, "Insertion should not go pending");
                     break;
                 default:
-                    throw new InternalErrorExceptionHVI($"Should not be retrying operation {pendingContext.type}");
+                    throw new HashValueIndexInternalErrorException($"Should not be retrying operation {pendingContext.type}");
             };
 
             return internalStatus;

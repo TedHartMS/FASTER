@@ -5,7 +5,7 @@ using FASTER.core;
 
 namespace FASTER.indexes.HashValueIndex
 {
-    internal partial class FasterKVHVI<TPKey> : FasterKV<TPKey, RecordId>
+    internal partial class SecondaryFasterKV<TPKey> : FasterKV<TPKey, RecordId>
     {
         /// <summary>
         /// Context for operations on the secondary FasterKV instance.

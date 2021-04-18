@@ -77,10 +77,10 @@ namespace FASTER.indexes.HashValueIndex
         internal class UnusedKeyComparer : IFasterEqualityComparer<TPKey>
         {
             public long GetHashCode64(ref TPKey cKey)
-                => throw new InternalErrorExceptionHVI("Must use KeyAccessor instead (predOrdinal is required)");
+                => throw new HashValueIndexInternalErrorException("Must use KeyAccessor instead (predOrdinal is required)");
 
             public bool Equals(ref TPKey cKey1, ref TPKey cKey2)
-                => throw new InternalErrorExceptionHVI("Must use KeyAccessor instead (predOrdinal is required)");
+                => throw new HashValueIndexInternalErrorException("Must use KeyAccessor instead (predOrdinal is required)");
         }
     }
 }

@@ -13,23 +13,7 @@ namespace FASTER.indexes.HashValueIndex
         private readonly int keyPointerSize = Utility.GetSize(default(KeyPointer<TPKey>));
         private readonly int recordIdSize = Utility.GetSize(default(RecordId));
 
-        void CreateSecondaryFkv()
-        {
-            this.secondaryFkv = new FasterKVHVI<TPKey>(
-                    this.RegistrationSettings.HashTableSize, this.RegistrationSettings.LogSettings, this.RegistrationSettings.CheckpointSettings, null /*SerializerSettings*/,
-                    this.keyAccessor,
-                    new VariableLengthStructSettings<TPKey, RecordId>
-                    {
-                        keyLength = new CompositeKey<TPKey>.VarLenLength(this.keyPointerSize, this.PredicateCount)
-                    }
-                );
-
-            // Now we have the log to use.
-            this.keyAccessor.SetLog(this.secondaryFkv.hlog);
-            this.bufferPool = this.secondaryFkv.hlog.bufferPool;
-        }
-
-        private unsafe Status ExecuteAndStore(AdvancedClientSession<TPKey, RecordId, FasterKVHVI<TPKey>.Input, FasterKVHVI<TPKey>.Output, FasterKVHVI<TPKey>.Context, FasterKVHVI<TPKey>.Functions> session,
+        private unsafe Status ExecuteAndStore(AdvancedClientSession<TPKey, RecordId, SecondaryFasterKV<TPKey>.Input, SecondaryFasterKV<TPKey>.Output, SecondaryFasterKV<TPKey>.Context, SecondaryFasterKV<TPKey>.Functions> session,
                 ref TKVValue kvValue, RecordId recordId)
         {
             // Note: stackalloc is safe because it's copied to a HeapContainer in PendingContext if the operation goes pending.
@@ -59,9 +43,9 @@ namespace FASTER.indexes.HashValueIndex
                 return Status.OK;
 
             ref CompositeKey<TPKey> compositeKey = ref Unsafe.AsRef<CompositeKey<TPKey>>(keyBytes);
-            var input = new FasterKVHVI<TPKey>.Input(0);
+            var input = new SecondaryFasterKV<TPKey>.Input(0);
             var value = recordId;
-            var context = new FasterKVHVI<TPKey>.Context { Functions = session.functions };
+            var context = new SecondaryFasterKV<TPKey>.Context { Functions = session.functions };
             return session.IndexInsert(this.secondaryFkv, ref compositeKey.CastToFirstKeyPointerRefAsKeyRef(), value, ref input, ref context);
         }
     }

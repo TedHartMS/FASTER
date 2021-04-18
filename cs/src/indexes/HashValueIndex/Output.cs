@@ -5,7 +5,7 @@ using FASTER.core;
 
 namespace FASTER.indexes.HashValueIndex
 {
-    internal unsafe partial class FasterKVHVI<TPKey> : FasterKV<TPKey, RecordId>
+    internal unsafe partial class SecondaryFasterKV<TPKey> : FasterKV<TPKey, RecordId>
     {
         /// <summary>
         /// Output from Reads on the secondary FasterKV instance (stores Predicate key chains).

@@ -7,14 +7,14 @@ using System.Runtime.CompilerServices;
 
 namespace FASTER.indexes.HashValueIndex
 {
-    internal unsafe partial class FasterKVHVI<TPKey> : FasterKV<TPKey, RecordId>
+    internal unsafe partial class SecondaryFasterKV<TPKey> : FasterKV<TPKey, RecordId>
     {
         internal class Functions : IAdvancedFunctions<TPKey, RecordId, Input, Output, Context>, IInputAccessor<Input>
         {
-            readonly FasterKVHVI<TPKey> fkv;
+            readonly SecondaryFasterKV<TPKey> fkv;
             readonly KeyAccessor<TPKey> keyAccessor;
 
-            internal Functions(FasterKVHVI<TPKey> fkv, KeyAccessor<TPKey> keyAcc)
+            internal Functions(SecondaryFasterKV<TPKey> fkv, KeyAccessor<TPKey> keyAcc)
             {
                 this.fkv = fkv;
                 this.keyAccessor = keyAcc;
@@ -28,16 +28,6 @@ namespace FASTER.indexes.HashValueIndex
             #endregion IInputAccessor
 
             #region IFunctions implementation
-
-            private const string NotUsedForHVI = "HashValueIndex-implementing FasterKVs should not use this IFunctions method";
-
-            #region Upserts
-            public bool ConcurrentWriter(ref TPKey _, ref RecordId src, ref RecordId dst, ref RecordInfo recordInfo, long logicalAddress) => throw new InternalErrorExceptionHVI(NotUsedForHVI);
-
-            public void SingleWriter(ref TPKey _, ref RecordId src, ref RecordId dst) => throw new InternalErrorExceptionHVI(NotUsedForHVI);
-
-            public void UpsertCompletionCallback(ref TPKey _, ref RecordId value, Context ctx) => throw new InternalErrorExceptionHVI(NotUsedForHVI);
-            #endregion Upserts
 
             #region Reads
             public void ConcurrentReader(ref TPKey queryKeyPointerRefAsKeyRef, ref Input input, ref RecordId value, ref Output output, ref RecordInfo recordInfo, long logicalAddress)
@@ -97,25 +87,36 @@ namespace FASTER.indexes.HashValueIndex
             public void ReadCompletionCallback(ref TPKey _, ref Input input, ref Output output, Context ctx, Status status, RecordInfo recordInfo) { }
             #endregion Reads
 
+#if DEBUG
+            private const string NotUsedForHashValueIndex = "HashValueIndex SecondaryFasterKVs should not use this IFunctions method";
+
+            #region Upserts
+            public bool ConcurrentWriter(ref TPKey _, ref RecordId src, ref RecordId dst, ref RecordInfo recordInfo, long logicalAddress) => throw new HashValueIndexInternalErrorException(NotUsedForHashValueIndex);
+
+            public void SingleWriter(ref TPKey _, ref RecordId src, ref RecordId dst) => throw new HashValueIndexInternalErrorException(NotUsedForHashValueIndex);
+
+            public void UpsertCompletionCallback(ref TPKey _, ref RecordId value, Context ctx) => throw new HashValueIndexInternalErrorException(NotUsedForHashValueIndex);
+            #endregion Upserts
+
             #region RMWs
             public bool NeedCopyUpdate(ref TPKey _, ref Input input, ref RecordId value)
-                => throw new InternalErrorExceptionHVI(NotUsedForHVI);
+                => throw new HashValueIndexInternalErrorException(NotUsedForHashValueIndex);
 
             public void CopyUpdater(ref TPKey _, ref Input input, ref RecordId oldValue, ref RecordId newValue)
-                => throw new InternalErrorExceptionHVI(NotUsedForHVI);
+                => throw new HashValueIndexInternalErrorException(NotUsedForHashValueIndex);
 
             public void InitialUpdater(ref TPKey _, ref Input input, ref RecordId value)
-                => throw new InternalErrorExceptionHVI(NotUsedForHVI);
+                => throw new HashValueIndexInternalErrorException(NotUsedForHashValueIndex);
 
             public bool InPlaceUpdater(ref TPKey _, ref Input input, ref RecordId value, ref RecordInfo recordInfo, long logicalAddress)
-                => throw new InternalErrorExceptionHVI(NotUsedForHVI);
+                => throw new HashValueIndexInternalErrorException(NotUsedForHashValueIndex);
 
             public void RMWCompletionCallback(ref TPKey _, ref Input input, Context ctx, Status status)
-                => throw new InternalErrorExceptionHVI(NotUsedForHVI);
-#endregion RMWs
+                => throw new HashValueIndexInternalErrorException(NotUsedForHashValueIndex);
+            #endregion RMWs
 
             public void DeleteCompletionCallback(ref TPKey _, Context ctx)
-                => throw new InternalErrorExceptionHVI(NotUsedForHVI);
+                => throw new HashValueIndexInternalErrorException(NotUsedForHashValueIndex);
 
             public void CheckpointCompletionCallback(string sessionId, CommitPoint commitPoint) { }
 
@@ -126,6 +127,7 @@ namespace FASTER.indexes.HashValueIndex
             public void Lock(ref RecordInfo recordInfo, ref TPKey key, ref RecordId value, LockType lockType, ref long lockContext) { }
 
             public bool Unlock(ref RecordInfo recordInfo, ref TPKey key, ref RecordId value, LockType lockType, long lockContext) => true;
+#endif
             #endregion IFunctions implementation
         }
     }

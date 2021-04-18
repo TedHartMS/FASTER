@@ -36,8 +36,6 @@ namespace FASTER.indexes.HashValueIndex
         private int PredicateCount => this.predicates is { } ? this.predicates.Length : 0;
         private readonly ConcurrentDictionary<string, Guid> predicateNames = new ConcurrentDictionary<string, Guid>();
 
-        internal FasterKVHVI<TPKey> secondaryFkv;
-
         private readonly IFasterEqualityComparer<TPKey> userKeyComparer;
         private KeyAccessor<TPKey> keyAccessor;
 
@@ -103,15 +101,15 @@ namespace FASTER.indexes.HashValueIndex
         private void VerifyRegistrationSettings()
         {
             if (this.RegistrationSettings is null)
-                throw new ArgumentExceptionHVI("RegistrationSettings is required");
+                throw new HashValueIndexArgumentException("RegistrationSettings is required");
             if (this.RegistrationSettings.LogSettings is null)
-                throw new ArgumentExceptionHVI("RegistrationSettings.LogSettings is required");
+                throw new HashValueIndexArgumentException("RegistrationSettings.LogSettings is required");
             if (this.RegistrationSettings.CheckpointSettings is null)
-                throw new ArgumentExceptionHVI("RegistrationSettings.CheckpointSettings is required");
+                throw new HashValueIndexArgumentException("RegistrationSettings.CheckpointSettings is required");
 
             // TODOdcr: Support ReadCache and CopyReadsToTail for SubsetIndex
             if (this.RegistrationSettings.LogSettings.ReadCacheSettings is { } || this.RegistrationSettings.LogSettings.CopyReadsToTail != CopyReadsToTail.None)
-                throw new ArgumentExceptionHVI("SubsetIndex does not support ReadCache or CopyReadsToTail");
+                throw new HashValueIndexArgumentException("SubsetIndex does not support ReadCache or CopyReadsToTail");
         }
 
         void UpdatePredicates(Predicate<TKVKey, TKVValue, TPKey>[] newPredicates)
@@ -125,7 +123,7 @@ namespace FASTER.indexes.HashValueIndex
                 {
                     var dupSet = newPredicates.Select(p => p.Name).Aggregate(new HashSet<string>(), (set, name) => { if (this.predicateNames.ContainsKey(name)) { set.Add(name); } return set; });
                     if (dupSet.Count > 0)
-                        throw new ArgumentExceptionHVI($"Duplicate predicate name(s): {string.Join(", ", dupSet)}");
+                        throw new HashValueIndexArgumentException($"Duplicate predicate name(s): {string.Join(", ", dupSet)}");
                 }
 
                 if (this.predicates is null)
@@ -157,18 +155,18 @@ namespace FASTER.indexes.HashValueIndex
             => sessionBroker.GetSessionObject(this.sessionSlot) as Sessions ?? new Sessions(sessionBroker, this.sessionSlot, this.primaryFkv, this.secondaryFkv, this.keyAccessor);
 
         /// <inheritdoc/>
-        public void Insert(ref TKVValue value, RecordId recordId, SecondaryIndexSessionBroker sessionBroker) { /* Currently unsupported for HVI */ }
+        public void Insert(ref TKVValue value, RecordId recordId, SecondaryIndexSessionBroker sessionBroker) { /* Currently unsupported for HashValueIndex */ }
 
         /// <inheritdoc/>
         public void Upsert(ref TKVValue value, RecordId recordId, bool isMutable, SecondaryIndexSessionBroker sessionBroker)
         {
-            if (isMutable)  // Currently unsupported for HVI
+            if (isMutable)  // Currently unsupported for HashValueIndex
                 return;
             ExecuteAndStore(GetSessions(sessionBroker).SecondarySession, ref value, recordId);
         }
 
         /// <inheritdoc/>
-        public void Delete(RecordId recordId, SecondaryIndexSessionBroker sessionBroker) { /* Currently unsupported for HVI */ }
+        public void Delete(RecordId recordId, SecondaryIndexSessionBroker sessionBroker) { /* Currently unsupported for HashValueIndex */ }
 
         /// <summary>
         /// Obtains a list of registered Predicate names organized by the groups defined in previous Register calls. TODO: Replace with GetMetadata()
@@ -179,11 +177,11 @@ namespace FASTER.indexes.HashValueIndex
         private Predicate<TKVKey, TKVValue, TPKey> GetImplementingPredicate(IPredicate iPred)
         {
             if (iPred is null)
-                throw new ArgumentExceptionHVI($"The Predicate cannot be null.");
+                throw new HashValueIndexArgumentException($"The Predicate cannot be null.");
             var pred = iPred as Predicate<TKVKey, TKVValue, TPKey>;
             Guid id = default;
             if (pred is null || !this.predicateNames.TryGetValue(pred.Name, out id) || id != pred.Id)
-                throw new ArgumentExceptionHVI($"The Predicate {iPred.Name} with Id {(pred is null ? "(unavailable)" : id.ToString())} is not registered with this FasterKV.");
+                throw new HashValueIndexArgumentException($"The Predicate {iPred.Name} with Id {(pred is null ? "(unavailable)" : id.ToString())} is not registered with this FasterKV.");
             return pred;
         }
 
@@ -192,7 +190,7 @@ namespace FASTER.indexes.HashValueIndex
         internal IEnumerable<QueryRecord<TKVKey, TKVValue>> Query(IPredicate predicate, ref TPKey key, SecondaryIndexSessionBroker sessionBroker, QuerySettings querySettings)
             => Query(this.MakeQueryInput(this.GetPredicateOrdinal(predicate), ref key), sessionBroker, querySettings ?? QuerySettings.Default);
 
-        private IEnumerable<QueryRecord<TKVKey, TKVValue>> Query(FasterKVHVI<TPKey>.Input input, SecondaryIndexSessionBroker sessionBroker, QuerySettings querySettings)
+        private IEnumerable<QueryRecord<TKVKey, TKVValue>> Query(SecondaryFasterKV<TPKey>.Input input, SecondaryIndexSessionBroker sessionBroker, QuerySettings querySettings)
         {
             var sessions = GetSessions(sessionBroker);
             foreach (var recordId in Query(sessions.SecondarySession, input, querySettings))
@@ -207,7 +205,7 @@ namespace FASTER.indexes.HashValueIndex
         internal IAsyncEnumerable<QueryRecord<TKVKey, TKVValue>> QueryAsync(IPredicate predicate, ref TPKey key, SecondaryIndexSessionBroker sessionBroker, QuerySettings querySettings)
             => QueryAsync(this.MakeQueryInput(this.GetPredicateOrdinal(predicate), ref key), sessionBroker, querySettings ?? QuerySettings.Default);
 
-        private async IAsyncEnumerable<QueryRecord<TKVKey, TKVValue>> QueryAsync(FasterKVHVI<TPKey>.Input input, SecondaryIndexSessionBroker sessionBroker, QuerySettings querySettings)
+        private async IAsyncEnumerable<QueryRecord<TKVKey, TKVValue>> QueryAsync(SecondaryFasterKV<TPKey>.Input input, SecondaryIndexSessionBroker sessionBroker, QuerySettings querySettings)
         {
             var sessions = GetSessions(sessionBroker);
             await foreach (var recordId in QueryAsync(sessions.SecondarySession, input, querySettings))

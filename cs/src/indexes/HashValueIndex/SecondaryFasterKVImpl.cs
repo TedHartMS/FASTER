@@ -13,7 +13,7 @@ namespace FASTER.indexes.HashValueIndex
 {
     // Internal function implementations for the secondary FasterKV implementing the SubsetIndex; these correspond to the similarly-named
     // functions in FasterImpl.cs.
-    internal unsafe partial class FasterKVHVI<TPKey> : FasterKV<TPKey, RecordId>
+    internal unsafe partial class SecondaryFasterKV<TPKey> : FasterKV<TPKey, RecordId>
     {
         internal KeyAccessor<TPKey> KeyAccessor => (KeyAccessor<TPKey>)this.comparer;
 

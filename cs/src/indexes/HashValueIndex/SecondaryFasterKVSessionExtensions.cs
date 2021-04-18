@@ -289,7 +289,7 @@ namespace FASTER.indexes.HashValueIndex
                 throw new ArgumentNullException(nameof(predicate));
             if (predicate is Predicate<TKVKey, TKVValue, TPKey> fullPredicate)
                 return fullPredicate.Index;
-            throw new ExceptionHVI($"Predicate {predicate.Name} is not of the expected implementation type");
+            throw new HashValueIndexException($"Predicate {predicate.Name} is not of the expected implementation type");
         }
 
         private static HashValueIndex<TKVKey, TKVValue, TPKey> GetIndex<TKVKey, TKVValue, TPKey>((IPredicate predicate, TPKey queryKey)[] queryPredicates)
@@ -327,9 +327,9 @@ namespace FASTER.indexes.HashValueIndex
 
         #region Internal Context operations
 
-        internal static Status IndexRead<TPKey>(this AdvancedClientSession<TPKey, RecordId, FasterKVHVI<TPKey>.Input, FasterKVHVI<TPKey>.Output, FasterKVHVI<TPKey>.Context, FasterKVHVI<TPKey>.Functions> session,
-                                                FasterKVHVI<TPKey> fkv, ref TPKey key,
-                                                ref FasterKVHVI<TPKey>.Input input, ref FasterKVHVI<TPKey>.Output output, ref RecordInfo recordInfo, ref FasterKVHVI<TPKey>.Context context)
+        internal static Status IndexRead<TPKey>(this AdvancedClientSession<TPKey, RecordId, SecondaryFasterKV<TPKey>.Input, SecondaryFasterKV<TPKey>.Output, SecondaryFasterKV<TPKey>.Context, SecondaryFasterKV<TPKey>.Functions> session,
+                                                SecondaryFasterKV<TPKey> fkv, ref TPKey key,
+                                                ref SecondaryFasterKV<TPKey>.Input input, ref SecondaryFasterKV<TPKey>.Output output, ref RecordInfo recordInfo, ref SecondaryFasterKV<TPKey>.Context context)
         {
             if (session.SupportAsync) session.UnsafeResumeThread();
             try
@@ -342,17 +342,17 @@ namespace FASTER.indexes.HashValueIndex
             }
         }
 
-        internal static ValueTask<FasterKVHVI<TPKey>.ReadAsyncResult<FasterKVHVI<TPKey>.Input, FasterKVHVI<TPKey>.Output, FasterKVHVI<TPKey>.Context>> IndexReadAsync<TPKey>(
-                                    this AdvancedClientSession<TPKey, RecordId, FasterKVHVI<TPKey>.Input, FasterKVHVI<TPKey>.Output, FasterKVHVI<TPKey>.Context, FasterKVHVI<TPKey>.Functions> session,
-                                    FasterKVHVI<TPKey> fkv, ref TPKey key, ref FasterKVHVI<TPKey>.Input input, long startAddress,
-                                    ref FasterKVHVI<TPKey>.Context context, long serialNo, QuerySettings querySettings)
+        internal static ValueTask<SecondaryFasterKV<TPKey>.ReadAsyncResult<SecondaryFasterKV<TPKey>.Input, SecondaryFasterKV<TPKey>.Output, SecondaryFasterKV<TPKey>.Context>> IndexReadAsync<TPKey>(
+                                    this AdvancedClientSession<TPKey, RecordId, SecondaryFasterKV<TPKey>.Input, SecondaryFasterKV<TPKey>.Output, SecondaryFasterKV<TPKey>.Context, SecondaryFasterKV<TPKey>.Functions> session,
+                                    SecondaryFasterKV<TPKey> fkv, ref TPKey key, ref SecondaryFasterKV<TPKey>.Input input, long startAddress,
+                                    ref SecondaryFasterKV<TPKey>.Context context, long serialNo, QuerySettings querySettings)
         {
             return fkv.ContextIndexReadAsync(session.FasterSession, session.ctx, ref key, ref input, startAddress, ref context, serialNo, querySettings);
         }
 
-        internal static Status IndexInsert<TPKey>(this AdvancedClientSession<TPKey, RecordId, FasterKVHVI<TPKey>.Input, FasterKVHVI<TPKey>.Output, FasterKVHVI<TPKey>.Context, FasterKVHVI<TPKey>.Functions> session,
-                                    FasterKVHVI<TPKey> fkv,
-                                    ref TPKey key, RecordId recordId, ref FasterKVHVI<TPKey>.Input input, ref FasterKVHVI<TPKey>.Context context)
+        internal static Status IndexInsert<TPKey>(this AdvancedClientSession<TPKey, RecordId, SecondaryFasterKV<TPKey>.Input, SecondaryFasterKV<TPKey>.Output, SecondaryFasterKV<TPKey>.Context, SecondaryFasterKV<TPKey>.Functions> session,
+                                    SecondaryFasterKV<TPKey> fkv,
+                                    ref TPKey key, RecordId recordId, ref SecondaryFasterKV<TPKey>.Input input, ref SecondaryFasterKV<TPKey>.Context context)
         {
             // Called on the secondary FasterKV
             if (session.SupportAsync) session.UnsafeResumeThread();

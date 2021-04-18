@@ -10,13 +10,13 @@ namespace FASTER.indexes.HashValueIndex
         class Sessions
         {
             private readonly FasterKV<TKVKey, TKVValue> primaryFkv;
-            private readonly FasterKVHVI<TPKey> secondaryFkv;
+            private readonly SecondaryFasterKV<TPKey> secondaryFkv;
             private readonly KeyAccessor<TPKey> keyAccessor;
 
             private AdvancedClientSession<TKVKey, TKVValue, PrimaryInput, PrimaryOutput, Empty, PrimaryFunctions> primarySession;
-            private AdvancedClientSession<TPKey, RecordId, FasterKVHVI<TPKey>.Input, FasterKVHVI<TPKey>.Output, FasterKVHVI<TPKey>.Context, FasterKVHVI<TPKey>.Functions> secondarySession;
+            private AdvancedClientSession<TPKey, RecordId, SecondaryFasterKV<TPKey>.Input, SecondaryFasterKV<TPKey>.Output, SecondaryFasterKV<TPKey>.Context, SecondaryFasterKV<TPKey>.Functions> secondarySession;
 
-            internal Sessions (SecondaryIndexSessionBroker sessionBroker, long slot, FasterKV<TKVKey, TKVValue> primaryFkv, FasterKVHVI<TPKey> secondaryFkv, KeyAccessor<TPKey> keyAccessor)
+            internal Sessions (SecondaryIndexSessionBroker sessionBroker, long slot, FasterKV<TKVKey, TKVValue> primaryFkv, SecondaryFasterKV<TPKey> secondaryFkv, KeyAccessor<TPKey> keyAccessor)
             {
                 this.primaryFkv = primaryFkv;
                 this.secondaryFkv = secondaryFkv;
@@ -27,7 +27,7 @@ namespace FASTER.indexes.HashValueIndex
             internal AdvancedClientSession<TKVKey, TKVValue, PrimaryInput, PrimaryOutput, Empty, PrimaryFunctions> PrimarySession
                 => this.primarySession ??= this.primaryFkv.For(new PrimaryFunctions()).NewSession<PrimaryFunctions>(threadAffinitized: false);
 
-            internal AdvancedClientSession<TPKey, RecordId, FasterKVHVI<TPKey>.Input, FasterKVHVI<TPKey>.Output, FasterKVHVI<TPKey>.Context, FasterKVHVI<TPKey>.Functions> SecondarySession
+            internal AdvancedClientSession<TPKey, RecordId, SecondaryFasterKV<TPKey>.Input, SecondaryFasterKV<TPKey>.Output, SecondaryFasterKV<TPKey>.Context, SecondaryFasterKV<TPKey>.Functions> SecondarySession
                 => this.secondarySession ??= this.secondaryFkv.NewSession(this.keyAccessor);
         }
     }
