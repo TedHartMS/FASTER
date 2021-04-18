@@ -3,7 +3,7 @@
 
 using System;
 
-namespace FASTER.core.SecondaryIndex
+namespace FASTER.core
 {
     /// <summary>
     /// The wrapper around the provider data stored in the primary faster instance.
@@ -28,12 +28,12 @@ namespace FASTER.core.SecondaryIndex
         /// <summary>
         /// A reference to the record key
         /// </summary>
-        public ref TKVKey Key => ref this.keyContainer.Get();
+        public ref TKVKey KeyRef => ref this.keyContainer.Get();
 
         /// <summary>
         /// A reference to the record value
         /// </summary>
-        public ref TKVValue Value => ref this.valueContainer.Get();
+        public ref TKVValue ValueRef => ref this.valueContainer.Get();
 
         /// <summary>
         /// The ID of the record with this key and value; useful for post-query processing across multiple indexes.
