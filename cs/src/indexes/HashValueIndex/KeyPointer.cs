@@ -55,7 +55,7 @@ namespace FASTER.indexes.HashValueIndex
         // If Key size is > 4, then reinterpret the Key as an offset to the actual key. (TODOperf not implemented)
         private const byte kIsOutOfLineKeyBit = 0x04;
 
-        // For Update, the TPKey has changed; remove this record from the previous TPKey chain.
+        // For Update, the TPKey has changed; remove this record from the previous TPKey chain. TODO remove update flags if unused
         private const byte kUnlinkOldBit = 0x08;
 
         // For Update and insert, the TPKey has changed; add this record to the new TPKey chain.

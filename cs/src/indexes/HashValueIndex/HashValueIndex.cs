@@ -153,11 +153,8 @@ namespace FASTER.indexes.HashValueIndex
         /// </summary>
         public IPredicate GetPredicate(string name) => this.predicates.First(pred => pred.Name == name);
 
-        private Sessions GetSessions(SecondaryIndexSessionBroker sessionBroker)
-        {
-            var sessions = sessionBroker.GetSessionObject(this.sessionSlot) as Sessions;
-            return sessions ?? Sessions.CreateNew(sessionBroker, this.sessionSlot, this.primaryFkv, this.secondaryFkv, this.keyAccessor);
-        }
+        private Sessions GetSessions(SecondaryIndexSessionBroker sessionBroker) 
+            => sessionBroker.GetSessionObject(this.sessionSlot) as Sessions ?? new Sessions(sessionBroker, this.sessionSlot, this.primaryFkv, this.secondaryFkv, this.keyAccessor);
 
         /// <inheritdoc/>
         public void Insert(ref TKVValue value, RecordId recordId, SecondaryIndexSessionBroker sessionBroker) { /* Currently unsupported for HVI */ }

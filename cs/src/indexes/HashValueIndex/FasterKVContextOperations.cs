@@ -18,10 +18,8 @@ namespace FASTER.indexes.HashValueIndex
         {
         }
 
-        internal AdvancedClientSession<TPKey, RecordId, Input, Output, Context, Functions> NewSession(KeyAccessor<TPKey> keyAccessor)
-        {
-            return this.For(new Functions(this, keyAccessor)).NewSession<Functions>(threadAffinitized: false);
-        }
+        internal AdvancedClientSession<TPKey, RecordId, Input, Output, Context, Functions> NewSession(KeyAccessor<TPKey> keyAccessor) 
+            => this.For(new Functions(this, keyAccessor)).NewSession<Functions>(threadAffinitized: false);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal Status ContextIndexRead<TInput, TOutput, TContext, FasterSession>(ref TPKey key, ref TInput input, ref TOutput output, ref RecordInfo recordInfo, ref TContext context,

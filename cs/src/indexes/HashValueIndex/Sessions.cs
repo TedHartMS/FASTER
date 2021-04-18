@@ -9,19 +9,26 @@ namespace FASTER.indexes.HashValueIndex
     {
         class Sessions
         {
-            internal AdvancedClientSession<TKVKey, TKVValue, PrimaryInput, PrimaryOutput, Empty, PrimaryFunctions> PrimarySession;
-            internal AdvancedClientSession<TPKey, RecordId, FasterKVHVI<TPKey>.Input, FasterKVHVI<TPKey>.Output, FasterKVHVI<TPKey>.Context, FasterKVHVI<TPKey>.Functions> SecondarySession;
+            private readonly FasterKV<TKVKey, TKVValue> primaryFkv;
+            private readonly FasterKVHVI<TPKey> secondaryFkv;
+            private readonly KeyAccessor<TPKey> keyAccessor;
 
-            internal static Sessions CreateNew(SecondaryIndexSessionBroker sessionBroker, long slot, FasterKV<TKVKey, TKVValue> primaryFkv, FasterKVHVI<TPKey> secondaryFkv, KeyAccessor<TPKey> keyAccessor)
+            private AdvancedClientSession<TKVKey, TKVValue, PrimaryInput, PrimaryOutput, Empty, PrimaryFunctions> primarySession;
+            private AdvancedClientSession<TPKey, RecordId, FasterKVHVI<TPKey>.Input, FasterKVHVI<TPKey>.Output, FasterKVHVI<TPKey>.Context, FasterKVHVI<TPKey>.Functions> secondarySession;
+
+            internal Sessions (SecondaryIndexSessionBroker sessionBroker, long slot, FasterKV<TKVKey, TKVValue> primaryFkv, FasterKVHVI<TPKey> secondaryFkv, KeyAccessor<TPKey> keyAccessor)
             {
-                var sessions = new Sessions
-                {
-                    PrimarySession = primaryFkv.For(new PrimaryFunctions()).NewSession<PrimaryFunctions>(threadAffinitized: false),
-                    SecondarySession = secondaryFkv.NewSession(keyAccessor)
-                };
-                sessionBroker.SetSessionObject(slot, sessions);
-                return sessions;
+                this.primaryFkv = primaryFkv;
+                this.secondaryFkv = secondaryFkv;
+                this.keyAccessor = keyAccessor;
+                sessionBroker.SetSessionObject(slot, this);
             }
+
+            internal AdvancedClientSession<TKVKey, TKVValue, PrimaryInput, PrimaryOutput, Empty, PrimaryFunctions> PrimarySession
+                => this.primarySession ??= this.primaryFkv.For(new PrimaryFunctions()).NewSession<PrimaryFunctions>(threadAffinitized: false);
+
+            internal AdvancedClientSession<TPKey, RecordId, FasterKVHVI<TPKey>.Input, FasterKVHVI<TPKey>.Output, FasterKVHVI<TPKey>.Context, FasterKVHVI<TPKey>.Functions> SecondarySession
+                => this.secondarySession ??= this.secondaryFkv.NewSession(this.keyAccessor);
         }
     }
 }

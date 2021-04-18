@@ -8,8 +8,8 @@ namespace FASTER.indexes.HashValueIndex
 {
     internal partial class FasterKVHVI<TPKey> : FasterKV<TPKey, RecordId>
     {
-        internal override OperationStatus RetryOperationStatus<Input, Output, Context, FasterSession>(FasterExecutionContext<Input, Output, Context> currentCtx,
-                                                                        ref PendingContext<Input, Output, Context> pendingContext, FasterSession fasterSession)
+        internal override OperationStatus RetryOperationStatus<TInput, TOutput, TContext, FasterSession>(FasterExecutionContext<TInput, TOutput, TContext> currentCtx,
+                                                                        ref PendingContext<TInput, TOutput, TContext> pendingContext, FasterSession fasterSession)
         {
             OperationStatus internalStatus;
             switch (pendingContext.type)
