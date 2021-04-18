@@ -39,7 +39,16 @@ namespace FASTER.indexes.HashValueIndex
                         // Because we traverse the chain, we must wait for any pending read operations to complete.
                         session.CompletePendingWithOutputs(out var completedOutputs, wait: true);
                         if (completedOutputs.Next())
-                            status = output.PendingResultStatus;
+                        {
+                            // The local function avoids CS8176: Iterators cannot have by-reference locals
+                            void setOutput()
+                            {
+                                ref var completedOutput = ref completedOutputs.Current;
+                                status = completedOutput.Status;
+                                output = completedOutput.Output;
+                            }
+                            setOutput();
+                        }
                         completedOutputs.Dispose();
                     }
 

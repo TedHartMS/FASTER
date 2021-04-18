@@ -52,16 +52,10 @@ namespace FASTER.indexes.HashValueIndex
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void Dispose()
             {
-                if (this.keyContainer is { })
-                {
-                    this.keyContainer.Dispose();
-                    this.keyContainer = null;
-                }
-                if (this.valueContainer is { })
-                {
-                    this.valueContainer.Dispose();
-                    this.valueContainer = null;
-                }
+                this.keyContainer?.Dispose();
+                this.keyContainer = null;
+                this.valueContainer?.Dispose();
+                this.valueContainer = null;
             }
         }
 
@@ -100,25 +94,26 @@ namespace FASTER.indexes.HashValueIndex
                 // the liveness loop, and if the record is live, we'll return the key and value this call obtains.
                 var input = new PrimaryInput { hlog = this.primaryFkv.hlog };
 
-                void GetPendingStatus(ref Status status)
+                void GetPendingOutput(ref Status status)
                 {
                     session.CompletePendingWithOutputs(out var completedOutputs, wait: true);
                     if (completedOutputs.Next())
                     {
-                        status = completedOutputs.Current.Status;
-                        output.Set(ref completedOutputs.Current.Output);
-                        recordInfo = completedOutputs.Current.RecordInfo;
+                        ref var completedOutput = ref completedOutputs.Current;
+                        status = completedOutput.Status;
+                        output.Set(ref completedOutput.Output);
+                        recordInfo = completedOutput.RecordInfo;
                     }
                     completedOutputs.Dispose();
                 }
 
                 Status status = session.ReadAtAddress(recordId.Address, ref input, ref output, ReadFlags.SkipReadCache);
                 if (status == Status.PENDING)
-                    GetPendingStatus(ref status);
+                    GetPendingOutput(ref status);
                 if (status != Status.OK)
                     return false;
 
-                // Now prepare to confirm liveness: Look up the key and see if the address matches (it must be the highest non-readCache address for the key).
+                // Now prepare to confirm liveness: Look up the key and see if the address (it must be the highest non-readCache address for the key) and version match.
                 // Setting input.hlog to null switches Concurrent/SingleReader mode from "get the key and value at this address" to "traverse the liveness chain".
                 input.hlog = null;
 
@@ -127,13 +122,13 @@ namespace FASTER.indexes.HashValueIndex
                     recordInfo = default;
                     status = session.Read(ref output.GetKey(), ref input, ref output, ref recordInfo, ReadFlags.SkipReadCache);
                     if (status == Status.PENDING)
-                        GetPendingStatus(ref status);
+                        GetPendingOutput(ref status);
 
                     if (status != Status.OK || !recordId.Equals(output.currentAddress, recordInfo.Version))
                         return false;
 
                     output.DetachHeapContainers(out IHeapContainer<TKVKey> keyContainer, out IHeapContainer<TKVValue> valueContainer);
-                    record = new QueryRecord<TKVKey, TKVValue>(keyContainer, valueContainer);
+                    record = new QueryRecord<TKVKey, TKVValue>(keyContainer, valueContainer, recordId);
                     return true;
                 }
             }
@@ -178,7 +173,7 @@ namespace FASTER.indexes.HashValueIndex
                         return default;
 
                     initialOutput.DetachHeapContainers(out IHeapContainer<TKVKey> keyContainer, out IHeapContainer<TKVValue> valueContainer);
-                    return new QueryRecord<TKVKey, TKVValue>(keyContainer, valueContainer);
+                    return new QueryRecord<TKVKey, TKVValue>(keyContainer, valueContainer, recordId);
                 }
             }
             finally

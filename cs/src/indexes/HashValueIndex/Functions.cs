@@ -94,10 +94,7 @@ namespace FASTER.indexes.HashValueIndex
                 Debug.Assert(input.PredicateOrdinal == storedKeyPointer.PredicateOrdinal, "Mismatched input and stored Predicate ordinal");
             }
 
-            public void ReadCompletionCallback(ref TPKey _, ref Input input, ref Output output, Context ctx, Status status, RecordInfo recordInfo)
-            {
-                output.PendingResultStatus = status;
-            }
+            public void ReadCompletionCallback(ref TPKey _, ref Input input, ref Output output, Context ctx, Status status, RecordInfo recordInfo) { }
             #endregion Reads
 
             #region RMWs

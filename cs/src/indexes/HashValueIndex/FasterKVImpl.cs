@@ -243,7 +243,7 @@ namespace FASTER.indexes.HashValueIndex
         // composite key (KeyPointerSize * PredicateCount), but the query key has only one KeyPointer.
         private class QueryKeyContainer : IHeapContainer<TPKey>
         {
-            private readonly SectorAlignedMemory mem;
+            private SectorAlignedMemory mem;
 
             public unsafe QueryKeyContainer(ref TPKey key, KeyAccessor<TPKey> keyAccessor, SectorAlignedBufferPool pool)
             {
@@ -254,7 +254,11 @@ namespace FASTER.indexes.HashValueIndex
 
             public unsafe ref TPKey Get() => ref Unsafe.AsRef<TPKey>(this.mem.GetValidPointer());
 
-            public void Dispose() => this.mem.Return();
+            public void Dispose()
+            {
+                this.mem?.Return();
+                this.mem = null;
+            }
         }
 
         unsafe struct CASHelper

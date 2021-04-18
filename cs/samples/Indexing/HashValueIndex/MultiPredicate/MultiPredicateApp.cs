@@ -3,6 +3,7 @@
 
 using System;
 using System.Linq;
+using FASTER.core;
 using FASTER.indexes.HashValueIndex;
 using HashValueIndexSampleCommon;
 

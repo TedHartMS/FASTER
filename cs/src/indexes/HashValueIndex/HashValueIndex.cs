@@ -254,5 +254,17 @@ namespace FASTER.indexes.HashValueIndex
             return null;
 #endif
         }
+
+        /// <summary>
+        /// Flush data in the secondary FasterKV.
+        /// </summary>
+        /// <param name="wait"></param>
+        public void Flush(bool wait) => this.secondaryFkv.Log.Flush(wait);
+
+        /// <summary>
+        /// Flush data in the secondary FasterKV and evict from memory.
+        /// </summary>
+        /// <param name="wait"></param>
+        public void FlushAndEvict(bool wait) => this.secondaryFkv.Log.FlushAndEvict(wait);
     }
 }

@@ -1662,7 +1662,7 @@ namespace FASTER.core
             if (status == OperationStatus.CPR_SHIFT_DETECTED || ((asyncOp || RelaxedCPR) && status == OperationStatus.RETRY_LATER))
             {
 #region Retry as (v+1) Operation
-                var internalStatus = default(OperationStatus);
+                OperationStatus internalStatus;
                 do
                 {
                     internalStatus = RetryOperationStatus(currentCtx, ref pendingContext, fasterSession);

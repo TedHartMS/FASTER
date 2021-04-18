@@ -3,6 +3,7 @@
 
 using System;
 using System.Linq;
+using FASTER.core;
 using FASTER.indexes.HashValueIndex;
 using HashValueIndexSampleCommon;
 
@@ -17,6 +18,7 @@ namespace BasicPredicateSample
             store = new Store();
             store.RunInitialInserts();
             store.FlushAndEvict();
+            store.index.FlushAndEvict(wait: true);
 
             QueryPredicate();
             Console.WriteLine("Press <enter> to exit");

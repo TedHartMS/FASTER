@@ -18,10 +18,7 @@ namespace FASTER.indexes.HashValueIndex
 
             internal bool IsDeleted;
 
-            // Used only for ReadCompletionCallback.
-            internal Status PendingResultStatus;
-
-            public override string ToString() => $"rId ({this.RecordId}), prevAddr {this.PreviousAddress}";
+            public override string ToString() => $"rId ({this.RecordId}), prevAddr {this.PreviousAddress}, isDel {this.IsDeleted}";
         }
     }
 }

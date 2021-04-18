@@ -79,9 +79,9 @@ namespace HashValueIndexSampleCommon
 
             foreach (var cat in catsOfAge)
             {
-                var value = cat.GetValue();
+                var value = cat.ValueRef;
                 value.Age += 10;
-                var status = session.RMW(ref cat.GetKey(), ref value);
+                var status = session.RMW(ref cat.KeyRef, ref value);
                 if (status == Status.PENDING)
                     ++statusPending;
             }
