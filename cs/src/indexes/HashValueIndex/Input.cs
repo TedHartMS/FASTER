@@ -20,50 +20,60 @@ namespace FASTER.indexes.HashValueIndex
         /// </summary>
         internal unsafe struct Input : IDisposable
         {
-            private SectorAlignedMemory keyPointerMem;
+            internal SectorAlignedMemory keyPointerMem;
 
-            internal Input(int predOrdinal)
+            internal Input(SectorAlignedBufferPool pool, KeyAccessor<TPKey> keyAccessor, ref TPKey key, int predOrdinal)
             {
-                this.keyPointerMem = null;
-                this.PredicateOrdinal = predOrdinal;
+                // Create a varlen CompositeKey with just one item. This is ONLY used as the query key to Query.
+                // Putting the query key in Input is necessary because iterator functions cannot contain unsafe code or have
+                // byref args, and bufferPool is needed here because the stack goes away as part of the iterator operation.
+                this.keyPointerMem = pool.Get(keyAccessor.KeyPointerSize);
+                ref KeyPointer<TPKey> keyPointer = ref Unsafe.AsRef<KeyPointer<TPKey>>(keyPointerMem.GetValidPointer());
+                keyPointer.Initialize(predOrdinal, ref key, keyAccessor.KeyPointerSize);
                 this.IsDelete = false;
             }
 
-            internal void SetQueryKey(SectorAlignedBufferPool pool, KeyAccessor<TPKey> keyAccessor, ref TPKey key)
+            internal Input(QueryContinuationToken continuationToken, SectorAlignedBufferPool pool, int queryOrdinal)
             {
-                // Create a varlen CompositeKey with just one item. This is ONLY used as the query key to Query.
-                this.keyPointerMem = pool.Get(keyAccessor.KeyPointerSize);
-                ref KeyPointer<TPKey> keyPointer = ref Unsafe.AsRef<KeyPointer<TPKey>>(keyPointerMem.GetValidPointer());
-                keyPointer.Initialize(this.PredicateOrdinal, ref key, keyAccessor.KeyPointerSize);
+                ref var serializedState = ref continuationToken.Predicates[queryOrdinal];
+
+                // TODO: Validate the restored KeyPointer.PreviousAddress is good
+
+                this.keyPointerMem = pool.Get(serializedState.State.Length);
+                ref KeyPointer<TPKey> keyPointer = ref Unsafe.AsRef<KeyPointer<TPKey>>(this.keyPointerMem.GetValidPointer());
+                fixed (byte* serializedBytes = serializedState.State)
+                    Buffer.MemoryCopy(serializedBytes, this.keyPointerMem.GetValidPointer(), serializedState.State.Length, serializedState.State.Length);
+                this.IsDelete = false;
             }
 
-            /// <summary>
-            /// The ordinal of the <see cref="Predicate{TKVKey, TKVValue, TPKey}"/> in the <see cref="HashValueIndex"/>.
-            /// </summary>
-            public int PredicateOrdinal { get; set; }
+            internal void Serialize(KeyAccessor<TPKey> keyAccessor, QueryContinuationToken continuationToken, int queryOrdinal, long previousAddress)
+            {
+                ref var serializedState = ref continuationToken.Predicates[queryOrdinal];
+                this.PreviousAddress = previousAddress;
+                if (serializedState.State is null)
+                    serializedState.State = new byte[keyAccessor.KeyPointerSize];
+                fixed (byte* serializedBytes = serializedState.State)
+                    Buffer.MemoryCopy(this.keyPointerMem.GetValidPointer(), serializedBytes, keyAccessor.KeyPointerSize, keyAccessor.KeyPointerSize);
+            }
 
-            /// <summary>
-            /// Whether this is a Delete (or the Delete part of an RCU). TODO needed?
-            /// </summary>
-            public bool IsDelete { get; set; }
+            internal long PreviousAddress
+            {
+                get => this.QueryKeyPointerRef.PreviousAddress;
+                set => this.QueryKeyPointerRef.PreviousAddress = value;
+            }
 
-            /// <summary>
-            /// The query key for a Query method
-            /// </summary>
-            public ref TPKey QueryKeyRef => ref Unsafe.AsRef<TPKey>(this.keyPointerMem.GetValidPointer());
+            internal int PredicateOrdinal => this.QueryKeyPointerRef.PredicateOrdinal;
 
-            /// <summary>
-            /// The query key for a Query method
-            /// </summary>
-            public ref KeyPointer<TPKey> QueryKeyPointerRef => ref Unsafe.AsRef<KeyPointer<TPKey>>(this.keyPointerMem.GetValidPointer());
+            internal bool IsDelete { get; set; }
+
+            internal ref TPKey QueryKeyRef => ref Unsafe.AsRef<TPKey>(this.keyPointerMem.GetValidPointer());
+
+            internal ref KeyPointer<TPKey> QueryKeyPointerRef => ref Unsafe.AsRef<KeyPointer<TPKey>>(this.keyPointerMem.GetValidPointer());
 
             public void Dispose()
             {
-                if (this.keyPointerMem is {})
-                {
-                    this.keyPointerMem.Return();
-                    this.keyPointerMem = null;
-                }
+                this.keyPointerMem?.Return();
+                this.keyPointerMem = null;
             }
 
             public override string ToString() => $"qKeyPtr {this.QueryKeyPointerRef}, predOrd {this.PredicateOrdinal}, isDel {this.IsDelete}";

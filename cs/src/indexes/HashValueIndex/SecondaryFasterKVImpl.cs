@@ -19,13 +19,8 @@ namespace FASTER.indexes.HashValueIndex
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal OperationStatus IndexInternalRead<TInput, TOutput, TContext, FasterSession>(
-                                    ref TPKey queryKeyPointerRefAsKeyRef,
-                                    ref TInput input,
-                                    ref TOutput output,
-                                    long startAddress,
-                                    ref TContext context,
-                                    ref PendingContext<TInput, TOutput, TContext> pendingContext,
-                                    FasterSession fasterSession,
+                                    ref TPKey queryKeyPointerRefAsKeyRef, ref TInput input, ref TOutput output, long startAddress, TContext context,
+                                    ref PendingContext<TInput, TOutput, TContext> pendingContext, FasterSession fasterSession,
                                     FasterExecutionContext<TInput, TOutput, TContext> sessionCtx,
                                     long lsn)
             where FasterSession : IFasterSession<TPKey, RecordId, TInput, TOutput, TContext>
@@ -272,9 +267,8 @@ namespace FASTER.indexes.HashValueIndex
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal OperationStatus IndexInternalInsert<TInput, TOutput, TContext, FasterSession>(
-                        ref TPKey inputFirstKeyPointerRefAsKeyRef, RecordId recordId, ref TInput input, ref TContext context,
-                        ref PendingContext<TInput, TOutput, TContext> pendingContext,
-                        FasterSession fasterSession,
+                        ref TPKey inputFirstKeyPointerRefAsKeyRef, RecordId recordId, ref TInput input, TContext context,
+                        ref PendingContext<TInput, TOutput, TContext> pendingContext, FasterSession fasterSession,
                         FasterExecutionContext<TInput, TOutput, TContext> sessionCtx, long lsn)
             where FasterSession : IFasterSession<TPKey, RecordId, TInput, TOutput, TContext>
         {
@@ -469,7 +463,7 @@ namespace FASTER.indexes.HashValueIndex
 #endregion
 
             return status == OperationStatus.RETRY_NOW
-                ? IndexInternalInsert(ref inputFirstKeyPointerRefAsKeyRef, recordId, ref input, ref context, ref pendingContext, fasterSession, sessionCtx, lsn)
+                ? IndexInternalInsert(ref inputFirstKeyPointerRefAsKeyRef, recordId, ref input, context, ref pendingContext, fasterSession, sessionCtx, lsn)
                 : status;
         }
    }

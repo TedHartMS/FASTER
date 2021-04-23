@@ -46,7 +46,7 @@ namespace FASTER.indexes.HashValueIndex
             => ref Unsafe.AsRef<TPKey>((byte*)Unsafe.AsPointer(ref this));
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal void ClearUpdateFlags(int predCount, int keyPointerSize)
+        internal void ClearUpdateFlags(int predCount, int keyPointerSize)   // TODO needed?
         {
             for (var ii = 0; ii < predCount; ++ii)
                 this.GetKeyPointerRef(ii, keyPointerSize).ClearUpdateFlags();
@@ -69,18 +69,6 @@ namespace FASTER.indexes.HashValueIndex
             public unsafe ref TPKey AsRef(void* source) => ref Unsafe.AsRef<TPKey>(source);
 
             public unsafe void Initialize(void* source, void* end) { }
-        }
-
-        /// <summary>
-        /// This is the unused key comparer passed to the secondary FasterKV
-        /// </summary>
-        internal class UnusedKeyComparer : IFasterEqualityComparer<TPKey>
-        {
-            public long GetHashCode64(ref TPKey cKey)
-                => throw new HashValueIndexInternalErrorException("Must use KeyAccessor instead (predOrdinal is required)");
-
-            public bool Equals(ref TPKey cKey1, ref TPKey cKey2)
-                => throw new HashValueIndexInternalErrorException("Must use KeyAccessor instead (predOrdinal is required)");
         }
     }
 }

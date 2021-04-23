@@ -30,9 +30,9 @@ namespace FASTER.indexes.HashValueIndex
         private byte flags;
 
         /// <summary>
-        /// The Key returned by the <see cref="Predicate{TKVKey, TKVValue, TPKey}"/> execution.
+        /// The Key returned by the <see cref="Predicate{TKVKey, TKVValue, TPKey}"/> execution. Must be the last field, in case we make it varlen.
         /// </summary>
-        internal TPKey Key;               // TODOperf: for Key size > 4, reinterpret this an offset to the actual value (after the KeyPointer list)
+        internal TPKey Key;
         #endregion Fields
 
         internal void Initialize(int predOrdinal, ref TPKey key, int keyPointerSize)
@@ -49,7 +49,7 @@ namespace FASTER.indexes.HashValueIndex
         // in any TPKey chain for it). Also used in ChangeTracker to determine whether to set kUnlinkOldBit.
         private const byte kIsNullBit = 0x01;
 
-        // The record is marked deleted (but we don't tombstone).
+        // The record is marked deleted (but we don't tombstone). TODO needed? If not, remove all Tombstone references 
         private const byte kIsDeletedBit = 0x02;
 
         // If Key size is > 4, then reinterpret the Key as an offset to the actual key. (TODOperf not implemented)
@@ -106,7 +106,7 @@ namespace FASTER.indexes.HashValueIndex
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal void ClearUpdateFlags() => this.flags = (byte)(this.flags & ~(kUnlinkOldBit | kLinkNewBit));
+        internal void ClearUpdateFlags() => this.flags = (byte)(this.flags & ~(kUnlinkOldBit | kLinkNewBit)); // TODO needed?
         #endregion Accessors
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

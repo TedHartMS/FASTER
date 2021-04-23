@@ -185,28 +185,71 @@ namespace FASTER.indexes.HashValueIndex
             return pred;
         }
 
+        #region Query Utilities
         private int GetPredicateOrdinal(IPredicate iPred) => this.GetImplementingPredicate(iPred).Ordinal;
 
-        internal IEnumerable<QueryRecord<TKVKey, TKVValue>> Query(IPredicate predicate, ref TPKey key, SecondaryIndexSessionBroker sessionBroker, QuerySettings querySettings)
-            => Query(this.MakeQueryInput(this.GetPredicateOrdinal(predicate), ref key), sessionBroker, querySettings ?? QuerySettings.Default);
+        private SecondaryFasterKV<TPKey>.Input MakeQueryInput(IPredicate iPred, ref TPKey key) => new SecondaryFasterKV<TPKey>.Input(this.bufferPool, this.keyAccessor, ref key, this.GetPredicateOrdinal(iPred));
 
-        private IEnumerable<QueryRecord<TKVKey, TKVValue>> Query(SecondaryFasterKV<TPKey>.Input input, SecondaryIndexSessionBroker sessionBroker, QuerySettings querySettings)
+        private SecondaryFasterKV<TPKey>.Input MakeQueryInput(QueryContinuationToken continuationToken, int queryOrdinal) => new SecondaryFasterKV<TPKey>.Input(continuationToken, this.bufferPool, queryOrdinal);
+
+        private bool MakeQueryIterator(IPredicate predicate, ref TPKey key, string continuationString, out QueryContinuationToken continuationToken, out SecondaryFasterKV<TPKey>.Input input)
         {
-            var sessions = GetSessions(sessionBroker);
-            foreach (var recordId in Query(sessions.SecondarySession, input, querySettings))
+            if (string.IsNullOrEmpty(continuationString))
             {
-                if (querySettings.IsCanceled)
-                    yield break;
-                if (ResolveRecord(sessions.PrimarySession, recordId, out var record))
-                    yield return record;
+                continuationToken = default;
+                input = this.MakeQueryInput(predicate, ref key);
+                return true;
             }
+
+            continuationToken = QueryContinuationToken.FromString(continuationString);
+            input = this.MakeQueryInput(continuationToken, 0);
+            return input.PreviousAddress != FASTER.core.Constants.kInvalidAddress;
         }
 
+
+        // TODO: Add RecordId to conttok!
+
+
+
+        private bool MakeQueryIterator(IEnumerable<(IPredicate pred, TPKey key)> queryPredicates, string continuationString, out QueryContinuationToken continuationToken, out MultiPredicateQueryIterator<TPKey> queryIterator)
+        {
+            if (string.IsNullOrEmpty(continuationString))
+            {
+                continuationToken = default;
+                queryIterator = new MultiPredicateQueryIterator<TPKey>(queryPredicates.Select(qp => this.MakeQueryInput(qp.pred, ref qp.key)));
+                return true;
+            }
+
+            continuationToken = QueryContinuationToken.FromString(continuationString);
+            var localToken = continuationToken;
+            queryIterator = new MultiPredicateQueryIterator<TPKey>(queryPredicates.Select((qp, ii) => this.MakeQueryInput(localToken, ii)));
+            return queryIterator.states.Any(state => state.RecordInfo.PreviousAddress != FASTER.core.Constants.kInvalidAddress);
+        }
+        #endregion Query Utilities
+
+        #region Single Predicate Sync
+        internal IEnumerable<QueryRecord<TKVKey, TKVValue>> Query(IPredicate predicate, ref TPKey key, SecondaryIndexSessionBroker sessionBroker, QuerySettings querySettings)
+            => InternalQuery(this.MakeQueryInput(predicate, ref key), sessionBroker, querySettings ?? QuerySettings.Default);
+
+        internal QuerySegment<TKVKey, TKVValue> QuerySegmented(IPredicate predicate, ref TPKey key, SecondaryIndexSessionBroker sessionBroker, string continuationString, int numRecords, QuerySettings querySettings)
+        {
+            if (MakeQueryIterator(predicate, ref key, continuationString, out QueryContinuationToken continuationToken, out SecondaryFasterKV<TPKey>.Input input))
+            {
+                continuationToken ??= new QueryContinuationToken(1);
+                var records = InternalQuery(input, sessionBroker, querySettings ?? QuerySettings.Default, continuationToken, numRecords).ToList();
+                return new QuerySegment<TKVKey, TKVValue>(records, continuationToken.ToString());
+            }
+            return new QuerySegment<TKVKey, TKVValue>(new List<QueryRecord<TKVKey, TKVValue>>(), continuationString);
+        }
+        #endregion Single Predicate Sync
+
+        #region Single Predicate Async
         internal IAsyncEnumerable<QueryRecord<TKVKey, TKVValue>> QueryAsync(IPredicate predicate, ref TPKey key, SecondaryIndexSessionBroker sessionBroker, QuerySettings querySettings)
-            => QueryAsync(this.MakeQueryInput(this.GetPredicateOrdinal(predicate), ref key), sessionBroker, querySettings ?? QuerySettings.Default);
+            => QueryAsync(this.MakeQueryInput(predicate, ref key), sessionBroker, querySettings ?? QuerySettings.Default);
 
         private async IAsyncEnumerable<QueryRecord<TKVKey, TKVValue>> QueryAsync(SecondaryFasterKV<TPKey>.Input input, SecondaryIndexSessionBroker sessionBroker, QuerySettings querySettings)
         {
+#if false
             var sessions = GetSessions(sessionBroker);
             await foreach (var recordId in QueryAsync(sessions.SecondarySession, input, querySettings))
             {
@@ -216,31 +259,40 @@ namespace FASTER.indexes.HashValueIndex
                 if (record is { })
                     yield return record;
             }
-        }
-
-        internal IEnumerable<QueryRecord<TKVKey, TKVValue>> Query(
-                    IEnumerable<(IPredicate pred, TPKey key)> queryPredicates,
-                    Func<bool[], bool> matchPredicate,
-                    SecondaryIndexSessionBroker sessionBroker,
-                    QuerySettings querySettings = null)
-        {
-            var predicates = queryPredicates.Select(pk => (GetImplementingPredicate(pk.pred), pk.key)).ToArray();
-            querySettings ??= QuerySettings.Default;
-#if false   // TODO
-            return new QueryRecordIterator<RecordId>(new[] { predicatesAndKeys.Select(tup => ((IPredicate)tup.pred, this.Query(tup.pred, tup.key, querySettings))) },
-                                                      matchIndicators => matchPredicate(matchIndicators[0]), querySettings).Run();
 #else
-            return null;
+            yield break;
 #endif
         }
+        #endregion Single Predicate Async
 
-        internal IAsyncEnumerable<QueryRecord<TKVKey, TKVValue>> QueryAsync(
-                    IEnumerable<(IPredicate pred, TPKey key)> queryPredicates,
-                    Func<bool[], bool> matchPredicate,
-                    SecondaryIndexSessionBroker sessionBroker,
-                    QuerySettings querySettings = null)
+        #region Multi Predicate Sync
+        internal IEnumerable<QueryRecord<TKVKey, TKVValue>> Query(IEnumerable<(IPredicate pred, TPKey key)> queryPredicates,
+                    Func<bool[], bool> matchPredicate, SecondaryIndexSessionBroker sessionBroker, QuerySettings querySettings)
         {
-            var predicates = queryPredicates.Select(pk => (GetImplementingPredicate(pk.pred), pk.key)).ToArray();
+            return MakeQueryIterator(queryPredicates, string.Empty, out QueryContinuationToken continuationToken, out MultiPredicateQueryIterator<TPKey> queryIterator)
+                ? InternalQuery(queryIterator, matchPredicate, sessionBroker, querySettings ??= QuerySettings.Default)
+                : new QuerySegment<TKVKey, TKVValue>(new List<QueryRecord<TKVKey, TKVValue>>(), string.Empty);
+        }
+
+        internal IEnumerable<QueryRecord<TKVKey, TKVValue>> QuerySegmented(IEnumerable<(IPredicate pred, TPKey key)> queryPredicates,
+                    Func<bool[], bool> matchPredicate, SecondaryIndexSessionBroker sessionBroker, string continuationString, int numRecords, QuerySettings querySettings)
+        {
+            if (!MakeQueryIterator(queryPredicates, continuationString, out QueryContinuationToken continuationToken, out MultiPredicateQueryIterator<TPKey> queryIterator))
+            {
+                continuationToken ??= new QueryContinuationToken(1);
+                var records = InternalQuery(queryIterator, matchPredicate, sessionBroker, querySettings ?? QuerySettings.Default, continuationToken, numRecords).ToList();
+                return new QuerySegment<TKVKey, TKVValue>(records, continuationToken.ToString());
+            }
+            return new QuerySegment<TKVKey, TKVValue>(new List<QueryRecord<TKVKey, TKVValue>>(), continuationString);
+        }
+        #endregion Multi Predicate Sync
+
+        #region Multi Predicate Async
+        internal IAsyncEnumerable<QueryRecord<TKVKey, TKVValue>> QueryAsync(
+                    IEnumerable<(IPredicate pred, TPKey key)> queryPredicates, Func<bool[], bool> matchPredicate,
+                    SecondaryIndexSessionBroker sessionBroker, QuerySettings querySettings = null)
+        {
+            var inputs = queryPredicates.Select(pk => (GetImplementingPredicate(pk.pred), pk.key)).ToArray();
             querySettings ??= QuerySettings.Default;
 #if false   // TODO
             return new AsyncQueryRecordIterator<RecordId>(new[] { predicatesAndKeys.Select(tup => ((IPredicate)tup.pred, this.QueryAsync(tup.pred, tup.key, querySettings))) },
@@ -249,6 +301,7 @@ namespace FASTER.indexes.HashValueIndex
             return null;
 #endif
         }
+#endregion Multi Predicate Async
 
         /// <summary>
         /// Flush data in the secondary FasterKV.

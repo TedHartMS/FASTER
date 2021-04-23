@@ -8,7 +8,7 @@ namespace FASTER.indexes.HashValueIndex
 {
     public partial class HashValueIndex<TKVKey, TKVValue, TPKey> : ISecondaryValueIndex<TKVValue>
     {
-        private SectorAlignedBufferPool bufferPool;        // TODO: Look at SpanByte etc. instead
+        private SectorAlignedBufferPool bufferPool;
 
         private readonly int keyPointerSize = Utility.GetSize(default(KeyPointer<TPKey>));
         private readonly int recordIdSize = Utility.GetSize(default(RecordId));
@@ -43,10 +43,9 @@ namespace FASTER.indexes.HashValueIndex
                 return Status.OK;
 
             ref CompositeKey<TPKey> compositeKey = ref Unsafe.AsRef<CompositeKey<TPKey>>(keyBytes);
-            var input = new SecondaryFasterKV<TPKey>.Input(0);
-            var value = recordId;
+            var input = new SecondaryFasterKV<TPKey>.Input();   // TODO remove this if we don't need Input.IsDelete()
             var context = new SecondaryFasterKV<TPKey>.Context { Functions = session.functions };
-            return session.IndexInsert(this.secondaryFkv, ref compositeKey.CastToFirstKeyPointerRefAsKeyRef(), value, ref input, ref context);
+            return session.IndexInsert(this.secondaryFkv, ref compositeKey.CastToFirstKeyPointerRefAsKeyRef(), recordId, ref input, context);
         }
     }
 }

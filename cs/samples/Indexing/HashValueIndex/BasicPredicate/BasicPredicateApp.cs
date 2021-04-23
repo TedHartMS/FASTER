@@ -28,12 +28,27 @@ namespace BasicPredicateSample
         internal static void QueryPredicate()
         {
             using var session = store.FasterKV.For(new Functions()).NewSession<Functions>();
+            RunQueries(session, Species.Cat);
+            RunQueries(session, Species.Dog);
+        }
 
-            QueryRecord<Key, Value>[] results = session.Query(store.PetPred, (int)Species.Cat).ToArray();
-            Console.WriteLine($"{results.Length} cats retrieved");
+        private static void RunQueries(ClientSession<Key, Value, Value, Value, Empty, Functions> session, Species species)
+        {
+            QueryRecord<Key, Value>[] results = session.Query(store.PetPred, (int)species).ToArray();
+            Console.WriteLine($"{results.Length} {species}s retrieved");
 
-            results = session.Query(store.PetPred, (int)Species.Dog).ToArray();
-            Console.WriteLine($"{results.Length} dogs retrieved");
+            string continuationToken = string.Empty;
+            int count = 0;
+
+            while (true)
+            {
+                QuerySegment<Key, Value> segment = session.QuerySegmented(store.PetPred, (int)species, continuationToken, 100);
+                if (segment.Results.Count == 0)
+                    break;
+                count += segment.Results.Count;
+                continuationToken = segment.ContinuationToken;
+                Console.WriteLine($"  CT: {count} {species}s retrieved");
+            }
         }
     }
 }

@@ -11,6 +11,7 @@ namespace FASTER.indexes.HashValueIndex
         internal override OperationStatus RetryOperationStatus<TInput, TOutput, TContext, FasterSession>(FasterExecutionContext<TInput, TOutput, TContext> currentCtx,
                                                                         ref PendingContext<TInput, TOutput, TContext> pendingContext, FasterSession fasterSession)
         {
+            // TODO: TEst RetryOperationStatus
             OperationStatus internalStatus;
             switch (pendingContext.type)
             {
@@ -19,14 +20,14 @@ namespace FASTER.indexes.HashValueIndex
                                          ref pendingContext.input.Get(),
                                          ref pendingContext.output,
                                          pendingContext.recordInfo.PreviousAddress,
-                                         ref pendingContext.userContext,
+                                         pendingContext.userContext,
                                          ref pendingContext, fasterSession, currentCtx, pendingContext.serialNum);
                     break;
                 case OperationType.UPSERT:
                     internalStatus = this.IndexInternalInsert(ref pendingContext.key.Get(),
                                          pendingContext.value.Get(),
                                          ref pendingContext.input.Get(),
-                                         ref pendingContext.userContext,
+                                         pendingContext.userContext,
                                          ref pendingContext, fasterSession, currentCtx, pendingContext.serialNum);
                     // If this assert fires, we'll have to virtualize the retry and callback switches in InternalCompleteRetryRequest.
                     Debug.Assert(internalStatus != OperationStatus.RETRY_LATER, "Insertion should not go pending");

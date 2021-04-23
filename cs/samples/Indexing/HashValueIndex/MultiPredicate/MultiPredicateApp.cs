@@ -19,6 +19,9 @@ namespace MultiPredicateSample
 
             var catsOfAge = QueryPredicates(store);
             store.UpdateCats(catsOfAge);
+            
+            /* TODO: remove to test mutable scan: */ store.FlushAndEvict();
+
             QueryPredicates(store);
             Console.WriteLine("Press <enter> to exit");
             Console.ReadLine();
