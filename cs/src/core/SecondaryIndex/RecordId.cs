@@ -59,7 +59,7 @@ namespace FASTER.core
         /// <summary>
         /// Whether this is a default instance of RecordId
         /// </summary>
-        public bool IsDefault => this.Address == Constants.kInvalidAddress;
+        public bool IsDefault { get { return this.Address == Constants.kInvalidAddress; } }
 
         /// <inheritdoc/>
         public override string ToString() => $"address {this.Address}, version {this.Version}";

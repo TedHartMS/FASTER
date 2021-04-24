@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT license.
 
+using FASTER.core;
 using Newtonsoft.Json;
 
 #pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
@@ -13,7 +14,11 @@ namespace FASTER.indexes.HashValueIndex
 
         public QueryContinuationToken(int numberOfPredicates) => this.Predicates = new SerializedPredicate[numberOfPredicates];
 
-        public static QueryContinuationToken FromString(string json)
+        internal ref SerializedPredicate this[int index] => ref this.Predicates[index];
+
+        internal bool IsEmpty => this.Predicates[0].KeyState is null;
+
+        internal static QueryContinuationToken FromString(string json)
             => JsonConvert.DeserializeObject<QueryContinuationToken>(json);
 
         public override string ToString() 
@@ -22,6 +27,7 @@ namespace FASTER.indexes.HashValueIndex
 
     public struct SerializedPredicate
     {
-        public byte[] State;
+        public byte[] KeyState;
+        public RecordId RecordId;
     }
 }

@@ -222,7 +222,7 @@ namespace FASTER.indexes.HashValueIndex
 
             continuationToken = QueryContinuationToken.FromString(continuationString);
             var localToken = continuationToken;
-            queryIterator = new MultiPredicateQueryIterator<TPKey>(queryPredicates.Select((qp, ii) => this.MakeQueryInput(localToken, ii)));
+            queryIterator = new MultiPredicateQueryIterator<TPKey>(queryPredicates.Select((qp, ii) => this.MakeQueryInput(localToken, ii)), continuationToken);
             return queryIterator.states.Any(state => state.RecordInfo.PreviousAddress != FASTER.core.Constants.kInvalidAddress);
         }
         #endregion Query Utilities
@@ -274,12 +274,13 @@ namespace FASTER.indexes.HashValueIndex
                 : new QuerySegment<TKVKey, TKVValue>(new List<QueryRecord<TKVKey, TKVValue>>(), string.Empty);
         }
 
-        internal IEnumerable<QueryRecord<TKVKey, TKVValue>> QuerySegmented(IEnumerable<(IPredicate pred, TPKey key)> queryPredicates,
+        internal QuerySegment<TKVKey, TKVValue> QuerySegmented(IEnumerable<(IPredicate pred, TPKey key)> queryPredicates,
                     Func<bool[], bool> matchPredicate, SecondaryIndexSessionBroker sessionBroker, string continuationString, int numRecords, QuerySettings querySettings)
         {
-            if (!MakeQueryIterator(queryPredicates, continuationString, out QueryContinuationToken continuationToken, out MultiPredicateQueryIterator<TPKey> queryIterator))
+            if (MakeQueryIterator(queryPredicates, continuationString, out QueryContinuationToken continuationToken, out MultiPredicateQueryIterator<TPKey> queryIterator))
             {
-                continuationToken ??= new QueryContinuationToken(1);
+                // TODO: Verify continuationToken here wrt count if it's non-null
+                continuationToken ??= new QueryContinuationToken(queryIterator.Length);
                 var records = InternalQuery(queryIterator, matchPredicate, sessionBroker, querySettings ?? QuerySettings.Default, continuationToken, numRecords).ToList();
                 return new QuerySegment<TKVKey, TKVValue>(records, continuationToken.ToString());
             }

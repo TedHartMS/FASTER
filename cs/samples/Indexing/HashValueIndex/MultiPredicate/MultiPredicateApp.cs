@@ -11,18 +11,24 @@ namespace MultiPredicateSample
 {
     class MultiPredicateApp
     {
+        private static Store store;
+
         static void Main()
         {
-            using var store = new Store();
-            store.RunInitialInserts();
-            store.FlushAndEvict();
+            using (store = new Store())
+            {
+                store.RunInitialInserts();
+                store.FlushAndEvict();
 
-            var catsOfAge = QueryPredicates(store);
-            store.UpdateCats(catsOfAge);
-            
-            /* TODO: remove to test mutable scan: */ store.FlushAndEvict();
+                var catsOfAge = QueryPredicates(store);
+                store.UpdateCats(catsOfAge);
 
-            QueryPredicates(store);
+                /* TODO: remove to test mutable scan: */
+                store.FlushAndEvict();
+
+                QueryPredicates(store);
+            }
+
             Console.WriteLine("Press <enter> to exit");
             Console.ReadLine();
         }
@@ -38,27 +44,34 @@ namespace MultiPredicateSample
             results = session.Query(store.CombinedPetPred, new AgeOrPetKey(Species.Dog)).ToArray();
             Console.WriteLine($"{results.Length} dogs retrieved");
 
-            results = session.Query(new[] { (store.CombinedPetPred, new AgeOrPetKey(Species.Cat)),
-                                            (store.CombinedAgePred, new AgeOrPetKey(Constants.CatAge)) },
-                                    vec => vec[0] && vec[1]).ToArray();
-            Console.WriteLine($"{results.Length} cats age {Constants.CatAge} retrieved");
-            var catsOfAge = results;
-
-            results = session.Query(new[] { (store.CombinedPetPred, new AgeOrPetKey(Species.Cat)),
-                                            (store.CombinedAgePred, new AgeOrPetKey(Constants.CatAge + Constants.CatAgeIncrement)) },
-                                    vec => vec[0] && vec[1]).ToArray();
-            Console.WriteLine($"{results.Length} cats age {Constants.CatAge + Constants.CatAgeIncrement} retrieved");
-
-            results = session.Query(new[] { (store.CombinedPetPred, new AgeOrPetKey(Species.Dog)),
-                                            (store.CombinedAgePred, new AgeOrPetKey(Constants.DogAge)) },
-                                    vec => vec[0] && vec[1]).ToArray();
-            Console.WriteLine($"{results.Length} dogs age {Constants.DogAge} retrieved");
-
-            results = session.Query(new[] { (store.CombinedPetPred, new AgeOrPetKey(Species.Dog)),
-                                            (store.CombinedAgePred, new AgeOrPetKey(Constants.CatAge)) },
-                                    vec => vec[0] || vec[1]).ToArray();
-            Console.WriteLine($"{results.Length} dogs or any pet age {Constants.CatAge} retrieved");
+            var catsOfAge = RunQueries(session, Species.Cat, Constants.CatAge, vec => vec[0] && vec[1], $"cats age {Constants.CatAge} retrieved");
+            RunQueries(session, Species.Cat, Constants.CatAge + Constants.CatAgeIncrement, vec => vec[0] && vec[1], $"cats age {Constants.CatAge + Constants.CatAgeIncrement} retrieved");
+            RunQueries(session, Species.Dog, Constants.DogAge, vec => vec[0] && vec[1], $"dogs age {Constants.DogAge} retrieved");
+            RunQueries(session, Species.Dog, Constants.CatAge, vec => vec[0] || vec[1], $"dogs or any pet age {Constants.CatAge} retrieved");
             return catsOfAge;
+        }
+
+        private static QueryRecord<Key, Value>[] RunQueries(ClientSession<Key, Value, Value, Value, Empty, Functions> session, Species species, int age, Func<bool[], bool> matchPredicate, string message)
+        {
+            (IPredicate, AgeOrPetKey)[] queryPredicates = new[] { (store.CombinedPetPred, new AgeOrPetKey(species)),
+                                                                  (store.CombinedAgePred, new AgeOrPetKey(age)) };
+            var results = session.Query(queryPredicates, matchPredicate).ToArray();
+            Console.WriteLine($"{results.Length} {message}");
+
+            string continuationToken = string.Empty;
+            int count = 0;
+
+            while (true)
+            {
+                QuerySegment<Key, Value> segment = session.QuerySegmented(queryPredicates, matchPredicate, continuationToken, 100);
+                if (segment.Results.Count == 0)
+                    break;
+                count += segment.Results.Count;
+                continuationToken = segment.ContinuationToken;
+                Console.WriteLine($"  CT: {count} {species}s retrieved");
+            }
+
+            return results;
         }
     }
 }

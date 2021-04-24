@@ -253,6 +253,29 @@ namespace FASTER.indexes.HashValueIndex
             => Query<TKVKey, TKVValue, TPKey>(clientSession.SecondaryIndexSessionBroker, queryPredicates, matchPredicate, querySettings);
 
         /// <summary>
+        /// Query records from a single predicate and resolve them on the primary <see cref="FasterKV{Key, Value}"/> instance.
+        /// </summary>
+        /// <typeparam name="TKVKey">Key type of the primary <see cref="FasterKV{Key, Value}"/></typeparam>
+        /// <typeparam name="TKVValue">Value type of the primary <see cref="FasterKV{Key, Value}"/></typeparam>
+        /// <typeparam name="TInput">Input type of the <paramref name="clientSession"/></typeparam>
+        /// <typeparam name="TOutput">Output type of the <paramref name="clientSession"/></typeparam>
+        /// <typeparam name="TContext">Context </typeparam>
+        /// <typeparam name="TFunctions">Functions type of the <paramref name="clientSession"/></typeparam>
+        /// <typeparam name="TPKey">Key type of the <paramref name="queryPredicates"/></typeparam>
+        /// <param name="clientSession">The session on the primary <see cref="FasterKV{Key, Value}"/></param>
+        /// <param name="queryPredicates">A vector of tuples consisting of the Predicate to query and the key to search for</param>
+        /// <param name="matchPredicate">A function that receives a vector of bool in the order of the predicates in <paramref name="queryPredicates"/>, 
+        ///     indicating whether the RecordId currently being processed by the query matched the queryPredicate at that position.</param>
+        /// <param name="continuationToken"></param>
+        /// <param name="numberOfRecords"></param>
+        /// <param name="querySettings">Optional settings for the query</param>
+        /// <returns></returns>
+        public static QuerySegment<TKVKey, TKVValue> QuerySegmented<TKVKey, TKVValue, TInput, TOutput, TContext, TFunctions, TPKey>(this ClientSession<TKVKey, TKVValue, TInput, TOutput, TContext, TFunctions> clientSession,
+                            (IPredicate predicate, TPKey queryKey)[] queryPredicates, Func<bool[], bool> matchPredicate, string continuationToken, int numberOfRecords, QuerySettings querySettings = null)
+            where TFunctions : IFunctions<TKVKey, TKVValue, TInput, TOutput, TContext>
+            => QuerySegmented<TKVKey, TKVValue, TPKey>(clientSession.SecondaryIndexSessionBroker, queryPredicates, matchPredicate, continuationToken, numberOfRecords, querySettings);
+
+        /// <summary>
         /// Query records from multiple predicates and resolve them on the primary <see cref="FasterKV{Key, Value}"/> instance.
         /// </summary>
         /// <typeparam name="TKVKey">Key type of the primary <see cref="FasterKV{Key, Value}"/></typeparam>
@@ -356,6 +379,10 @@ namespace FASTER.indexes.HashValueIndex
         private static IEnumerable<QueryRecord<TKVKey, TKVValue>> Query<TKVKey, TKVValue, TPKey>(SecondaryIndexSessionBroker secondaryIndexSessionBroker,
                             (IPredicate predicate, TPKey queryKey)[] queryPredicates, Func<bool[], bool> matchPredicate, QuerySettings querySettings)
             => GetIndex<TKVKey, TKVValue, TPKey>(queryPredicates).Query(queryPredicates, matchPredicate, secondaryIndexSessionBroker, querySettings);
+
+        private static QuerySegment<TKVKey, TKVValue> QuerySegmented<TKVKey, TKVValue, TPKey>(SecondaryIndexSessionBroker secondaryIndexSessionBroker,
+                            (IPredicate predicate, TPKey queryKey)[] queryPredicates, Func<bool[], bool> matchPredicate, string continuationToken, int numRecords, QuerySettings querySettings)
+            => GetIndex<TKVKey, TKVValue, TPKey>(queryPredicates).QuerySegmented(queryPredicates, matchPredicate, secondaryIndexSessionBroker, continuationToken, numRecords, querySettings);
 
         private static IAsyncEnumerable<QueryRecord<TKVKey, TKVValue>> QueryAsync<TKVKey, TKVValue, TPKey>(SecondaryIndexSessionBroker secondaryIndexSessionBroker,
                             (IPredicate predicate, TPKey queryKey)[] queryPredicates, Func<bool[], bool> matchPredicate, QuerySettings querySettings)

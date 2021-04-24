@@ -15,12 +15,15 @@ namespace BasicPredicateSample
 
         static void Main()
         {
-            store = new Store();
-            store.RunInitialInserts();
-            store.FlushAndEvict();
-            store.index.FlushAndEvict(wait: true);
+            using (store = new Store())
+            {
+                store.RunInitialInserts();
+                store.FlushAndEvict();
+                store.index.FlushAndEvict(wait: true);
 
-            QueryPredicate();
+                QueryPredicate();
+            }
+
             Console.WriteLine("Press <enter> to exit");
             Console.ReadLine();
         }

@@ -40,12 +40,17 @@ namespace FASTER.indexes.HashValueIndex
         internal int[] activeIndexes;
         internal int activeLength;
 
-        internal MultiPredicateQueryIterator(IEnumerable<SecondaryFasterKV<TPKey>.Input> inputs)
+        internal MultiPredicateQueryIterator(IEnumerable<SecondaryFasterKV<TPKey>.Input> inputs, QueryContinuationToken continuationToken = null)
         {
             this.states = inputs.Select(input => new PredicateIterationState<TPKey>(input)).ToArray();
             matches = new bool[this.Length];
             activeIndexes = new int[this.Length];
             activeLength = default;
+            if (continuationToken is { })
+            {
+                for (var ii = 0; ii < this.Length; ++ii)
+                    this[ii].RecordId = continuationToken[ii].RecordId;
+            }
         }
 
         internal int Length => this.states.Length;

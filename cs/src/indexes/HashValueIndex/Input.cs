@@ -39,21 +39,22 @@ namespace FASTER.indexes.HashValueIndex
 
                 // TODO: Validate the restored KeyPointer.PreviousAddress is good
 
-                this.keyPointerMem = pool.Get(serializedState.State.Length);
+                this.keyPointerMem = pool.Get(serializedState.KeyState.Length);
                 ref KeyPointer<TPKey> keyPointer = ref Unsafe.AsRef<KeyPointer<TPKey>>(this.keyPointerMem.GetValidPointer());
-                fixed (byte* serializedBytes = serializedState.State)
-                    Buffer.MemoryCopy(serializedBytes, this.keyPointerMem.GetValidPointer(), serializedState.State.Length, serializedState.State.Length);
+                fixed (byte* serializedBytes = serializedState.KeyState)
+                    Buffer.MemoryCopy(serializedBytes, this.keyPointerMem.GetValidPointer(), serializedState.KeyState.Length, serializedState.KeyState.Length);
                 this.IsDelete = false;
             }
 
-            internal void Serialize(KeyAccessor<TPKey> keyAccessor, QueryContinuationToken continuationToken, int queryOrdinal, long previousAddress)
+            internal void Serialize(KeyAccessor<TPKey> keyAccessor, QueryContinuationToken continuationToken, int queryOrdinal, long previousAddress, RecordId recordId)
             {
                 ref var serializedState = ref continuationToken.Predicates[queryOrdinal];
                 this.PreviousAddress = previousAddress;
-                if (serializedState.State is null)
-                    serializedState.State = new byte[keyAccessor.KeyPointerSize];
-                fixed (byte* serializedBytes = serializedState.State)
+                if (serializedState.KeyState is null)
+                    serializedState.KeyState = new byte[keyAccessor.KeyPointerSize];
+                fixed (byte* serializedBytes = serializedState.KeyState)
                     Buffer.MemoryCopy(this.keyPointerMem.GetValidPointer(), serializedBytes, keyAccessor.KeyPointerSize, keyAccessor.KeyPointerSize);
+                serializedState.RecordId = recordId;
             }
 
             internal long PreviousAddress
@@ -64,7 +65,7 @@ namespace FASTER.indexes.HashValueIndex
 
             internal int PredicateOrdinal => this.QueryKeyPointerRef.PredicateOrdinal;
 
-            internal bool IsDelete { get; set; }
+            internal bool IsDelete { get; set; }    // TODO needed?
 
             internal ref TPKey QueryKeyRef => ref Unsafe.AsRef<TPKey>(this.keyPointerMem.GetValidPointer());
 
