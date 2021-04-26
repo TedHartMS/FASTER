@@ -22,7 +22,7 @@ namespace FASTER.indexes.HashValueIndex
         {
             internal SectorAlignedMemory keyPointerMem;
 
-            internal Input(SectorAlignedBufferPool pool, KeyAccessor<TPKey> keyAccessor, ref TPKey key, int predOrdinal)
+            internal Input(SectorAlignedBufferPool pool, KeyAccessor<TPKey> keyAccessor, int predOrdinal, ref TPKey key)
             {
                 // Create a varlen CompositeKey with just one item. This is ONLY used as the query key to Query.
                 // Putting the query key in Input is necessary because iterator functions cannot contain unsafe code or have
@@ -33,27 +33,22 @@ namespace FASTER.indexes.HashValueIndex
                 this.IsDelete = false;
             }
 
-            internal Input(QueryContinuationToken continuationToken, SectorAlignedBufferPool pool, int queryOrdinal)
+            internal Input(SectorAlignedBufferPool pool, KeyAccessor<TPKey> keyAccessor, QueryContinuationToken continuationToken, int predOrdinal, ref TPKey key, int queryOrdinal)
             {
                 ref var serializedState = ref continuationToken.Predicates[queryOrdinal];
 
-                // TODO: Validate the restored KeyPointer.PreviousAddress is good
-
-                this.keyPointerMem = pool.Get(serializedState.KeyState.Length);
+                this.keyPointerMem = pool.Get(keyAccessor.KeyPointerSize);
                 ref KeyPointer<TPKey> keyPointer = ref Unsafe.AsRef<KeyPointer<TPKey>>(this.keyPointerMem.GetValidPointer());
-                fixed (byte* serializedBytes = serializedState.KeyState)
-                    Buffer.MemoryCopy(serializedBytes, this.keyPointerMem.GetValidPointer(), serializedState.KeyState.Length, serializedState.KeyState.Length);
+                keyPointer.Initialize(predOrdinal, ref key, keyAccessor.KeyPointerSize);
+                keyPointer.PreviousAddress = serializedState.PreviousAddress;   // TODO: Validate the restored PreviousAddress is good
                 this.IsDelete = false;
             }
 
-            internal void Serialize(KeyAccessor<TPKey> keyAccessor, QueryContinuationToken continuationToken, int queryOrdinal, long previousAddress, RecordId recordId)
+            internal void Serialize(QueryContinuationToken continuationToken, int queryOrdinal, long previousAddress, RecordId recordId)
             {
                 ref var serializedState = ref continuationToken.Predicates[queryOrdinal];
                 this.PreviousAddress = previousAddress;
-                if (serializedState.KeyState is null)
-                    serializedState.KeyState = new byte[keyAccessor.KeyPointerSize];
-                fixed (byte* serializedBytes = serializedState.KeyState)
-                    Buffer.MemoryCopy(this.keyPointerMem.GetValidPointer(), serializedBytes, keyAccessor.KeyPointerSize, keyAccessor.KeyPointerSize);
+                serializedState.PreviousAddress = previousAddress;
                 serializedState.RecordId = recordId;
             }
 

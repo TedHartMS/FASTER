@@ -135,12 +135,56 @@ namespace FASTER.indexes.HashValueIndex
         /// <param name="clientSession">The session on the primary <see cref="FasterKV{Key, Value}"/></param>
         /// <param name="predicate">The Predicate to query</param>
         /// <param name="queryKey">The key to query on the predicate</param>
+        /// <param name="continuationToken"></param>
+        /// <param name="numberOfRecords"></param>
+        /// <param name="querySettings">Optional settings for the query</param>
+        /// <returns></returns>
+        public static ValueTask<QuerySegment<TKVKey, TKVValue>> QuerySegmentedAsync<TKVKey, TKVValue, TInput, TOutput, TContext, TFunctions, TPKey>(this ClientSession<TKVKey, TKVValue, TInput, TOutput, TContext, TFunctions> clientSession,
+                            IPredicate predicate, ref TPKey queryKey, string continuationToken, int numberOfRecords, QuerySettings querySettings = null)
+            where TFunctions : IFunctions<TKVKey, TKVValue, TInput, TOutput, TContext>
+            => QuerySegmentedAsync<TKVKey, TKVValue, TPKey>(clientSession.SecondaryIndexSessionBroker, predicate, ref queryKey, continuationToken, numberOfRecords, querySettings);
+
+        /// <summary>
+        /// Query records from a single predicate and resolve them on the primary <see cref="FasterKV{Key, Value}"/> instance.
+        /// </summary>
+        /// <typeparam name="TKVKey">Key type of the primary <see cref="FasterKV{Key, Value}"/></typeparam>
+        /// <typeparam name="TKVValue">Value type of the primary <see cref="FasterKV{Key, Value}"/></typeparam>
+        /// <typeparam name="TInput">Input type of the <paramref name="clientSession"/></typeparam>
+        /// <typeparam name="TOutput">Output type of the <paramref name="clientSession"/></typeparam>
+        /// <typeparam name="TContext">Context </typeparam>
+        /// <typeparam name="TFunctions">Functions type of the <paramref name="clientSession"/></typeparam>
+        /// <typeparam name="TPKey">Key type of the <paramref name="predicate"/></typeparam>
+        /// <param name="clientSession">The session on the primary <see cref="FasterKV{Key, Value}"/></param>
+        /// <param name="predicate">The Predicate to query</param>
+        /// <param name="queryKey">The key to query on the predicate</param>
         /// <param name="querySettings">Optional settings for the query</param>
         /// <returns></returns>
         public static IAsyncEnumerable<QueryRecord<TKVKey, TKVValue>> QueryAsync<TKVKey, TKVValue, TInput, TOutput, TContext, TFunctions, TPKey>(this ClientSession<TKVKey, TKVValue, TInput, TOutput, TContext, TFunctions> clientSession,
                             IPredicate predicate, TPKey queryKey, QuerySettings querySettings = null)
             where TFunctions : IFunctions<TKVKey, TKVValue, TInput, TOutput, TContext>
             => QueryAsync<TKVKey, TKVValue, TPKey>(clientSession.SecondaryIndexSessionBroker, predicate, ref queryKey, querySettings);
+
+        /// <summary>
+        /// Query records from a single predicate and resolve them on the primary <see cref="FasterKV{Key, Value}"/> instance.
+        /// </summary>
+        /// <typeparam name="TKVKey">Key type of the primary <see cref="FasterKV{Key, Value}"/></typeparam>
+        /// <typeparam name="TKVValue">Value type of the primary <see cref="FasterKV{Key, Value}"/></typeparam>
+        /// <typeparam name="TInput">Input type of the <paramref name="clientSession"/></typeparam>
+        /// <typeparam name="TOutput">Output type of the <paramref name="clientSession"/></typeparam>
+        /// <typeparam name="TContext">Context </typeparam>
+        /// <typeparam name="TFunctions">Functions type of the <paramref name="clientSession"/></typeparam>
+        /// <typeparam name="TPKey">Key type of the <paramref name="predicate"/></typeparam>
+        /// <param name="clientSession">The session on the primary <see cref="FasterKV{Key, Value}"/></param>
+        /// <param name="predicate">The Predicate to query</param>
+        /// <param name="queryKey">The key to query on the predicate</param>
+        /// <param name="continuationToken"></param>
+        /// <param name="numberOfRecords"></param>
+        /// <param name="querySettings">Optional settings for the query</param>
+        /// <returns></returns>
+        public static ValueTask<QuerySegment<TKVKey, TKVValue>> QuerySegmentedAsync<TKVKey, TKVValue, TInput, TOutput, TContext, TFunctions, TPKey>(this ClientSession<TKVKey, TKVValue, TInput, TOutput, TContext, TFunctions> clientSession,
+                            IPredicate predicate, TPKey queryKey, string continuationToken, int numberOfRecords, QuerySettings querySettings = null)
+            where TFunctions : IFunctions<TKVKey, TKVValue, TInput, TOutput, TContext>
+            => QuerySegmentedAsync<TKVKey, TKVValue, TPKey>(clientSession.SecondaryIndexSessionBroker, predicate, ref queryKey, continuationToken, numberOfRecords, querySettings);
 
         #endregion IFunctions
         #region IAdvancedFunctions
@@ -178,12 +222,56 @@ namespace FASTER.indexes.HashValueIndex
         /// <param name="clientSession">The session on the primary <see cref="FasterKV{Key, Value}"/></param>
         /// <param name="predicate">The Predicate to query</param>
         /// <param name="queryKey">The key to query on the predicate</param>
+        /// <param name="continuationToken"></param>
+        /// <param name="numberOfRecords"></param>
+        /// <param name="querySettings">Optional settings for the query</param>
+        /// <returns></returns>
+        public static QuerySegment<TKVKey, TKVValue> QuerySegmented<TKVKey, TKVValue, TInput, TOutput, TContext, TFunctions, TPKey>(this AdvancedClientSession<TKVKey, TKVValue, TInput, TOutput, TContext, TFunctions> clientSession,
+                            IPredicate predicate, ref TPKey queryKey, string continuationToken, int numberOfRecords, QuerySettings querySettings = null)
+            where TFunctions : IAdvancedFunctions<TKVKey, TKVValue, TInput, TOutput, TContext>
+            => QuerySegmented<TKVKey, TKVValue, TPKey>(clientSession.SecondaryIndexSessionBroker, predicate, ref queryKey, continuationToken, numberOfRecords, querySettings);
+
+        /// <summary>
+        /// Query records from a single predicate and resolve them on the primary <see cref="FasterKV{Key, Value}"/> instance.
+        /// </summary>
+        /// <typeparam name="TKVKey">Key type of the primary <see cref="FasterKV{Key, Value}"/></typeparam>
+        /// <typeparam name="TKVValue">Value type of the primary <see cref="FasterKV{Key, Value}"/></typeparam>
+        /// <typeparam name="TInput">Input type of the <paramref name="clientSession"/></typeparam>
+        /// <typeparam name="TOutput">Output type of the <paramref name="clientSession"/></typeparam>
+        /// <typeparam name="TContext">Context </typeparam>
+        /// <typeparam name="TFunctions">Functions type of the <paramref name="clientSession"/></typeparam>
+        /// <typeparam name="TPKey">Key type of the <paramref name="predicate"/></typeparam>
+        /// <param name="clientSession">The session on the primary <see cref="FasterKV{Key, Value}"/></param>
+        /// <param name="predicate">The Predicate to query</param>
+        /// <param name="queryKey">The key to query on the predicate</param>
         /// <param name="querySettings">Optional settings for the query</param>
         /// <returns></returns>
         public static IEnumerable<QueryRecord<TKVKey, TKVValue>> Query<TKVKey, TKVValue, TInput, TOutput, TContext, TFunctions, TPKey>(this AdvancedClientSession<TKVKey, TKVValue, TInput, TOutput, TContext, TFunctions> clientSession,
                             IPredicate predicate, TPKey queryKey, QuerySettings querySettings = null)
             where TFunctions : IAdvancedFunctions<TKVKey, TKVValue, TInput, TOutput, TContext>
             => Query<TKVKey, TKVValue, TPKey>(clientSession.SecondaryIndexSessionBroker, predicate, ref queryKey, querySettings);
+
+        /// <summary>
+        /// Query records from a single predicate and resolve them on the primary <see cref="FasterKV{Key, Value}"/> instance.
+        /// </summary>
+        /// <typeparam name="TKVKey">Key type of the primary <see cref="FasterKV{Key, Value}"/></typeparam>
+        /// <typeparam name="TKVValue">Value type of the primary <see cref="FasterKV{Key, Value}"/></typeparam>
+        /// <typeparam name="TInput">Input type of the <paramref name="clientSession"/></typeparam>
+        /// <typeparam name="TOutput">Output type of the <paramref name="clientSession"/></typeparam>
+        /// <typeparam name="TContext">Context </typeparam>
+        /// <typeparam name="TFunctions">Functions type of the <paramref name="clientSession"/></typeparam>
+        /// <typeparam name="TPKey">Key type of the <paramref name="predicate"/></typeparam>
+        /// <param name="clientSession">The session on the primary <see cref="FasterKV{Key, Value}"/></param>
+        /// <param name="predicate">The Predicate to query</param>
+        /// <param name="queryKey">The key to query on the predicate</param>
+        /// <param name="continuationToken"></param>
+        /// <param name="numberOfRecords"></param>
+        /// <param name="querySettings">Optional settings for the query</param>
+        /// <returns></returns>
+        public static QuerySegment<TKVKey, TKVValue> QuerySegmented<TKVKey, TKVValue, TInput, TOutput, TContext, TFunctions, TPKey>(this AdvancedClientSession<TKVKey, TKVValue, TInput, TOutput, TContext, TFunctions> clientSession,
+                            IPredicate predicate, TPKey queryKey, string continuationToken, int numberOfRecords, QuerySettings querySettings = null)
+            where TFunctions : IAdvancedFunctions<TKVKey, TKVValue, TInput, TOutput, TContext>
+            => QuerySegmented<TKVKey, TKVValue, TPKey>(clientSession.SecondaryIndexSessionBroker, predicate, ref queryKey, continuationToken, numberOfRecords, querySettings);
 
         /// <summary>
         /// Query records from a single predicate and resolve them on the primary <see cref="FasterKV{Key, Value}"/> instance.
@@ -218,12 +306,56 @@ namespace FASTER.indexes.HashValueIndex
         /// <param name="clientSession">The session on the primary <see cref="FasterKV{Key, Value}"/></param>
         /// <param name="predicate">The Predicate to query</param>
         /// <param name="queryKey">The key to query on the predicate</param>
+        /// <param name="continuationToken"></param>
+        /// <param name="numberOfRecords"></param>
+        /// <param name="querySettings">Optional settings for the query</param>
+        /// <returns></returns>
+        public static ValueTask<QuerySegment<TKVKey, TKVValue>> QuerySegmentedAsync<TKVKey, TKVValue, TInput, TOutput, TContext, TFunctions, TPKey>(this AdvancedClientSession<TKVKey, TKVValue, TInput, TOutput, TContext, TFunctions> clientSession,
+                            IPredicate predicate, ref TPKey queryKey, string continuationToken, int numberOfRecords, QuerySettings querySettings = null)
+            where TFunctions : IAdvancedFunctions<TKVKey, TKVValue, TInput, TOutput, TContext>
+            => QuerySegmentedAsync<TKVKey, TKVValue, TPKey>(clientSession.SecondaryIndexSessionBroker, predicate, ref queryKey, continuationToken, numberOfRecords, querySettings);
+
+        /// <summary>
+        /// Query records from a single predicate and resolve them on the primary <see cref="FasterKV{Key, Value}"/> instance.
+        /// </summary>
+        /// <typeparam name="TKVKey">Key type of the primary <see cref="FasterKV{Key, Value}"/></typeparam>
+        /// <typeparam name="TKVValue">Value type of the primary <see cref="FasterKV{Key, Value}"/></typeparam>
+        /// <typeparam name="TInput">Input type of the <paramref name="clientSession"/></typeparam>
+        /// <typeparam name="TOutput">Output type of the <paramref name="clientSession"/></typeparam>
+        /// <typeparam name="TContext">Context </typeparam>
+        /// <typeparam name="TFunctions">Functions type of the <paramref name="clientSession"/></typeparam>
+        /// <typeparam name="TPKey">Key type of the <paramref name="predicate"/></typeparam>
+        /// <param name="clientSession">The session on the primary <see cref="FasterKV{Key, Value}"/></param>
+        /// <param name="predicate">The Predicate to query</param>
+        /// <param name="queryKey">The key to query on the predicate</param>
         /// <param name="querySettings">Optional settings for the query</param>
         /// <returns></returns>
         public static IAsyncEnumerable<QueryRecord<TKVKey, TKVValue>> QueryAsync<TKVKey, TKVValue, TInput, TOutput, TContext, TFunctions, TPKey>(this AdvancedClientSession<TKVKey, TKVValue, TInput, TOutput, TContext, TFunctions> clientSession,
                             IPredicate predicate, TPKey queryKey, QuerySettings querySettings = null)
             where TFunctions : IAdvancedFunctions<TKVKey, TKVValue, TInput, TOutput, TContext>
             => QueryAsync<TKVKey, TKVValue, TPKey>(clientSession.SecondaryIndexSessionBroker, predicate, ref queryKey, querySettings);
+
+        /// <summary>
+        /// Query records from a single predicate and resolve them on the primary <see cref="FasterKV{Key, Value}"/> instance.
+        /// </summary>
+        /// <typeparam name="TKVKey">Key type of the primary <see cref="FasterKV{Key, Value}"/></typeparam>
+        /// <typeparam name="TKVValue">Value type of the primary <see cref="FasterKV{Key, Value}"/></typeparam>
+        /// <typeparam name="TInput">Input type of the <paramref name="clientSession"/></typeparam>
+        /// <typeparam name="TOutput">Output type of the <paramref name="clientSession"/></typeparam>
+        /// <typeparam name="TContext">Context </typeparam>
+        /// <typeparam name="TFunctions">Functions type of the <paramref name="clientSession"/></typeparam>
+        /// <typeparam name="TPKey">Key type of the <paramref name="predicate"/></typeparam>
+        /// <param name="clientSession">The session on the primary <see cref="FasterKV{Key, Value}"/></param>
+        /// <param name="predicate">The Predicate to query</param>
+        /// <param name="queryKey">The key to query on the predicate</param>
+        /// <param name="continuationToken"></param>
+        /// <param name="numberOfRecords"></param>
+        /// <param name="querySettings">Optional settings for the query</param>
+        /// <returns></returns>
+        public static ValueTask<QuerySegment<TKVKey, TKVValue>> QuerySegmentedAsync<TKVKey, TKVValue, TInput, TOutput, TContext, TFunctions, TPKey>(this AdvancedClientSession<TKVKey, TKVValue, TInput, TOutput, TContext, TFunctions> clientSession,
+                            IPredicate predicate, TPKey queryKey, string continuationToken, int numberOfRecords, QuerySettings querySettings = null)
+            where TFunctions : IAdvancedFunctions<TKVKey, TKVValue, TInput, TOutput, TContext>
+            => QuerySegmentedAsync<TKVKey, TKVValue, TPKey>(clientSession.SecondaryIndexSessionBroker, predicate, ref queryKey, continuationToken, numberOfRecords, querySettings);
 
         #endregion IAdvancedFunctions
         #endregion Single Predicate
@@ -296,6 +428,29 @@ namespace FASTER.indexes.HashValueIndex
             where TFunctions : IFunctions<TKVKey, TKVValue, TInput, TOutput, TContext>
             => QueryAsync<TKVKey, TKVValue, TPKey>(clientSession.SecondaryIndexSessionBroker, queryPredicates, matchPredicate, querySettings);
 
+        /// <summary>
+        /// Query records from a single predicate and resolve them on the primary <see cref="FasterKV{Key, Value}"/> instance.
+        /// </summary>
+        /// <typeparam name="TKVKey">Key type of the primary <see cref="FasterKV{Key, Value}"/></typeparam>
+        /// <typeparam name="TKVValue">Value type of the primary <see cref="FasterKV{Key, Value}"/></typeparam>
+        /// <typeparam name="TInput">Input type of the <paramref name="clientSession"/></typeparam>
+        /// <typeparam name="TOutput">Output type of the <paramref name="clientSession"/></typeparam>
+        /// <typeparam name="TContext">Context </typeparam>
+        /// <typeparam name="TFunctions">Functions type of the <paramref name="clientSession"/></typeparam>
+        /// <typeparam name="TPKey">Key type of the <paramref name="queryPredicates"/></typeparam>
+        /// <param name="clientSession">The session on the primary <see cref="FasterKV{Key, Value}"/></param>
+        /// <param name="queryPredicates">A vector of tuples consisting of the Predicate to query and the key to search for</param>
+        /// <param name="matchPredicate">A function that receives a vector of bool in the order of the predicates in <paramref name="queryPredicates"/>, 
+        ///     indicating whether the RecordId currently being processed by the query matched the queryPredicate at that position.</param>
+        /// <param name="continuationToken"></param>
+        /// <param name="numberOfRecords"></param>
+        /// <param name="querySettings">Optional settings for the query</param>
+        /// <returns></returns>
+        public static ValueTask<QuerySegment<TKVKey, TKVValue>> QuerySegmentedAsync<TKVKey, TKVValue, TInput, TOutput, TContext, TFunctions, TPKey>(this ClientSession<TKVKey, TKVValue, TInput, TOutput, TContext, TFunctions> clientSession,
+                            (IPredicate predicate, TPKey queryKey)[] queryPredicates, Func<bool[], bool> matchPredicate, string continuationToken, int numberOfRecords, QuerySettings querySettings = null)
+            where TFunctions : IFunctions<TKVKey, TKVValue, TInput, TOutput, TContext>
+            => QuerySegmentedAsync<TKVKey, TKVValue, TPKey>(clientSession.SecondaryIndexSessionBroker, queryPredicates, matchPredicate, continuationToken, numberOfRecords, querySettings);
+
         #endregion IFunctions
         #region IAdvancedFunctions
 
@@ -321,6 +476,29 @@ namespace FASTER.indexes.HashValueIndex
             => Query<TKVKey, TKVValue, TPKey>(clientSession.SecondaryIndexSessionBroker, queryPredicates, matchPredicate, querySettings);
 
         /// <summary>
+        /// Query records from a single predicate and resolve them on the primary <see cref="FasterKV{Key, Value}"/> instance.
+        /// </summary>
+        /// <typeparam name="TKVKey">Key type of the primary <see cref="FasterKV{Key, Value}"/></typeparam>
+        /// <typeparam name="TKVValue">Value type of the primary <see cref="FasterKV{Key, Value}"/></typeparam>
+        /// <typeparam name="TInput">Input type of the <paramref name="clientSession"/></typeparam>
+        /// <typeparam name="TOutput">Output type of the <paramref name="clientSession"/></typeparam>
+        /// <typeparam name="TContext">Context </typeparam>
+        /// <typeparam name="TFunctions">Functions type of the <paramref name="clientSession"/></typeparam>
+        /// <typeparam name="TPKey">Key type of the <paramref name="queryPredicates"/></typeparam>
+        /// <param name="clientSession">The session on the primary <see cref="FasterKV{Key, Value}"/></param>
+        /// <param name="queryPredicates">A vector of tuples consisting of the Predicate to query and the key to search for</param>
+        /// <param name="matchPredicate">A function that receives a vector of bool in the order of the predicates in <paramref name="queryPredicates"/>, 
+        ///     indicating whether the RecordId currently being processed by the query matched the queryPredicate at that position.</param>
+        /// <param name="continuationToken"></param>
+        /// <param name="numberOfRecords"></param>
+        /// <param name="querySettings">Optional settings for the query</param>
+        /// <returns></returns>
+        public static QuerySegment<TKVKey, TKVValue> QuerySegmented<TKVKey, TKVValue, TInput, TOutput, TContext, TFunctions, TPKey>(this AdvancedClientSession<TKVKey, TKVValue, TInput, TOutput, TContext, TFunctions> clientSession,
+                            (IPredicate predicate, TPKey queryKey)[] queryPredicates, Func<bool[], bool> matchPredicate, string continuationToken, int numberOfRecords, QuerySettings querySettings = null)
+            where TFunctions : IAdvancedFunctions<TKVKey, TKVValue, TInput, TOutput, TContext>
+            => QuerySegmented<TKVKey, TKVValue, TPKey>(clientSession.SecondaryIndexSessionBroker, queryPredicates, matchPredicate, continuationToken, numberOfRecords, querySettings);
+
+        /// <summary>
         /// Query records from multiple predicates and resolve them on the primary <see cref="FasterKV{Key, Value}"/> instance.
         /// </summary>
         /// <typeparam name="TKVKey">Key type of the primary <see cref="FasterKV{Key, Value}"/></typeparam>
@@ -340,6 +518,29 @@ namespace FASTER.indexes.HashValueIndex
                             (IPredicate predicate, TPKey queryKey)[] queryPredicates, Func<bool[], bool> matchPredicate, QuerySettings querySettings = null)
             where TFunctions : IAdvancedFunctions<TKVKey, TKVValue, TInput, TOutput, TContext>
             => QueryAsync<TKVKey, TKVValue, TPKey>(clientSession.SecondaryIndexSessionBroker, queryPredicates, matchPredicate, querySettings);
+
+        /// <summary>
+        /// Query records from a single predicate and resolve them on the primary <see cref="FasterKV{Key, Value}"/> instance.
+        /// </summary>
+        /// <typeparam name="TKVKey">Key type of the primary <see cref="FasterKV{Key, Value}"/></typeparam>
+        /// <typeparam name="TKVValue">Value type of the primary <see cref="FasterKV{Key, Value}"/></typeparam>
+        /// <typeparam name="TInput">Input type of the <paramref name="clientSession"/></typeparam>
+        /// <typeparam name="TOutput">Output type of the <paramref name="clientSession"/></typeparam>
+        /// <typeparam name="TContext">Context </typeparam>
+        /// <typeparam name="TFunctions">Functions type of the <paramref name="clientSession"/></typeparam>
+        /// <typeparam name="TPKey">Key type of the <paramref name="queryPredicates"/></typeparam>
+        /// <param name="clientSession">The session on the primary <see cref="FasterKV{Key, Value}"/></param>
+        /// <param name="queryPredicates">A vector of tuples consisting of the Predicate to query and the key to search for</param>
+        /// <param name="matchPredicate">A function that receives a vector of bool in the order of the predicates in <paramref name="queryPredicates"/>, 
+        ///     indicating whether the RecordId currently being processed by the query matched the queryPredicate at that position.</param>
+        /// <param name="continuationToken"></param>
+        /// <param name="numberOfRecords"></param>
+        /// <param name="querySettings">Optional settings for the query</param>
+        /// <returns></returns>
+        public static ValueTask<QuerySegment<TKVKey, TKVValue>> QuerySegmentedAsync<TKVKey, TKVValue, TInput, TOutput, TContext, TFunctions, TPKey>(this AdvancedClientSession<TKVKey, TKVValue, TInput, TOutput, TContext, TFunctions> clientSession,
+                            (IPredicate predicate, TPKey queryKey)[] queryPredicates, Func<bool[], bool> matchPredicate, string continuationToken, int numberOfRecords, QuerySettings querySettings = null)
+            where TFunctions : IAdvancedFunctions<TKVKey, TKVValue, TInput, TOutput, TContext>
+            => QuerySegmentedAsync<TKVKey, TKVValue, TPKey>(clientSession.SecondaryIndexSessionBroker, queryPredicates, matchPredicate, continuationToken, numberOfRecords, querySettings);
 
         #endregion IAdvancedFunctions
         #endregion Vector of Predicates
@@ -376,6 +577,10 @@ namespace FASTER.indexes.HashValueIndex
                             IPredicate predicate, ref TPKey queryKey, QuerySettings querySettings)
             => GetIndex<TKVKey, TKVValue, TPKey>(predicate).QueryAsync(predicate, ref queryKey, secondaryIndexSessionBroker, querySettings);
 
+        private static ValueTask<QuerySegment<TKVKey, TKVValue>> QuerySegmentedAsync<TKVKey, TKVValue, TPKey>(SecondaryIndexSessionBroker secondaryIndexSessionBroker,
+                            IPredicate predicate, ref TPKey queryKey, string continuationToken, int numRecords, QuerySettings querySettings)
+            => GetIndex<TKVKey, TKVValue, TPKey>(predicate).QuerySegmentedAsync(predicate, ref queryKey, secondaryIndexSessionBroker, continuationToken, numRecords, querySettings);
+
         private static IEnumerable<QueryRecord<TKVKey, TKVValue>> Query<TKVKey, TKVValue, TPKey>(SecondaryIndexSessionBroker secondaryIndexSessionBroker,
                             (IPredicate predicate, TPKey queryKey)[] queryPredicates, Func<bool[], bool> matchPredicate, QuerySettings querySettings)
             => GetIndex<TKVKey, TKVValue, TPKey>(queryPredicates).Query(queryPredicates, matchPredicate, secondaryIndexSessionBroker, querySettings);
@@ -388,6 +593,9 @@ namespace FASTER.indexes.HashValueIndex
                             (IPredicate predicate, TPKey queryKey)[] queryPredicates, Func<bool[], bool> matchPredicate, QuerySettings querySettings)
             => GetIndex<TKVKey, TKVValue, TPKey>(queryPredicates).QueryAsync(queryPredicates, matchPredicate, secondaryIndexSessionBroker, querySettings);
 
+        private static ValueTask<QuerySegment<TKVKey, TKVValue>> QuerySegmentedAsync<TKVKey, TKVValue, TPKey>(SecondaryIndexSessionBroker secondaryIndexSessionBroker,
+                            (IPredicate predicate, TPKey queryKey)[] queryPredicates, Func<bool[], bool> matchPredicate, string continuationString, int numRecords, QuerySettings querySettings)
+            => GetIndex<TKVKey, TKVValue, TPKey>(queryPredicates).QuerySegmentedAsync(queryPredicates, matchPredicate, secondaryIndexSessionBroker, continuationString, numRecords, querySettings);
         #endregion Internal API implementations
 
         #region Internal Context operations
@@ -409,9 +617,9 @@ namespace FASTER.indexes.HashValueIndex
 
         internal static ValueTask<SecondaryFasterKV<TPKey>.ReadAsyncResult<SecondaryFasterKV<TPKey>.Input, SecondaryFasterKV<TPKey>.Output, SecondaryFasterKV<TPKey>.Context>> IndexReadAsync<TPKey>(
                                     this AdvancedClientSession<TPKey, RecordId, SecondaryFasterKV<TPKey>.Input, SecondaryFasterKV<TPKey>.Output, SecondaryFasterKV<TPKey>.Context, SecondaryFasterKV<TPKey>.Functions> session,
-                                    SecondaryFasterKV<TPKey> fkv, ref TPKey key, ref SecondaryFasterKV<TPKey>.Input input, SecondaryFasterKV<TPKey>.Output output, long startAddress,
+                                    SecondaryFasterKV<TPKey> fkv, ref TPKey key, ref SecondaryFasterKV<TPKey>.Input input, long startAddress,
                                     SecondaryFasterKV<TPKey>.Context context, long serialNo, QuerySettings querySettings)
-            => fkv.ContextIndexReadAsync(session.FasterSession, session.ctx, ref key, ref input, output, startAddress, ref context, serialNo, querySettings);
+            => fkv.ContextIndexReadAsync(session.FasterSession, session.ctx, ref key, ref input, startAddress, ref context, serialNo, querySettings);
 
         internal static Status IndexInsert<TPKey>(this AdvancedClientSession<TPKey, RecordId, SecondaryFasterKV<TPKey>.Input, SecondaryFasterKV<TPKey>.Output, SecondaryFasterKV<TPKey>.Context, SecondaryFasterKV<TPKey>.Functions> session,
                                     SecondaryFasterKV<TPKey> fkv, ref TPKey key, RecordId recordId, ref SecondaryFasterKV<TPKey>.Input input, SecondaryFasterKV<TPKey>.Context context)

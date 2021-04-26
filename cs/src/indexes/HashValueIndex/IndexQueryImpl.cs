@@ -9,6 +9,7 @@ namespace FASTER.indexes.HashValueIndex
 {
     public partial class HashValueIndex<TKVKey, TKVValue, TPKey> : ISecondaryValueIndex<TKVValue>
     {
+        #region Sync
         private IEnumerable<QueryRecord<TKVKey, TKVValue>> InternalQuery(SecondaryFasterKV<TPKey>.Input input, SecondaryIndexSessionBroker sessionBroker, QuerySettings querySettings,
                                                                  QueryContinuationToken continuationToken = default, int numRecords = Constants.GetAllRecords)
         {
@@ -21,7 +22,7 @@ namespace FASTER.indexes.HashValueIndex
                 {
                     // Do not yield break here, because we want to serialize the current state into the continuationToken.
                     if (querySettings.IsCanceled)
-                        yield break;
+                        break;
                     SecondaryFasterKV<TPKey>.Output output = default;
                     if (!QueryNext(sessions.SecondarySession, input, ref output, querySettings, ref recordInfo, context))
                         recordInfo.PreviousAddress = core.Constants.kInvalidAddress;
@@ -32,12 +33,7 @@ namespace FASTER.indexes.HashValueIndex
                 }
 
                 if (continuationToken is { })
-                    input.Serialize(this.keyAccessor, continuationToken, 0, recordInfo.PreviousAddress, default);
-            }
-            catch (Exception)
-            {
-                // TODO: set conttok to some NoResults value on exception
-                throw;
+                    input.Serialize(continuationToken, 0, recordInfo.PreviousAddress, default);
             }
             finally
             {
@@ -74,8 +70,7 @@ namespace FASTER.indexes.HashValueIndex
                 }
 
                 // Iteration phase: "yield return" the highest RecordId, then retrieve all PreviousAddresses for those predicates.
-                var count = 0;
-                for ( ; numRecords == Constants.GetAllRecords || count < numRecords; /* incremented in loop */)
+                for (var count = 0; numRecords == Constants.GetAllRecords || count < numRecords; /* incremented in loop */)
                 {
                     // Do not yield break here, because we want to serialize the current state into the continuationToken.
                     if (querySettings.IsCanceled || !queryIter.Next())
@@ -103,13 +98,8 @@ namespace FASTER.indexes.HashValueIndex
                 if (continuationToken is { })
                 {
                     for (var ii = 0; ii < queryIter.Length; ++ii)
-                        queryIter[ii].Input.Serialize(this.keyAccessor, continuationToken, ii, queryIter[ii].RecordInfo.PreviousAddress, queryIter[ii].RecordId);
+                        queryIter[ii].Input.Serialize(continuationToken, ii, queryIter[ii].RecordInfo.PreviousAddress, queryIter[ii].RecordId);
                 }
-            }
-            catch (Exception)
-            {
-                // TODO: set conttok to some NoResults value on exception
-                throw;
             }
             finally
             {
@@ -148,41 +138,125 @@ namespace FASTER.indexes.HashValueIndex
             recordInfo.PreviousAddress = FASTER.core.Constants.kInvalidAddress;
             return false;
         }
+        #endregion Sync
 
-        private async IAsyncEnumerable<RecordId> InternalQueryAsync(AdvancedClientSession<TPKey, RecordId, SecondaryFasterKV<TPKey>.Input, SecondaryFasterKV<TPKey>.Output, SecondaryFasterKV<TPKey>.Context, SecondaryFasterKV<TPKey>.Functions> session,
-                SecondaryFasterKV<TPKey>.Input input, QuerySettings querySettings)
+        #region Async
+        private async IAsyncEnumerable<QueryRecord<TKVKey, TKVValue>> InternalQueryAsync(SecondaryFasterKV<TPKey>.Input input, SecondaryIndexSessionBroker sessionBroker, QuerySettings querySettings,
+                                                                    QueryContinuationToken continuationToken = default, int numRecords = Constants.GetAllRecords)
         {
-            var context = new SecondaryFasterKV<TPKey>.Context { Functions = session.functions };
-            RecordInfo recordInfo = default;
+            var sessions = GetSessions(sessionBroker);
+            var context = new SecondaryFasterKV<TPKey>.Context { Functions = sessions.SecondarySession.functions };
+            var startAddress = input.PreviousAddress;
             try
             {
-                do
+                for (var ii = 0; numRecords == Constants.GetAllRecords || ii < numRecords; ++ii)
                 {
-                    // Because we traverse the chain, we must wait for any pending read operations to complete.
-                    SecondaryFasterKV<TPKey>.Output queryOutput = default;
-                    var readAsyncResult = await session.IndexReadAsync(this.secondaryFkv, ref input.QueryKeyRef, ref input, queryOutput, recordInfo.PreviousAddress, context, session.ctx.serialNum, querySettings);
                     if (querySettings.IsCanceled)
-                        yield break;
+                        break;
+
+                    var readAsyncResult = await sessions.SecondarySession.IndexReadAsync(this.secondaryFkv, ref input.QueryKeyRef, ref input, startAddress, context, sessions.SecondarySession.ctx.serialNum, querySettings);
                     var (status, output) = readAsyncResult.Complete();
 
                     // ConcurrentReader and SingleReader are not called for tombstoned records, so instead we keep that state in the keyPointer.
                     // Thus, Status.NOTFOUND should only be returned if the key was not found.
                     if (status != Status.OK)
-                        yield break;
-                    yield return output.RecordId;
+                        break;
+                    var queryRecord = await ResolveRecordAsync(sessions.PrimarySession, output.RecordId, querySettings);
+                    if (queryRecord is { })
+                        yield return queryRecord;
 
-                    recordInfo.PreviousAddress = output.PreviousAddress;
-                } while (recordInfo.PreviousAddress != core.Constants.kInvalidAddress);
-            }
-            catch (Exception)
-            {
-                // TODO: set conttok to some NoResults value on exception
-                throw;
+                    startAddress = output.PreviousAddress;
+                    if (startAddress == core.Constants.kInvalidAddress)
+                        break;
+                }
+
+                if (continuationToken is { })
+                    input.Serialize(continuationToken, 0, startAddress, default);
             }
             finally
             {
                 input.Dispose();
             }
         }
+
+        private async IAsyncEnumerable<QueryRecord<TKVKey, TKVValue>> InternalQueryAsync(MultiPredicateQueryIterator<TPKey> queryIter, Func<bool[], bool> lambda, SecondaryIndexSessionBroker sessionBroker, QuerySettings querySettings,
+                                                                                         QueryContinuationToken continuationToken = default, int numRecords = Constants.GetAllRecords)
+        {
+            var sessions = GetSessions(sessionBroker);
+            var context = new SecondaryFasterKV<TPKey>.Context { Functions = sessions.SecondarySession.functions };
+            try
+            {
+                // Initialization phase: get the first records by individual key
+                if (continuationToken is null || continuationToken.IsEmpty)
+                {
+                    var any = false;
+                    for (var ii = 0; ii < queryIter.Length; ++ii)
+                    {
+                        var readAsyncResult = await sessions.SecondarySession.IndexReadAsync(this.secondaryFkv, ref queryIter[ii].Input.QueryKeyRef, ref queryIter[ii].Input,
+                                                queryIter[ii].RecordInfo.PreviousAddress, context, sessions.SecondarySession.ctx.serialNum, querySettings);
+                        var (status, output) = readAsyncResult.Complete();
+                        if (status != Status.OK)
+                        {
+                            queryIter[ii].RecordInfo.PreviousAddress = core.Constants.kInvalidAddress;
+                            continue;
+                        }
+                        if (querySettings.IsCanceled)
+                            yield break;
+                        queryIter[ii].RecordId = output.RecordId;
+                        queryIter[ii].RecordInfo.PreviousAddress = output.PreviousAddress;
+                        any = true;
+                    }
+                    if (!any)
+                        yield break;
+                }
+
+                // Iteration phase: "yield return" the highest RecordId, then retrieve all PreviousAddresses for those predicates.
+                for (var count = 0; numRecords == Constants.GetAllRecords || count < numRecords; /* incremented in loop */)
+                {
+                    // Do not yield break here, because we want to serialize the current state into the continuationToken.
+                    if (querySettings.IsCanceled || !queryIter.Next())
+                        break;
+                    if (lambda(queryIter.matches))
+                    {
+                        var queryRecord = await ResolveRecordAsync(sessions.PrimarySession, queryIter[queryIter.activeIndexes[0]].RecordId, querySettings);
+                        if (queryRecord is { })
+                        {
+                            yield return queryRecord;
+                            ++count;
+                        }
+                    }
+                    for (var ii = 0; ii < queryIter.activeLength; ++ii)
+                    {
+                        var activeIndex = queryIter.activeIndexes[ii];
+                        queryIter[activeIndex].RecordId = default;
+                        if (queryIter[activeIndex].RecordInfo.PreviousAddress != core.Constants.kInvalidAddress)
+                        {
+                            var readAsyncResult = await sessions.SecondarySession.IndexReadAsync(this.secondaryFkv, ref queryIter[activeIndex].Input.QueryKeyRef, ref queryIter[activeIndex].Input, 
+                                                    queryIter[activeIndex].RecordInfo.PreviousAddress, context, sessions.SecondarySession.ctx.serialNum, querySettings);
+                            var (status, output) = readAsyncResult.Complete();
+                            if (status != Status.OK)
+                                queryIter[activeIndex].RecordInfo.PreviousAddress = core.Constants.kInvalidAddress;
+                            else
+                            {
+                                queryIter[activeIndex].RecordId = output.RecordId;
+                                queryIter[activeIndex].RecordInfo.PreviousAddress = output.PreviousAddress;
+                            }
+                        }
+                    }
+                }
+
+                if (continuationToken is { })
+                {
+                    for (var ii = 0; ii < queryIter.Length; ++ii)
+                        queryIter[ii].Input.Serialize(continuationToken, ii, queryIter[ii].RecordInfo.PreviousAddress, queryIter[ii].RecordId);
+                }
+            }
+            finally
+            {
+                queryIter.Dispose();
+            }
+        }
+
+        #endregion Async
     }
 }

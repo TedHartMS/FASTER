@@ -43,6 +43,8 @@ namespace FASTER.indexes.HashValueIndex
         internal MultiPredicateQueryIterator(IEnumerable<SecondaryFasterKV<TPKey>.Input> inputs, QueryContinuationToken continuationToken = null)
         {
             this.states = inputs.Select(input => new PredicateIterationState<TPKey>(input)).ToArray();
+            if (continuationToken is { } &&  continuationToken.Predicates.Length != this.states.Length)
+                throw new HashValueIndexArgumentException($"Continuation token does not match number of predicates in the query");
             matches = new bool[this.Length];
             activeIndexes = new int[this.Length];
             activeLength = default;
@@ -73,7 +75,7 @@ namespace FASTER.indexes.HashValueIndex
                     maxFirstIndex = ii;
                 }
             }
-            if (maxRecordId.IsDefault)
+            if (maxRecordId.IsDefault())
                 return false;
 
             // 2. Set the active-indexes vector

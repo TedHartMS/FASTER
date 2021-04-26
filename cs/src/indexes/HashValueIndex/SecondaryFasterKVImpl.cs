@@ -11,7 +11,7 @@ using System.Threading;
 
 namespace FASTER.indexes.HashValueIndex
 {
-    // Internal function implementations for the secondary FasterKV implementing the SubsetIndex; these correspond to the similarly-named
+    // Internal function implementations for the secondary FasterKV implementing the HashValueIndex; these correspond to the similarly-named
     // functions in FasterImpl.cs.
     internal unsafe partial class SecondaryFasterKV<TPKey> : FasterKV<TPKey, RecordId>
     {
@@ -61,7 +61,7 @@ namespace FASTER.indexes.HashValueIndex
             {
                 logicalAddress = entry.Address;
 
-#if false // TODOdcr: Support ReadCache in SubsetIndex (must call this.KeyAccessor.GetRecordAddressFromKeyLogicalAddress) 
+#if false // TODOdcr: Support ReadCache in HashValueIndex (must call this.KeyAccessor.GetRecordAddressFromKeyLogicalAddress) 
                 if (UseReadCache)
                 {
                     // We don't let "read by address" use read cache
@@ -88,7 +88,7 @@ namespace FASTER.indexes.HashValueIndex
                 {
                     physicalAddress = hlog.GetPhysicalAddress(logicalAddress);
 
-                    // Note: we never have NoKey in the SubsetIndex flavor of this Read.
+                    // Note: we never have NoKey in the HashValueIndex flavor of this Read.
 
                     // The comparer is called during AsyncGetFromDiskCallback with a ref to the beginning of the stored CompsiteKey, so match that here.
                     var recordPhysicalAddress = this.KeyAccessor.GetRecordAddressFromKeyPointerAddress(physicalAddress);

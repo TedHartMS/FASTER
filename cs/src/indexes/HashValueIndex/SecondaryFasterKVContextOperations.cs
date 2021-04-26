@@ -34,11 +34,12 @@ namespace FASTER.indexes.HashValueIndex
 
         internal ValueTask<ReadAsyncResult<TInput, TOutput, TContext>> ContextIndexReadAsync<TInput, TOutput, TContext, FasterSession>(
                                         FasterSession fasterSession, FasterExecutionContext<TInput, TOutput, TContext> sessionCtx,
-                                        ref TPKey key, ref TInput input, TOutput output, long startAddress, ref TContext context, long serialNo, QuerySettings querySettings)
+                                        ref TPKey key, ref TInput input, long startAddress, ref TContext context, long serialNo, QuerySettings querySettings)
             where FasterSession : IFasterSession<TPKey, RecordId, TInput, TOutput, TContext>
         {
             var pcontext = default(PendingContext<TInput, TOutput, TContext>);
             var diskRequest = default(AsyncIOContext<TPKey, RecordId>);
+            TOutput output = default;
 
             fasterSession.UnsafeResumeThread();
             try

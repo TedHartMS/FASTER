@@ -3,6 +3,7 @@
 
 using FASTER.core;
 using Newtonsoft.Json;
+using System.Linq;
 
 #pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
 
@@ -16,7 +17,7 @@ namespace FASTER.indexes.HashValueIndex
 
         internal ref SerializedPredicate this[int index] => ref this.Predicates[index];
 
-        internal bool IsEmpty => this.Predicates[0].KeyState is null;
+        internal bool IsEmpty => this.Predicates.All(pred => pred.IsComplete);
 
         internal static QueryContinuationToken FromString(string json)
             => JsonConvert.DeserializeObject<QueryContinuationToken>(json);
@@ -27,7 +28,9 @@ namespace FASTER.indexes.HashValueIndex
 
     public struct SerializedPredicate
     {
-        public byte[] KeyState;
+        public long PreviousAddress;
         public RecordId RecordId;
+
+        internal bool IsComplete => this.PreviousAddress == FASTER.core.Constants.kInvalidAddress && this.RecordId.IsDefault();
     }
 }

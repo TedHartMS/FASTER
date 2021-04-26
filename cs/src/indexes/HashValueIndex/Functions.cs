@@ -32,7 +32,7 @@ namespace FASTER.indexes.HashValueIndex
             #region Reads
             public void ConcurrentReader(ref TPKey queryKeyPointerRefAsKeyRef, ref Input input, ref RecordId value, ref Output output, ref RecordInfo recordInfo, long logicalAddress)
             {
-                // Note: ConcurrentReader is not called for ReadCache, even if we eventually support ReadCache in SubsetIndex secondary KVs.
+                // Note: ConcurrentReader is not called for ReadCache, even if we eventually support ReadCache in HashValueIndex secondary KVs.
                 Debug.Assert(logicalAddress > FASTER.core.Constants.kTempInvalidAddress);
                 CopyInMemoryDataToOutput(ref queryKeyPointerRefAsKeyRef, ref input, ref value, ref output, logicalAddress);
             }
@@ -58,7 +58,7 @@ namespace FASTER.indexes.HashValueIndex
             {
                 if (logicalAddress <= FASTER.core.Constants.kTempInvalidAddress)
                 {
-                    // This is a ReadCache record. Note if we do support ReadCache in SubsetIndex secondary KVs: ReadCompletionCallback won't be called, so no need to flag it in Output.
+                    // This is a ReadCache record. Note if we do support ReadCache in HashValueIndex secondary KVs: ReadCompletionCallback won't be called, so no need to flag it in Output.
                     Debug.Fail("Invalid logicalAddress");
                     return;
                 }

@@ -17,7 +17,7 @@ namespace FASTER.indexes.HashValueIndex
 
         /// <summary>
         /// When registring new Indexes over an existing store, this is the logicalAddress in the primary
-        /// FasterKV at which indexing will be started. TODO: LogicalAddress is FasterKV-specific; revisit when indexing existing records.
+        /// FasterKV at which indexing will be started.
         /// </summary>
         public long IndexFromAddress = core.Constants.kInvalidAddress;
 

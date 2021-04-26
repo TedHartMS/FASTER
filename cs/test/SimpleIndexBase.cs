@@ -149,7 +149,7 @@ namespace FASTER.test
 
         internal void BaseDelete(RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker)
         {
-            Assert.IsFalse(recordId.IsDefault);
+            Assert.IsFalse(recordId.IsDefault());
             VerifySession(indexSessionBroker);
             if (!reverseLookup.TryGetValue(recordId, out TValue key))
                 Assert.Fail($"RecordId {recordId} not found in revserse lookup for {indexType}");
@@ -166,7 +166,7 @@ namespace FASTER.test
         internal void BaseInsert(ref TValue rawKey, RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker)
         {
             VerifySession(indexSessionBroker);
-            Assert.IsFalse(recordId.IsDefault);
+            Assert.IsFalse(recordId.IsDefault());
             var key = this.valueIndexKeyFunc(rawKey);
             VerifyNotImmutable(ref key, recordId);
             if (!MutableRecords.TryGetValue(key, out var recordIds))
