@@ -54,17 +54,19 @@ namespace FASTER.indexes.HashValueIndex
 
             internal long PreviousAddress
             {
-                get => this.QueryKeyPointerRef.PreviousAddress;
-                set => this.QueryKeyPointerRef.PreviousAddress = value;
+                get => this.AsQueryKeyPointerRef.PreviousAddress;
+                set => this.AsQueryKeyPointerRef.PreviousAddress = value;
             }
 
-            internal int PredicateOrdinal => this.QueryKeyPointerRef.PredicateOrdinal;
+            internal int PredicateOrdinal => this.AsQueryKeyPointerRef.PredicateOrdinal;
 
             internal bool IsDelete { get; set; }    // TODO needed?
 
-            internal ref TPKey QueryKeyRef => ref Unsafe.AsRef<TPKey>(this.keyPointerMem.GetValidPointer());
+            internal ref TPKey KeyRef => ref AsQueryKeyPointerRef.Key;
 
-            internal ref KeyPointer<TPKey> QueryKeyPointerRef => ref Unsafe.AsRef<KeyPointer<TPKey>>(this.keyPointerMem.GetValidPointer());
+            internal ref TPKey AsQueryKeyRef => ref Unsafe.AsRef<TPKey>(this.keyPointerMem.GetValidPointer());
+
+            internal ref KeyPointer<TPKey> AsQueryKeyPointerRef => ref Unsafe.AsRef<KeyPointer<TPKey>>(this.keyPointerMem.GetValidPointer());
 
             public void Dispose()
             {
@@ -72,7 +74,7 @@ namespace FASTER.indexes.HashValueIndex
                 this.keyPointerMem = null;
             }
 
-            public override string ToString() => $"qKeyPtr {this.QueryKeyPointerRef}, predOrd {this.PredicateOrdinal}, isDel {this.IsDelete}";
+            public override string ToString() => $"qKeyPtr {this.AsQueryKeyPointerRef}, predOrd {this.PredicateOrdinal}, isDel {this.IsDelete}";
         }
     }
 }

@@ -37,15 +37,16 @@ namespace BasicPredicateSample
 
         private static void RunQueries(ClientSession<Key, Value, Value, Value, Empty, Functions> session, Species species)
         {
-            QueryRecord<Key, Value>[] results = session.Query(store.PetPred, (int)species).ToArray();
+            var results = session.Query(store.PetPred, (int)species).ToArray();
             Console.WriteLine($"{results.Length} {species}s retrieved");
+            Dispose(results);
 
             string continuationToken = string.Empty;
             int count = 0;
 
             while (true)
             {
-                QuerySegment<Key, Value> segment = session.QuerySegmented(store.PetPred, (int)species, continuationToken, 100);
+                using var segment = session.QuerySegmented(store.PetPred, (int)species, continuationToken, 100);
                 if (segment.Results.Count == 0)
                     break;
                 count += segment.Results.Count;
@@ -53,5 +54,7 @@ namespace BasicPredicateSample
                 Console.WriteLine($"  CT: {count} {species}s retrieved");
             }
         }
+
+        private static void Dispose(QueryRecord<Key, Value>[] records) => Array.ForEach(records, record => record.Dispose());
     }
 }

@@ -87,7 +87,7 @@ namespace FASTER.indexes.HashValueIndex
             public void ReadCompletionCallback(ref TPKey _, ref Input input, ref Output output, Context ctx, Status status, RecordInfo recordInfo) { }
             #endregion Reads
 
-#if DEBUG
+#if !TODO // Remove and change to AdVancedFunctionsBase when no longer needed
             private const string NotUsedForHashValueIndex = "HashValueIndex SecondaryFasterKVs should not use this IFunctions method";
 
             #region Upserts

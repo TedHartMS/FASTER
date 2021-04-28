@@ -11,16 +11,37 @@ namespace FASTER.indexes.HashValueIndex
 {
     public class QueryContinuationToken
     {
+        public long PrimaryStartAddress;
+        public long PrimaryEndAddress;
         public SerializedPredicate[] Predicates;
+        public bool IsSecondaryStarted;
+        public bool IsCanceled;
+
+        public QueryContinuationToken() { /* For JsonConvert.DeserializeObject */ }
 
         public QueryContinuationToken(int numberOfPredicates) => this.Predicates = new SerializedPredicate[numberOfPredicates];
 
         internal ref SerializedPredicate this[int index] => ref this.Predicates[index];
 
-        internal bool IsEmpty => this.Predicates.All(pred => pred.IsComplete);
+        internal bool IsPrimaryStarted => this.PrimaryStartAddress != FASTER.core.Constants.kInvalidAddress;
+        internal void SetPrimaryAddresses(long start, long end)
+        {
+            this.PrimaryStartAddress = start;
+            this.PrimaryEndAddress = end;
+        }
+        internal bool IsPrimaryComplete => this.IsPrimaryStarted && this.PrimaryStartAddress >= this.PrimaryEndAddress;
+
+        internal bool IsSecondaryComplete => this.IsSecondaryStarted && this.Predicates.All(pred => pred.IsComplete);
+
+        internal bool IsComplete => this.IsPrimaryComplete && this.IsSecondaryComplete;
 
         internal static QueryContinuationToken FromString(string json)
-            => JsonConvert.DeserializeObject<QueryContinuationToken>(json);
+        {
+            var continuationToken = JsonConvert.DeserializeObject<QueryContinuationToken>(json);
+            return continuationToken.IsCanceled
+                ? throw new HashValueIndexInvalidOperationException("Query has been canceled")
+                : continuationToken;
+        }
 
         public override string ToString() 
             => JsonConvert.SerializeObject(this, new JsonSerializerSettings { Formatting = Formatting.Indented });

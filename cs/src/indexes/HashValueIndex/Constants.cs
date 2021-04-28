@@ -7,6 +7,7 @@ namespace FASTER.indexes.HashValueIndex
     {
         public const int kInvalidPredicateOrdinal = 255; // 0-based ordinals; this is also the max count
 
-        public const int GetAllRecords = -1;
+        // For query, get all records (not segmented)
+        public const int kGetAllRecords = -1;
     }
 }

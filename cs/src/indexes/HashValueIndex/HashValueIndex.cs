@@ -206,13 +206,13 @@ namespace FASTER.indexes.HashValueIndex
             continuationToken = QueryContinuationToken.FromString(continuationString);
             if (continuationToken.Predicates.Length != 1)
                 throw new HashValueIndexArgumentException($"Continuation token does not match number of predicates in the query");
-            if (continuationToken.IsEmpty)
+            if (continuationToken.IsComplete)
             {
                 input = default;
                 return false;
             }
             input = this.MakeQueryInput(predicate, ref key, continuationToken, 0);
-            return input.PreviousAddress != FASTER.core.Constants.kInvalidAddress;
+            return true;
         }
 
         private bool MakeQueryIterator(IEnumerable<(IPredicate pred, TPKey key)> queryPredicates, string continuationString, out QueryContinuationToken continuationToken, out MultiPredicateQueryIterator<TPKey> queryIterator)
@@ -225,14 +225,14 @@ namespace FASTER.indexes.HashValueIndex
             }
 
             continuationToken = QueryContinuationToken.FromString(continuationString);
-            if (continuationToken.IsEmpty)
+            if (continuationToken.IsComplete)
             {
                 queryIterator = default;
                 return false;
             }
             var localToken = continuationToken;
             queryIterator = new MultiPredicateQueryIterator<TPKey>(queryPredicates.Select((qp, ii) => this.MakeQueryInput(qp.pred, ref qp.key, localToken, ii)), continuationToken);
-            return queryIterator.states.Any(state => state.RecordInfo.PreviousAddress != FASTER.core.Constants.kInvalidAddress);
+            return true;
         }
 
         internal QuerySegment<TKVKey, TKVValue> CreateSegment(IEnumerable<QueryRecord<TKVKey, TKVValue>> recordsEnum, QueryContinuationToken continuationToken)
@@ -258,16 +258,19 @@ namespace FASTER.indexes.HashValueIndex
             => InternalQueryAsync(this.MakeQueryInput(predicate, ref key), sessionBroker, querySettings ?? QuerySettings.Default);
 
         internal ValueTask<QuerySegment<TKVKey, TKVValue>> QuerySegmentedAsync(IPredicate predicate, ref TPKey key, SecondaryIndexSessionBroker sessionBroker, string continuationString, int numRecords, QuerySettings querySettings)
-            => MakeQueryIterator(predicate, ref key, continuationString, out QueryContinuationToken continuationToken, out SecondaryFasterKV<TPKey>.Input input)
-                ? CreateSegmentAsync(InternalQueryAsync(input, sessionBroker, querySettings ?? QuerySettings.Default, continuationToken, numRecords), continuationToken, querySettings)
-                : new ValueTask<QuerySegment<TKVKey, TKVValue>>(new QuerySegment<TKVKey, TKVValue>(new List<QueryRecord<TKVKey, TKVValue>>(), continuationString));
+        {
+            querySettings ??= QuerySettings.Default;
+            return MakeQueryIterator(predicate, ref key, continuationString, out QueryContinuationToken continuationToken, out SecondaryFasterKV<TPKey>.Input input)
+                           ? CreateSegmentAsync(InternalQueryAsync(input, sessionBroker, querySettings, continuationToken, numRecords), continuationToken, querySettings)
+                           : new ValueTask<QuerySegment<TKVKey, TKVValue>>(new QuerySegment<TKVKey, TKVValue>(new List<QueryRecord<TKVKey, TKVValue>>(), continuationString));
+        }
         #endregion Single Predicate Async
 
         #region Multi Predicate Sync
         internal IEnumerable<QueryRecord<TKVKey, TKVValue>> Query(IEnumerable<(IPredicate pred, TPKey key)> queryPredicates,
                     Func<bool[], bool> matchPredicate, SecondaryIndexSessionBroker sessionBroker, QuerySettings querySettings)
             => MakeQueryIterator(queryPredicates, string.Empty, out QueryContinuationToken _, out MultiPredicateQueryIterator<TPKey> queryIterator)
-                ? InternalQuery(queryIterator, matchPredicate, sessionBroker, querySettings ??= QuerySettings.Default)
+                ? InternalQuery(queryIterator, matchPredicate, sessionBroker, querySettings ?? QuerySettings.Default)
                 : new List<QueryRecord<TKVKey, TKVValue>>();
 
         internal QuerySegment<TKVKey, TKVValue> QuerySegmented(IEnumerable<(IPredicate pred, TPKey key)> queryPredicates,
@@ -281,14 +284,17 @@ namespace FASTER.indexes.HashValueIndex
         internal IAsyncEnumerable<QueryRecord<TKVKey, TKVValue>> QueryAsync(IEnumerable<(IPredicate pred, TPKey key)> queryPredicates, Func<bool[], bool> matchPredicate,
                     SecondaryIndexSessionBroker sessionBroker, QuerySettings querySettings = null)
             => MakeQueryIterator(queryPredicates, string.Empty, out QueryContinuationToken _, out MultiPredicateQueryIterator<TPKey> queryIterator)
-                ? InternalQueryAsync(queryIterator, matchPredicate, sessionBroker, querySettings ??= QuerySettings.Default)
+                ? InternalQueryAsync(queryIterator, matchPredicate, sessionBroker, querySettings ?? QuerySettings.Default)
                 : new List<QueryRecord<TKVKey, TKVValue>>().ToAsyncEnumerable();
 
         internal ValueTask<QuerySegment<TKVKey, TKVValue>> QuerySegmentedAsync(IEnumerable<(IPredicate pred, TPKey key)> queryPredicates, Func<bool[], bool> matchPredicate,
                     SecondaryIndexSessionBroker sessionBroker, string continuationString, int numRecords, QuerySettings querySettings = null)
-            => MakeQueryIterator(queryPredicates, continuationString, out QueryContinuationToken continuationToken, out MultiPredicateQueryIterator<TPKey> queryIterator)
-                ? CreateSegmentAsync(InternalQueryAsync(queryIterator, matchPredicate, sessionBroker, querySettings ??= QuerySettings.Default, continuationToken, numRecords), continuationToken, querySettings)
-                : new ValueTask<QuerySegment<TKVKey, TKVValue>>(new QuerySegment<TKVKey, TKVValue>(new List<QueryRecord<TKVKey, TKVValue>>(), continuationString));
+        {
+            querySettings ??= QuerySettings.Default;
+            return MakeQueryIterator(queryPredicates, continuationString, out QueryContinuationToken continuationToken, out MultiPredicateQueryIterator<TPKey> queryIterator)
+                           ? CreateSegmentAsync(InternalQueryAsync(queryIterator, matchPredicate, sessionBroker, querySettings, continuationToken, numRecords), continuationToken, querySettings)
+                           : new ValueTask<QuerySegment<TKVKey, TKVValue>>(new QuerySegment<TKVKey, TKVValue>(new List<QueryRecord<TKVKey, TKVValue>>(), continuationString));
+        }
         #endregion Multi Predicate Async
 
         /// <summary>

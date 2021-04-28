@@ -130,7 +130,6 @@ namespace FASTER.core
 
         /// <summary>
         /// Subscribe to records (in batches) as they become read-only in the log
-        /// Currently, we support only one subscriber to the log (easy to extend)
         /// Subscriber only receives new log updates from the time of subscription onwards
         /// To scan the historical part of the log, use the Scan(...) method
         /// </summary>
@@ -143,7 +142,6 @@ namespace FASTER.core
 
         /// <summary>
         /// Subscribe to records (in batches) as they get evicted from main memory.
-        /// Currently, we support only one subscriber to the log (easy to extend)
         /// Subscriber only receives eviction updates from the time of subscription onwards
         /// To scan the historical part of the log, use the Scan(...) method
         /// </summary>

@@ -1,9 +1,9 @@
 ﻿// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT license.
 
+using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace FASTER.core
 {
@@ -12,7 +12,7 @@ namespace FASTER.core
     /// </summary>
     /// <typeparam name="TKVKey"></typeparam>
     /// <typeparam name="TKVValue"></typeparam>
-    public class QuerySegment<TKVKey, TKVValue> : IEnumerable<QueryRecord<TKVKey, TKVValue>>
+    public class QuerySegment<TKVKey, TKVValue> : IEnumerable<QueryRecord<TKVKey, TKVValue>>, IDisposable
     {
         /// <summary>
         /// The records for the current segment
@@ -37,5 +37,12 @@ namespace FASTER.core
         public IEnumerator<QueryRecord<TKVKey, TKVValue>> GetEnumerator() => this.Results.GetEnumerator();
 
         IEnumerator IEnumerable.GetEnumerator() => this.GetEnumerator();
+
+        /// <inheritdoc/>
+        public void Dispose()
+        {
+            this.Results.ForEach(record => record.Dispose());
+            this.Results.Clear();
+        }
     }
 }

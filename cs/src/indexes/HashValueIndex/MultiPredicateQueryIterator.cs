@@ -46,7 +46,7 @@ namespace FASTER.indexes.HashValueIndex
             if (continuationToken is { } &&  continuationToken.Predicates.Length != this.states.Length)
                 throw new HashValueIndexArgumentException($"Continuation token does not match number of predicates in the query");
             matches = new bool[this.Length];
-            activeIndexes = new int[this.Length];
+            activeIndexes = inputs.Select(input => input.PredicateOrdinal).ToArray();
             activeLength = default;
             if (continuationToken is { })
             {
@@ -62,7 +62,7 @@ namespace FASTER.indexes.HashValueIndex
         // TODOoerf: This could be a priority queue, but we likely aren't going to have enough predicates in a single query to matter.
         internal bool Next()
         {
-            // 1. Get highest address. We can order on just Address because Version should not change after the record goes ReadOnly.
+            // 1. Get highest RecordId. We can order on just Address because Version should not change after the record goes ReadOnly.
             RecordId maxRecordId = default;
             int maxFirstIndex = -1;
             for (int ii = 0; ii < this.Length; ++ii)
