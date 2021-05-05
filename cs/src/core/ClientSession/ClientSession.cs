@@ -891,8 +891,11 @@ namespace FASTER.core
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             private bool ConcurrentWriterNoLock(ref Key key, ref Value src, ref Value dst, ref RecordInfo recordInfo, long address)
-                => _clientSession.functions.ConcurrentWriter(ref key, ref src, ref dst)
-                    && _clientSession.fht.UpdateSIForIPU(ref dst, new RecordId(address, recordInfo), this.SecondaryIndexSessionBroker);
+            {
+                recordInfo.Version = _clientSession.ctx.version;
+                return _clientSession.functions.ConcurrentWriter(ref key, ref src, ref dst)
+                    && _clientSession.fht.UpdateSIForIPU(ref key, ref dst, new RecordId(address, recordInfo), this.SecondaryIndexSessionBroker);
+            }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             private bool ConcurrentWriterLock(ref Key key, ref Value src, ref Value dst, ref RecordInfo recordInfo, long address)
@@ -922,6 +925,7 @@ namespace FASTER.core
             private void ConcurrentDeleterNoLock(ref RecordInfo recordInfo)
             {
                 // Non-Advanced IFunctions has no ConcurrentDeleter
+                recordInfo.Version = _clientSession.ctx.version;
                 recordInfo.Tombstone = true;
             }
 
@@ -976,8 +980,11 @@ namespace FASTER.core
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             private bool InPlaceUpdaterNoLock(ref Key key, ref Input input, ref Value value, ref RecordInfo recordInfo, long address)
-                => _clientSession.functions.InPlaceUpdater(ref key, ref input, ref value)
-                    && _clientSession.fht.UpdateSIForIPU(ref value, new RecordId(address, recordInfo), this.SecondaryIndexSessionBroker);
+            {
+                recordInfo.Version = _clientSession.ctx.version;
+                return _clientSession.functions.InPlaceUpdater(ref key, ref input, ref value)
+                    && _clientSession.fht.UpdateSIForIPU(ref key, ref value, new RecordId(address, recordInfo), this.SecondaryIndexSessionBroker);
+            }
 
             private bool InPlaceUpdaterLock(ref Key key, ref Input input, ref Value value, ref RecordInfo recordInfo, long address)
             {

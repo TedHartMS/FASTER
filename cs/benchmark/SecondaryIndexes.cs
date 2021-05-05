@@ -13,14 +13,24 @@ namespace FASTER.benchmark
 
         public void SetSessionSlot(long slot) { }
 
-        public void Delete(ref Key key, SecondaryIndexSessionBroker indexSessionBroker) { }
+        public void Delete(ref Key key, RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker) { }
 
-        public void Insert(ref Key key, SecondaryIndexSessionBroker indexSessionBroker) { }
+        public void Insert(ref Key key, RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker) { }
 
-        public void Upsert(ref Key key, bool isMutableRecord, SecondaryIndexSessionBroker indexSessionBroker) { }
+        public void Upsert(ref Key key, RecordId recordId, bool isMutableRecord, SecondaryIndexSessionBroker indexSessionBroker) { }
+
+        public void OnPrimaryCheckpoint(int version, long flushedUntilAddress) { }
+
+        public void OnPrimaryRecover(int version, long flushedUntilAddress, out int recoveredToVersion, out long recoveredToAddress)
+        {
+            recoveredToVersion = default;
+            recoveredToAddress = default;
+        }
+
+        public void OnPrimaryTruncate(long newBeginAddress) { }
     }
 
-    class NullValueIndex<Value> : ISecondaryValueIndex<Value>
+    class NullValueIndex<Key, Value> : ISecondaryValueIndex<Key, Value>
     {
         public string Name => "ValueIndex";
 
@@ -28,10 +38,20 @@ namespace FASTER.benchmark
 
         public void SetSessionSlot(long slot) { }
 
-        public void Delete(RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker) { }
+        public void Delete(ref Key key, RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker) { }
 
-        public void Insert(ref Value value, RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker) { }
+        public void Insert(ref Key key, ref Value value, RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker) { }
 
-        public void Upsert(ref Value value, RecordId recordId, bool isMutableRecord, SecondaryIndexSessionBroker indexSessionBroker) { }
+        public void Upsert(ref Key key, ref Value value, RecordId recordId, bool isMutableRecord, SecondaryIndexSessionBroker indexSessionBroker) { }
+
+        public void OnPrimaryCheckpoint(int version, long flushedUntilAddress) { }
+
+        public void OnPrimaryRecover(int version, long flushedUntilAddress, out int recoveredToVersion, out long recoveredToAddress)
+        {
+            recoveredToVersion = default;
+            recoveredToAddress = default;
+        }
+
+        public void OnPrimaryTruncate(long newBeginAddress) { }
     }
 }

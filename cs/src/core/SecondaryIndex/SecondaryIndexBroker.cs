@@ -2,7 +2,6 @@
 // Licensed under the MIT license.
 
 using System;
-using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
 #pragma warning disable IDE0056 // Use index operator (^ is not supported on .NET Framework or NETCORE pre-3.0)
@@ -15,13 +14,13 @@ namespace FASTER.core
     public class SecondaryIndexBroker<TKVKey, TKVValue>
     {
         private ISecondaryKeyIndex<TKVKey>[] allKeyIndexes;
-        private ISecondaryValueIndex<TKVValue>[] allValueIndexes;
+        private ISecondaryValueIndex<TKVKey, TKVValue>[] allValueIndexes;
 
         // Use arrays for faster traversal.
         private ISecondaryKeyIndex<TKVKey>[] mutableKeyIndexes = Array.Empty<ISecondaryKeyIndex<TKVKey>>();
         internal int MutableKeyIndexCount => mutableKeyIndexes.Length;
 
-        private ISecondaryValueIndex<TKVValue>[] mutableValueIndexes = Array.Empty<ISecondaryValueIndex<TKVValue>>();
+        private ISecondaryValueIndex<TKVKey, TKVValue>[] mutableValueIndexes = Array.Empty<ISecondaryValueIndex<TKVKey, TKVValue>>();
         internal int MutableValueIndexCount => mutableValueIndexes.Length;
 
         readonly object membershipLock = new object();
@@ -65,7 +64,7 @@ namespace FASTER.core
             lock (membershipLock)
             {
                 if (!addSpecific(ref allKeyIndexes, ref mutableKeyIndexes, index as ISecondaryKeyIndex<TKVKey>)
-                    && !addSpecific(ref allValueIndexes, ref mutableValueIndexes, index as ISecondaryValueIndex<TKVValue>))
+                    && !addSpecific(ref allValueIndexes, ref mutableValueIndexes, index as ISecondaryValueIndex<TKVKey, TKVValue>))
                     throw new SecondaryIndexException("Object is not a KeyIndex or ValueIndex");
                 this.HasMutableIndexes |= isMutable;    // Note: removing indexes will have to recalculate this
                 index.SetSessionSlot(SecondaryIndexSessionBroker.NextSessionSlot++);
@@ -92,33 +91,22 @@ namespace FASTER.core
         /// Inserts a mutable key into all mutable secondary key indexes.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Insert(ref TKVKey key, SecondaryIndexSessionBroker indexSessionBroker)
+        public void Insert(ref TKVKey key, RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker)
         {
             var mki = this.mutableKeyIndexes;
             foreach (var keyIndex in mki)
-                keyIndex.Insert(ref key, indexSessionBroker);
+                keyIndex.Insert(ref key, recordId, indexSessionBroker);
         }
 
         /// <summary>
         /// Upserts a mutable key into all mutable secondary key indexes.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Upsert(ref TKVKey key, SecondaryIndexSessionBroker indexSessionBroker)
+        public void Upsert(ref TKVKey key, RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker)
         {
             var mki = this.mutableKeyIndexes;
             foreach (var keyIndex in mki)
-                keyIndex.Upsert(ref key, isMutableRecord: true, indexSessionBroker);
-        }
-
-        /// <summary>
-        /// Deletes recordId for a key from all mutable secondary key indexes.
-        /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Delete(ref TKVKey key, SecondaryIndexSessionBroker indexSessionBroker)
-        {
-            var mki = this.mutableKeyIndexes;
-            foreach (var keyIndex in mki)
-                keyIndex.Delete(ref key, indexSessionBroker);
+                keyIndex.Upsert(ref key, recordId, isMutableRecord: true, indexSessionBroker);
         }
         #endregion Mutable KeyIndexes
 
@@ -127,35 +115,42 @@ namespace FASTER.core
         /// Inserts a recordId keyed by a mutable value into all mutable secondary value indexes.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Insert(ref TKVValue value, RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker)
+        public void Insert(ref TKVKey key, ref TKVValue value, RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker)
         {
             var mvi = this.mutableValueIndexes;
             foreach (var valueIndex in mvi)
-                valueIndex.Insert(ref value, recordId, indexSessionBroker);
+                valueIndex.Insert(ref key, ref value, recordId, indexSessionBroker);
         }
 
         /// <summary>
         /// Upserts a recordId keyed by a mutable value into all mutable secondary value indexes.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Upsert(ref TKVValue value, RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker)
+        public void Upsert(ref TKVKey key, ref TKVValue value, RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker)
         {
             var mvi = this.mutableValueIndexes;
             foreach (var valueIndex in mvi)
-                valueIndex.Upsert(ref value, recordId, isMutableRecord:false, indexSessionBroker);
-        }
-
-        /// <summary>
-        /// Deletes a recordId keyed by a mutable value from all mutable secondary value indexes.
-        /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Delete(RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker)
-        {
-            var mvi = this.mutableValueIndexes;
-            foreach (var valueIndex in mvi)
-                valueIndex.Delete(recordId, indexSessionBroker);
+                valueIndex.Upsert(ref key, ref value, recordId, isMutableRecord:false, indexSessionBroker);
         }
         #endregion Mutable ValueIndexes
+
+        #region Mutable Key and Value Indexes
+
+        /// <summary>
+        /// Deletes recordId for a key from all mutable secondary key indexes.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Delete(ref TKVKey key, RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker)
+        {
+            var mki = this.mutableKeyIndexes;
+            foreach (var keyIndex in mki)
+                keyIndex.Delete(ref key, recordId, indexSessionBroker);
+
+            var mvi = this.mutableValueIndexes;
+            foreach (var valueIndex in mvi)
+                valueIndex.Delete(ref key, recordId, indexSessionBroker);
+        }
+        #endregion Mutable Key and Value Indexes
 
         /// <summary>
         /// Upserts a readonly key into all secondary key indexes and readonly values into secondary value indexes.
@@ -167,12 +162,12 @@ namespace FASTER.core
             if (ki is { })
             {
                 foreach (var keyIndex in ki)
-                    keyIndex.Upsert(ref key, isMutableRecord: false, indexSessionBroker);
+                    keyIndex.Upsert(ref key, recordId, isMutableRecord: false, indexSessionBroker);
             }
             if (vi is { })
             {
                 foreach (var valueIndex in vi)
-                    valueIndex.Upsert(ref value, recordId, isMutableRecord: false, indexSessionBroker);
+                    valueIndex.Upsert(ref key, ref value, recordId, isMutableRecord: false, indexSessionBroker);
             }
         }
     }

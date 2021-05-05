@@ -9,18 +9,28 @@ namespace FASTER.test.SubsetIndex.SimpleIndexTests
 {
     class SimpleValueIndexTests
     {
-        class SimpleValueIndex<TValue> : SimpleValueIndexBase<TValue>, ISecondaryValueIndex<TValue>
+        class SimpleValueIndex<TKey, TValue> : SimpleValueIndexBase<TValue>, ISecondaryValueIndex<TKey, TValue>
         {
             internal SimpleValueIndex(string name, Func<TValue, TValue> indexKeyFunc, bool isMutableIndex) : base(name, indexKeyFunc, isMutableIndex: isMutableIndex) { }
 
-            public void Delete(RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker)
+            public void Delete(ref TKey key, RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker)
                 => BaseDelete(recordId, indexSessionBroker);
 
-            public void Insert(ref TValue value, RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker)
+            public void Insert(ref TKey key, ref TValue value, RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker)
                 => BaseInsert(ref value, recordId, indexSessionBroker);
 
-            public void Upsert(ref TValue value, RecordId recordId, bool isMutableRecord, SecondaryIndexSessionBroker indexSessionBroker)
+            public void Upsert(ref TKey key, ref TValue value, RecordId recordId, bool isMutableRecord, SecondaryIndexSessionBroker indexSessionBroker)
                 => BaseUpsert(ref value, recordId, isMutableRecord, indexSessionBroker);
+
+            public void OnPrimaryCheckpoint(int version, long flushedUntilAddress) { }
+
+            public void OnPrimaryRecover(int version, long flushedUntilAddress, out int recoveredToVersion, out long recoveredToAddress)
+            {
+                recoveredToVersion = default;
+                recoveredToAddress = default;
+            }
+
+            public void OnPrimaryTruncate(long newBeginAddress) { }
         }
 
         private const int valueDivisor = 50;
@@ -33,7 +43,7 @@ namespace FASTER.test.SubsetIndex.SimpleIndexTests
         public void TearDown() => store.TearDown();
 
         private ISecondaryIndex CreateIndex(bool isMutable, bool isAsync, Func<int, int> indexKeyFunc)
-            => new SimpleValueIndex<int>($"{TestContext.CurrentContext.Test.Name}_mutable_{(isAsync ? "async" : "sync")}", indexKeyFunc, isMutable);
+            => new SimpleValueIndex<int, int>($"{TestContext.CurrentContext.Test.Name}_mutable_{(isAsync ? "async" : "sync")}", indexKeyFunc, isMutable);
 
         [Test]
         [Category("FasterKV"), Category("Index")]
