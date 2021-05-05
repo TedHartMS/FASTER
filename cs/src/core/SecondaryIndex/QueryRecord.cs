@@ -43,8 +43,10 @@ namespace FASTER.core
         /// <inheritdoc/>
         public void Dispose()
         {
-            this.keyContainer.Dispose();
-            this.valueContainer.Dispose();
+            this.keyContainer?.Dispose();
+            this.keyContainer = null;
+            this.valueContainer?.Dispose();
+            this.valueContainer = null;
         }
 
         /// <inheritdoc/>

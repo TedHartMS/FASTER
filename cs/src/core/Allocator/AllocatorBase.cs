@@ -778,15 +778,15 @@ namespace FASTER.core
 
         void OnCompleted()
         {
-            OnCompleted(this.OnReadOnlyObservers);
-            OnCompleted(this.OnEvictionObservers);
+            OnCompleted(ref this.OnReadOnlyObservers);
+            OnCompleted(ref this.OnEvictionObservers);
         }
 
-        internal static void OnCompleted(IObserver<IFasterScanIterator<Key, Value>>[] observers)
+        internal static void OnCompleted(ref IObserver<IFasterScanIterator<Key, Value>>[] observers)
         {
-            if (observers is null)
-                return;
             var localObservers = observers;
+            if (localObservers is null || Interlocked.CompareExchange(ref observers, null, localObservers) != localObservers)
+                return;
             foreach (var observer in localObservers)
                 observer.OnCompleted();
         }
