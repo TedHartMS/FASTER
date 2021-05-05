@@ -85,7 +85,7 @@ namespace FASTER.benchmark
             if (testLoader.SecondaryIndexType.HasFlag(SecondaryIndexType.Key))
                 store.SecondaryIndexBroker.AddIndex(new NullKeyIndex<Key>());
             if (testLoader.SecondaryIndexType.HasFlag(SecondaryIndexType.Value))
-                store.SecondaryIndexBroker.AddIndex(new NullValueIndex<Value>());
+                store.SecondaryIndexBroker.AddIndex(new NullValueIndex<Key, Value>());
         }
 
         internal void Dispose()

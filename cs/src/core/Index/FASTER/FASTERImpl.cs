@@ -1222,10 +1222,11 @@ namespace FASTER.core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal bool UpdateSIForDelete(ref Key key, RecordId recordId, bool isNewRecord, SecondaryIndexSessionBroker indexSessionBroker)
         {
-            if (this.SecondaryIndexBroker.MutableKeyIndexCount > 0)
-                this.SecondaryIndexBroker.Delete(ref key, indexSessionBroker);
-            if (!isNewRecord && this.SecondaryIndexBroker.MutableValueIndexCount > 0)
-                this.SecondaryIndexBroker.Delete(recordId, indexSessionBroker);
+            // TODO: if isNewRecord, we've added a new record to mark a delete, but the index operation won't have the correct recordId here. Should we read it?
+            if (!isNewRecord)
+                recordId = default;
+            if (this.SecondaryIndexBroker.MutableKeyIndexCount > 0 || this.SecondaryIndexBroker.MutableValueIndexCount > 0)
+                this.SecondaryIndexBroker.Delete(ref key, recordId, indexSessionBroker);
             return true;
         }
 

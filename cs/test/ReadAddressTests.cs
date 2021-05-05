@@ -60,7 +60,7 @@ namespace FASTER.test.readaddress
             }
         }
 
-        private class InsertValueIndex : ISecondaryValueIndex<Value>
+        private class InsertValueIndex : ISecondaryValueIndex<Key, Value>
         {
             public long lastWriteAddress;
 
@@ -70,11 +70,21 @@ namespace FASTER.test.readaddress
 
             public void SetSessionSlot(long slot) { }
 
-            public void Delete(RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker) { }
+            public void Delete(ref Key key, RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker) { }
 
-            public void Insert(ref Value value, RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker) => lastWriteAddress = recordId.Address;
+            public void Insert(ref Key key, ref Value value, RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker) => lastWriteAddress = recordId.Address;
 
-            public void Upsert(ref Value value, RecordId recordId, bool isMutableRecord, SecondaryIndexSessionBroker indexSessionBroker) { }
+            public void Upsert(ref Key key, ref Value value, RecordId recordId, bool isMutableRecord, SecondaryIndexSessionBroker indexSessionBroker) { }
+
+            public void OnPrimaryCheckpoint(int version, long flushedUntilAddress) { }
+
+            public void OnPrimaryRecover(int version, long flushedUntilAddress, out int recoveredToVersion, out long recoveredToAddress)
+            {
+                recoveredToVersion = default;
+                recoveredToAddress = default;
+            }
+
+            public void OnPrimaryTruncate(long newBeginAddress) { }
         }
 
         private static long SetReadOutput(long key, long value) => (key << 32) | value;

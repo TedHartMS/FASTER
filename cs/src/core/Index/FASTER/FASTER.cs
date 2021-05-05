@@ -616,11 +616,11 @@ namespace FASTER.core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal bool UpdateSIForIPU(ref Value value, RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker)
+        internal bool UpdateSIForIPU(ref Key key, ref Value value, RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker)
         {
             // KeyIndexes do not need notification of in-place updates because the key does not change.
             if (this.SecondaryIndexBroker.MutableValueIndexCount > 0)
-                this.SecondaryIndexBroker.Upsert(ref value, recordId, indexSessionBroker);
+                this.SecondaryIndexBroker.Upsert(ref key, ref value, recordId, indexSessionBroker);
             return true;
         }
 
@@ -639,10 +639,11 @@ namespace FASTER.core
         {
             if (!recordInfo.Invalid && !recordInfo.Tombstone)
             {
+                var recordId = new RecordId(address, recordInfo);
                 if (this.SecondaryIndexBroker.MutableKeyIndexCount > 0)
-                    this.SecondaryIndexBroker.Insert(ref key, indexSessionBroker);
+                    this.SecondaryIndexBroker.Insert(ref key, recordId, indexSessionBroker);
                 if (this.SecondaryIndexBroker.MutableValueIndexCount > 0)
-                    this.SecondaryIndexBroker.Insert(ref value, new RecordId(address, recordInfo), indexSessionBroker);
+                    this.SecondaryIndexBroker.Insert(ref key, ref value, recordId, indexSessionBroker);
             }
         }
 

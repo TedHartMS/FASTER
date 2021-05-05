@@ -14,14 +14,24 @@ namespace FASTER.test.SubsetIndex.SimpleIndexTests
         {
             internal SimpleKeyIndex(string name, bool isMutableIndex) : base(name, isMutableIndex: isMutableIndex) { }
 
-            public void Delete(ref TKey key, SecondaryIndexSessionBroker indexSessionBroker)
+            public void Delete(ref TKey key, RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker)
                 => BaseDelete(ref key, indexSessionBroker);
 
-            public void Insert(ref TKey key, SecondaryIndexSessionBroker indexSessionBroker)
+            public void Insert(ref TKey key, RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker)
                 => BaseInsert(ref key, indexSessionBroker);
 
-            public void Upsert(ref TKey key, bool isMutableRecord, SecondaryIndexSessionBroker indexSessionBroker)
+            public void Upsert(ref TKey key, RecordId recordId, bool isMutableRecord, SecondaryIndexSessionBroker indexSessionBroker)
                 => BaseUpsert(ref key, isMutableRecord, indexSessionBroker);
+
+            public void OnPrimaryCheckpoint(int version, long flushedUntilAddress) { }
+
+            public void OnPrimaryRecover(int version, long flushedUntilAddress, out int recoveredToVersion, out long recoveredToAddress)
+            {
+                recoveredToVersion = default;
+                recoveredToAddress = default;
+            }
+
+            public void OnPrimaryTruncate(long newBeginAddress) { }
         }
 
         readonly PrimaryFasterKV store = new PrimaryFasterKV();
