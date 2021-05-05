@@ -5,7 +5,7 @@ using FASTER.core;
 
 namespace FASTER.indexes.HashValueIndex
 {
-    public partial class HashValueIndex<TKVKey, TKVValue, TPKey> : ISecondaryValueIndex<TKVValue>
+    public partial class HashValueIndex<TKVKey, TKVValue, TPKey> : ISecondaryValueIndex<TKVKey, TKVValue>
     {
         class Sessions
         {

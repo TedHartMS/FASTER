@@ -5,7 +5,7 @@ using FASTER.core;
 
 namespace FASTER.indexes.HashValueIndex
 {
-    public partial class HashValueIndex<TKVKey, TKVValue, TPKey> : ISecondaryValueIndex<TKVValue>
+    public partial class HashValueIndex<TKVKey, TKVValue, TPKey> : ISecondaryValueIndex<TKVKey, TKVValue>
     {
         internal SecondaryFasterKV<TPKey> secondaryFkv;
 
@@ -24,6 +24,19 @@ namespace FASTER.indexes.HashValueIndex
             this.keyAccessor.SetLog(this.secondaryFkv.hlog);
             this.bufferPool = this.secondaryFkv.hlog.bufferPool;
         }
+
+        /// <inheritdoc/>
+        public void OnPrimaryCheckpoint(int version, long flushedUntilAddress) { }
+
+        /// <inheritdoc/>
+        public void OnPrimaryRecover(int version, long flushedUntilAddress, out int recoveredToVersion, out long recoveredToAddress)
+        {
+            recoveredToVersion = default;
+            recoveredToAddress = default;
+        }
+
+        /// <inheritdoc/>
+        public void OnPrimaryTruncate(long newBeginAddress) { }
     }
 
     internal partial class SecondaryFasterKV<TPKey> : FasterKV<TPKey, RecordId>

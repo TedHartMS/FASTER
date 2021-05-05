@@ -7,7 +7,7 @@ using System.Collections.Generic;
 
 namespace FASTER.indexes.HashValueIndex
 {
-    public partial class HashValueIndex<TKVKey, TKVValue, TPKey> : ISecondaryValueIndex<TKVValue>
+    public partial class HashValueIndex<TKVKey, TKVValue, TPKey> : ISecondaryValueIndex<TKVKey, TKVValue>
     {
         #region Sync
         private IEnumerable<QueryRecord<TKVKey, TKVValue>> InternalQuery(SecondaryFasterKV<TPKey>.Input input, SecondaryIndexSessionBroker sessionBroker, QuerySettings querySettings,

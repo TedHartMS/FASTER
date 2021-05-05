@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace FASTER.indexes.HashValueIndex
 {
-    public partial class HashValueIndex<TKVKey, TKVValue, TPKey> : ISecondaryValueIndex<TKVValue>
+    public partial class HashValueIndex<TKVKey, TKVValue, TPKey> : ISecondaryValueIndex<TKVKey, TKVValue>
     {
         internal FasterKV<TKVKey, TKVValue> primaryFkv;
 

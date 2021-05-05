@@ -37,10 +37,10 @@ namespace MultiPredicateSample
 
                 store.FlushAndEvict();
                 var catsOfAge = await QueryPredicates("Index query only", store);
-                Dispose(catsOfAge);
 
                 // Update generates new mutable records
                 store.UpdateCats(catsOfAge);
+                Dispose(catsOfAge);
 
                 await QueryPredicates("Mutable scan followed by index query", store);
             }

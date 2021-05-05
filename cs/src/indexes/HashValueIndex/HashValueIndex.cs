@@ -18,7 +18,7 @@ namespace FASTER.indexes.HashValueIndex
     /// <typeparam name="TKVKey">The type of the key in the primary <see cref="FasterKV{TKVKey, TKVValue}"/> instance.</typeparam>
     /// <typeparam name="TKVValue">The type of the value in the primary <see cref="FasterKV{TKVKey, TKVValue}"/> instance.</typeparam>
     /// <typeparam name="TPKey">The type of the key returned from the <see cref="IPredicate"/>, which is the key of the secondary <see cref="FasterKV{TPKey, Long}"/>.</typeparam>
-    public partial class HashValueIndex<TKVKey, TKVValue, TPKey> : ISecondaryValueIndex<TKVValue>
+    public partial class HashValueIndex<TKVKey, TKVValue, TPKey> : ISecondaryValueIndex<TKVKey, TKVValue>
     {
         /// <inheritdoc/>
         public string Name { get; private set; }
@@ -155,18 +155,19 @@ namespace FASTER.indexes.HashValueIndex
             => sessionBroker.GetSessionObject(this.sessionSlot) as Sessions ?? new Sessions(sessionBroker, this.sessionSlot, this.primaryFkv, this.secondaryFkv, this.keyAccessor);
 
         /// <inheritdoc/>
-        public void Insert(ref TKVValue value, RecordId recordId, SecondaryIndexSessionBroker sessionBroker) { /* Currently unsupported for HashValueIndex */ }
+        public void Insert(ref TKVKey key, ref TKVValue value, RecordId recordId, SecondaryIndexSessionBroker sessionBroker) { /* Currently unsupported for HashValueIndex */ }
 
         /// <inheritdoc/>
-        public void Upsert(ref TKVValue value, RecordId recordId, bool isMutable, SecondaryIndexSessionBroker sessionBroker)
+        public void Upsert(ref TKVKey key, ref TKVValue value, RecordId recordId, bool isMutable, SecondaryIndexSessionBroker sessionBroker)
         {
+            // key is ignored for HashValueIndex
             if (isMutable)  // Currently unsupported for HashValueIndex
                 return;
             ExecuteAndStore(GetSessions(sessionBroker).SecondarySession, ref value, recordId);
         }
 
         /// <inheritdoc/>
-        public void Delete(RecordId recordId, SecondaryIndexSessionBroker sessionBroker) { /* Currently unsupported for HashValueIndex */ }
+        public void Delete(ref TKVKey key, RecordId recordId, SecondaryIndexSessionBroker sessionBroker) { /* Currently unsupported for HashValueIndex */ }
 
         /// <summary>
         /// Obtains a list of registered Predicate names organized by the groups defined in previous Register calls. TODO: Replace with GetMetadata()
