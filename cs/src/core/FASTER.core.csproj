@@ -33,7 +33,8 @@
   </PropertyGroup>
   
   <ItemGroup>
-    <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="4.7.1" />
+    <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="5.0.0" />
+	<PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.0.0" PrivateAssets="All"/>
   </ItemGroup>
   
   <ItemGroup Condition="'$(TargetFramework)' == 'net461'">
@@ -47,6 +48,6 @@
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' != 'net461'">
-    <PackageReference Include="System.Interactive.Async" Version="4.1.1" />
+    <PackageReference Include="System.Interactive.Async" Version="5.0.0" />
   </ItemGroup>
 </Project>

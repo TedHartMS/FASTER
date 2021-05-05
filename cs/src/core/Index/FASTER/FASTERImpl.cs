@@ -245,9 +245,9 @@ namespace FASTER.core
         CreatePendingContext:
             {
                 pendingContext.type = OperationType.READ;
-                if (!pendingContext.NoKey)    // If this is true, we don't have a valid key
+                if (!pendingContext.NoKey && pendingContext.key == default)    // If this is true, we don't have a valid key
                     pendingContext.key = hlog.GetKeyContainer(ref key);
-                pendingContext.input = fasterSession.GetHeapContainer(ref input);
+                if (pendingContext.input == default) pendingContext.input = fasterSession.GetHeapContainer(ref input);
                 pendingContext.output = output;
 
                 if (pendingContext.output is IHeapConvertible heapConvertible)
@@ -360,7 +360,10 @@ namespace FASTER.core
                 ref RecordInfo recordInfo = ref hlog.GetInfo(physicalAddress);
                 if (!recordInfo.Tombstone
                     && fasterSession.ConcurrentWriter(ref key, ref value, ref hlog.GetValue(physicalAddress), ref recordInfo, logicalAddress))
+                {
+                    hlog.MarkPage(logicalAddress, sessionCtx.version);
                     return OperationStatus.SUCCESS;
+                }
                 goto CreateNewRecord;
             }
 
@@ -383,6 +386,8 @@ namespace FASTER.core
                     if (!recordInfo.Tombstone
                         && fasterSession.ConcurrentWriter(ref key, ref value, ref hlog.GetValue(physicalAddress), ref recordInfo, logicalAddress))
                     {
+                        if (sessionCtx.phase == Phase.REST) hlog.MarkPage(logicalAddress, sessionCtx.version);
+                        else hlog.MarkPageAtomic(logicalAddress, sessionCtx.version);
                         status = OperationStatus.SUCCESS;
                         goto LatchRelease; // Release shared latch (if acquired)
                     }
@@ -408,8 +413,8 @@ namespace FASTER.core
             Debug.Assert(latchDestination == LatchDestination.CreatePendingContext, $"Upsert CreatePendingContext encountered latchDest == {latchDestination}");
             {
                 pendingContext.type = OperationType.UPSERT;
-                pendingContext.key = hlog.GetKeyContainer(ref key);
-                pendingContext.value = hlog.GetValueContainer(ref value);
+                if (pendingContext.key == default) pendingContext.key = hlog.GetKeyContainer(ref key);
+                if (pendingContext.value == default) pendingContext.value = hlog.GetValueContainer(ref value);
                 pendingContext.userContext = userContext;
                 pendingContext.entry.word = entry.word;
                 pendingContext.logicalAddress = logicalAddress;
@@ -655,7 +660,10 @@ namespace FASTER.core
                 ref RecordInfo recordInfo = ref hlog.GetInfo(physicalAddress);
                 if (!recordInfo.Tombstone
                     && fasterSession.InPlaceUpdater(ref key, ref input, ref hlog.GetValue(physicalAddress), ref recordInfo, logicalAddress))
+                {
+                    hlog.MarkPage(logicalAddress, sessionCtx.version);
                     return OperationStatus.SUCCESS;
+                }
                 goto CreateNewRecord;
             }
 
@@ -684,6 +692,8 @@ namespace FASTER.core
 
                         if (fasterSession.InPlaceUpdater(ref key, ref input, ref hlog.GetValue(physicalAddress), ref recordInfo, logicalAddress))
                         {
+                            if (sessionCtx.phase == Phase.REST) hlog.MarkPage(logicalAddress, sessionCtx.version);
+                            else hlog.MarkPageAtomic(logicalAddress, sessionCtx.version);
                             status = OperationStatus.SUCCESS;
                             goto LatchRelease; // Release shared latch (if acquired)
                         }
@@ -754,8 +764,8 @@ namespace FASTER.core
             Debug.Assert(latchDestination == LatchDestination.CreatePendingContext, $"RMW CreatePendingContext encountered latchDest == {latchDestination}");
             {
                 pendingContext.type = OperationType.RMW;
-                pendingContext.key = hlog.GetKeyContainer(ref key);
-                pendingContext.input = fasterSession.GetHeapContainer(ref input);
+                if (pendingContext.key == default) pendingContext.key = hlog.GetKeyContainer(ref key);
+                if (pendingContext.input == default) pendingContext.input = fasterSession.GetHeapContainer(ref input);
                 pendingContext.userContext = userContext;
                 pendingContext.entry.word = entry.word;
                 pendingContext.logicalAddress = logicalAddress;
@@ -1101,6 +1111,8 @@ namespace FASTER.core
                 ref RecordInfo recordInfo = ref hlog.GetInfo(physicalAddress);
                 ref Value value = ref hlog.GetValue(physicalAddress);
                 fasterSession.ConcurrentDeleter(ref hlog.GetKey(physicalAddress), ref value, ref recordInfo, logicalAddress);
+                if (sessionCtx.phase == Phase.REST) hlog.MarkPage(logicalAddress, sessionCtx.version);
+                else hlog.MarkPageAtomic(logicalAddress, sessionCtx.version);
                 if (WriteDefaultOnDelete)
                     value = default;
 
@@ -1178,7 +1190,7 @@ namespace FASTER.core
         CreatePendingContext:
             {
                 pendingContext.type = OperationType.DELETE;
-                pendingContext.key = hlog.GetKeyContainer(ref key);
+                if (pendingContext.key == default) pendingContext.key = hlog.GetKeyContainer(ref key);
                 pendingContext.userContext = userContext;
                 pendingContext.entry.word = entry.word;
                 pendingContext.logicalAddress = logicalAddress;
@@ -1329,7 +1341,7 @@ namespace FASTER.core
 
                 // If NoKey, we do not have the key in the initial call and must use the key from the satisfied request.
                 // With the new overload of CompletePending that returns CompletedOutputs, pendingContext must have the key.
-                if (pendingContext.NoKey)
+                if (pendingContext.NoKey && pendingContext.key == default)
                     pendingContext.key = hlog.GetKeyContainer(ref hlog.GetContextRecordKey(ref request));
 
                 fasterSession.SingleReader(ref pendingContext.key.Get(), ref pendingContext.input.Get(),
