@@ -188,7 +188,7 @@ namespace FASTER.core
                 if (!pendingContext.recordInfo.Tombstone)
                 {
                     fasterSession.SingleReader(ref key, ref input, ref hlog.GetValue(physicalAddress), ref output, logicalAddress);
-                    if (CopyReadsToTail == CopyReadsToTail.FromReadOnly)
+                    if (CopyReadsToTail == CopyReadsToTail.FromReadOnly && !pendingContext.SkipReadCache)
                     {
                         var container = hlog.GetValueContainer(ref hlog.GetValue(physicalAddress));
                         InternalUpsert(ref key, ref container.Get(), ref userContext, ref pendingContext, fasterSession, sessionCtx, lsn);

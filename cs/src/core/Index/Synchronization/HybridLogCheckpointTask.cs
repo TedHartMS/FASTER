@@ -37,6 +37,7 @@ namespace FASTER.core
                     faster.WriteHybridLogMetaInfo();
                     break;
                 case Phase.REST:
+                    faster.SecondaryIndexBroker.OnPrimaryCheckpointComplete(new PrimaryCheckpointInfo(faster._hybridLogCheckpoint.info.version, faster._hybridLogCheckpoint.info.finalLogicalAddress));
                     faster._hybridLogCheckpoint.Reset();
                     var nextTcs = new TaskCompletionSource<LinkedCheckpointInfo>(TaskCreationOptions.RunContinuationsAsynchronously);
                     faster.checkpointTcs.SetResult(new LinkedCheckpointInfo { NextTask = nextTcs.Task });

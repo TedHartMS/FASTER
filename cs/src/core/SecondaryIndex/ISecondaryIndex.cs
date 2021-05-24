@@ -1,6 +1,10 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT license.
 
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+
 namespace FASTER.core
 {
     /// <summary>
@@ -9,9 +13,14 @@ namespace FASTER.core
     public interface ISecondaryIndex
     {
         /// <summary>
-        /// The identifier of the index.
+        /// The friendly identifier of the index.
         /// </summary>
         string Name { get; }
+
+        /// <summary>
+        /// The unique identifier of the index.
+        /// </summary>
+        Guid Id { get; }
 
         /// <summary>
         /// If true, the index is updated immediately on each FasterKV operation; otherwise it is updated only when record pages go ReadOnly.
@@ -24,20 +33,43 @@ namespace FASTER.core
         void SetSessionSlot(long slot);
 
         /// <summary>
-        /// Called when the Primary FKV has checkpointed the log (either by itself or as part of a full checkpoint).
+        /// Returns the latest checkpoint token for this index.
         /// </summary>
-        /// <param name="version">The version that has been checkpointed by the Primary FKV</param>
-        /// <param name="flushedUntilAddress">The highest address that has been flushed by the Primary FKV checkpoint</param>
-        void OnPrimaryCheckpoint(int version, long flushedUntilAddress);
+        /// <remarks>Called when the Primary FKV has begun checkpointing the log (either by itself or as part of a full checkpoint).</remarks>
+        Guid GetLatestCheckpointToken();
 
         /// <summary>
-        /// Called when the Primary FKV has restored itself.
+        /// Provides information about a just-completed Primary FasterKV checkpoint.
         /// </summary>
-        /// <param name="version">The version that was restored by the Primary FKV</param>
-        /// <param name="flushedUntilAddress">The highest address that was restored by the Primary FKV checkpoint</param>
-        /// <param name="recoveredToVersion">The primary version the SecondaryIndex recovered to</param>
-        /// <param name="recoveredToAddress">The highest Primary FKV address the SecondaryIndex recovered to</param>
-        void OnPrimaryRecover(int version, long flushedUntilAddress, out int recoveredToVersion, out long recoveredToAddress);
+        /// <param name="primaryCheckpointInfo"></param>
+        /// <remarks>Called when the Primary FKV has completed checkpointing the log (either by itself or as part of a full checkpoint). The Secondary Index should
+        ///     hold this information in-memory so it can store it to and retrieve it from its own checkpoint information, so the <see cref="SecondaryIndexBroker{TKVKey, TKVValue}"/> can replay
+        ///     records from that point</remarks>
+        void OnPrimaryCheckpointCompleted(PrimaryCheckpointInfo primaryCheckpointInfo);
+
+        /// <summary>
+        /// Sychronous function to begin recovery of a secondary index; the index recovers itself here and returns a <see cref="PrimaryCheckpointInfo"/> indicating the last Primary FasterKV
+        /// checkpoint to which it recovered. The <see cref="SecondaryIndexBroker{TKVKey, TKVValue}"/> will replay records since then, until the index is up to date with the Primary FasterKV.
+        /// </summary>
+        /// <param name="secondaryLogToken">A checkpoint token that was returned by <see cref="GetLatestCheckpointToken"/></param>
+        /// <returns>The Primary FasterKV checkpoint info stored in the secondary index checkpoint identified by <paramref name="secondaryLogToken"/>, or default if not found</returns>
+        /// <remarks>This is called after the Primary FKV has recovered itself and before it is open for operations.</remarks>
+        PrimaryCheckpointInfo BeginRecover(Guid secondaryLogToken);
+
+        /// <summary>
+        /// Asychronous function to begin recovery of a secondary index; the index recovers itself here and returns a <see cref="PrimaryCheckpointInfo"/> indicating the last Primary FasterKV
+        /// checkpoint to which it recovered. The <see cref="SecondaryIndexBroker{TKVKey, TKVValue}"/> will replay records since then, until the index is up to date with the Primary FasterKV.
+        /// </summary>
+        /// <param name="secondaryLogToken">A checkpoint token that was returned by <see cref="GetLatestCheckpointToken"/></param>
+        /// <param name="cancellationToken">Allow cancellation of the operation</param>
+        /// <returns>A task wrapping the Primary FasterKV checkpoint info stored in the secondary index checkpoint identified by <paramref name="secondaryLogToken"/>, or default if not found.</returns>
+        /// <remarks>This is called after the Primary FKV has recovered itself and before it is open for operations.</remarks>
+        Task<PrimaryCheckpointInfo> BeginRecoverAsync(Guid secondaryLogToken, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Called when the <see cref="SecondaryIndexBroker{TKVKey, TKVValue}"/> has completed replay of records (if any).
+        /// </summary>
+        void EndRecover();
 
         /// <summary>
         /// Called when the Primary FKV has set the new BeginAddress.
@@ -66,7 +98,7 @@ namespace FASTER.core
         void Insert(ref TKVKey key, RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker);
 
         /// <summary>
-        /// Upserts a key into the secondary index. This may be called either immediately during a FasterKV operation, or when the page containing a record goes ReadOnly.
+        /// Upserts a key into the secondary index. This may be called either immediately during a FasterKV operation, or during recovery.
         /// </summary>
         /// <param name="key">The key to be upserted</param>
         /// <param name="recordId">The identifier of the record containing the <paramref name="key"/></param>
@@ -85,6 +117,14 @@ namespace FASTER.core
         /// <param name="recordId">The identifier of the record to be removed for the <paramref name="key"/></param>
         /// <param name="indexSessionBroker">The <see cref="SecondaryIndexSessionBroker"/> for the primary FasterKV session making this call</param>
         void Delete(ref TKVKey key, RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker);
+
+        /// <summary>
+        /// Scans a range from a page that has gone readonly.
+        /// </summary>
+        /// <param name="iter">The iterator over the region that is going readonly</param>
+        /// <param name="indexSessionBroker">The <see cref="SecondaryIndexSessionBroker"/> for the primary FasterKV session making this call</param>
+        /// <typeparam name="TKVValue">The value type for the <see cref="FasterKV{Key, Value}"/></typeparam>
+        void ScanReadOnlyPages<TKVValue>(IFasterScanIterator<TKVKey, TKVValue> iter, SecondaryIndexSessionBroker indexSessionBroker);
     }
 
     /// <summary>
@@ -110,7 +150,7 @@ namespace FASTER.core
 
         /// <summary>
         /// Upserts a recordId into the secondary index, with the associated value from which the index derives its key(s).
-        /// This may be called either immediately during a FasterKV operation, or when the page containing a record goes ReadOnly.
+        /// This may be called either immediately during a FasterKV operation, or during recovery.
         /// </summary>
         /// <param name="key">The key for the <paramref name="value"/> being upserted</param>
         /// <param name="value">The value to be upserted</param>
@@ -130,5 +170,12 @@ namespace FASTER.core
         /// <param name="recordId">The recordId to be removed</param>
         /// <param name="indexSessionBroker">The <see cref="SecondaryIndexSessionBroker"/> for the primary FasterKV session making this call</param>
         void Delete(ref TKVKey key, RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker);
+
+        /// <summary>
+        /// Scans a range from a page that has gone readonly.
+        /// </summary>
+        /// <param name="iter">The iterator over the region that is going readonly</param>
+        /// <param name="indexSessionBroker">The <see cref="SecondaryIndexSessionBroker"/> for the primary FasterKV session making this call</param>
+        void ScanReadOnlyPages(IFasterScanIterator<TKVKey, TKVValue> iter, SecondaryIndexSessionBroker indexSessionBroker);
     }
 }

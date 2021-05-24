@@ -31,7 +31,7 @@ namespace FASTER.indexes.HashValueIndex
                     while (needMoreRecords() && scanner.GetNext(out var recordInfo) && !querySettings.IsCanceled)
                     {
                         continuationToken.PrimaryStartAddress = scanner.NextAddress;
-                        if (IsMatch(scanner, input) && ResolveRecord(sessions.PrimarySession, new RecordId(scanner.CurrentAddress, recordInfo.Version), out var queryRecord))
+                        if (IsMatch(scanner, input) && ResolveRecord(sessions.PrimarySession, new RecordId(recordInfo.Version, scanner.CurrentAddress), out var queryRecord))
                         {
                             yield return queryRecord;
                             ++count;
@@ -93,7 +93,7 @@ namespace FASTER.indexes.HashValueIndex
                     while (needMoreRecords() && scanner.GetNext(out var recordInfo))
                     {
                         continuationToken.PrimaryStartAddress = scanner.NextAddress;
-                        if (IsMatch(scanner, queryIter, lambda) && ResolveRecord(sessions.PrimarySession, new RecordId(scanner.CurrentAddress, recordInfo.Version), out var queryRecord))
+                        if (IsMatch(scanner, queryIter, lambda) && ResolveRecord(sessions.PrimarySession, new RecordId(recordInfo.Version, scanner.CurrentAddress), out var queryRecord))
                         {
                             yield return queryRecord;
                             ++count;
@@ -218,7 +218,7 @@ namespace FASTER.indexes.HashValueIndex
                         continuationToken.PrimaryStartAddress = scanner.NextAddress;
                         if (IsMatch(scanner, input))
                         {
-                            var queryRecord = await ResolveRecordAsync(sessions.PrimarySession, new RecordId(scanner.CurrentAddress, recordInfo.Version), querySettings);
+                            var queryRecord = await ResolveRecordAsync(sessions.PrimarySession, new RecordId(recordInfo.Version, scanner.CurrentAddress), querySettings);
                             if (queryRecord is { })
                             {
                                 yield return queryRecord;
@@ -293,7 +293,7 @@ namespace FASTER.indexes.HashValueIndex
                         continuationToken.PrimaryStartAddress = scanner.NextAddress;
                         if (IsMatch(scanner, queryIter, lambda))
                         {
-                            var queryRecord = await ResolveRecordAsync(sessions.PrimarySession, new RecordId(scanner.CurrentAddress, recordInfo.Version), querySettings);
+                            var queryRecord = await ResolveRecordAsync(sessions.PrimarySession, new RecordId(recordInfo.Version, scanner.CurrentAddress), querySettings);
                             if (queryRecord is { })
                             {
                                 yield return queryRecord;

@@ -4,8 +4,14 @@
     <TargetFrameworks>netstandard2.1;netstandard2.0;net461</TargetFrameworks>
     <Platforms>AnyCPU;x64</Platforms>
     <LangVersion>8</LangVersion>
-    <PackageId>Microsoft.FASTER.indexes.HashValueIndex</PackageId>
+  </PropertyGroup>
+
+  <!-- Local NuGet to be removed -->
+  <PropertyGroup>
+    <PackageId>Microsoft.FASTER.Indexes.HashValueIndex</PackageId>
+    <Version>1.9.3-tag1</Version>
     <PackageOutputPath>$(SolutionDir)\build_output\packages</PackageOutputPath>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -20,7 +26,6 @@
     <AssemblyOriginatorKeyFile>../../../FASTER.snk</AssemblyOriginatorKeyFile>
     <DelaySign>false</DelaySign>
     <DocumentationFile>bin\$(Platform)\$(Configuration)\$(TargetFramework)\$(AssemblyName).xml</DocumentationFile>
-    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)' == 'Debug'">

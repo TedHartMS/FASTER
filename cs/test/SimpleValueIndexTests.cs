@@ -5,7 +5,7 @@ using System;
 using FASTER.core;
 using NUnit.Framework;
 
-namespace FASTER.test.SubsetIndex.SimpleIndexTests
+namespace FASTER.test.SecondaryIndex.SimpleIndexTests
 {
     class SimpleValueIndexTests
     {
@@ -24,13 +24,19 @@ namespace FASTER.test.SubsetIndex.SimpleIndexTests
 
             public void OnPrimaryCheckpoint(int version, long flushedUntilAddress) { }
 
-            public void OnPrimaryRecover(int version, long flushedUntilAddress, out int recoveredToVersion, out long recoveredToAddress)
+            public void Recover(int version, long flushedUntilAddress, out int recoveredToVersion, out long recoveredToAddress)
             {
                 recoveredToVersion = default;
                 recoveredToAddress = default;
             }
 
             public void OnPrimaryTruncate(long newBeginAddress) { }
+
+            public void ScanReadOnlyPages(IFasterScanIterator<TKey, TValue> iter, SecondaryIndexSessionBroker indexSessionBroker)
+            {
+                while (iter.GetNext(out var recordInfo))
+                    Upsert(ref iter.GetKey(), ref iter.GetValue(), new RecordId(recordInfo.Version, iter.CurrentAddress), isMutableRecord: false, indexSessionBroker);
+            }
         }
 
         private const int valueDivisor = 50;

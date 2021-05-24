@@ -24,6 +24,9 @@ namespace FASTER.indexes.HashValueIndex
         public string Name { get; private set; }
 
         /// <inheritdoc/>
+        public Guid Id { get; }
+
+        /// <inheritdoc/>
         public bool IsMutable => false;
 
         /// <inheritdoc/>
@@ -56,6 +59,7 @@ namespace FASTER.indexes.HashValueIndex
                               string predName, Func<TKVValue, TPKey> predFunc)
             : this(name, fkv, registrationSettings)
         {
+            this.Id = registrationSettings.Id;
             UpdatePredicates(new[] { new Predicate<TKVKey, TKVValue, TPKey>(this, 0, predName, predFunc) });
             CreateSecondaryFkv();
         }
@@ -71,6 +75,7 @@ namespace FASTER.indexes.HashValueIndex
                               params (string name, Func<TKVValue, TPKey> func)[] predFuncs)
             : this(name, fkv, registrationSettings)
         {
+            this.Id = registrationSettings.Id;
             UpdatePredicates(this.predicates = predFuncs.Select((tup, ord) => new Predicate<TKVKey, TKVValue, TPKey>(this, ord, tup.name, tup.func)).ToArray());
             CreateSecondaryFkv();
         }
@@ -82,6 +87,7 @@ namespace FASTER.indexes.HashValueIndex
             this.RegistrationSettings = registrationSettings;
             VerifyRegistrationSettings();
             this.userKeyComparer = GetUserKeyComparer();
+            this.readOnlyQueue = new WorkQueueOrdered<long, OrderedRange>(primaryFkv.Log.BeginAddress); // Note: readOnlyQueue's nextAddress is updated by Recovery and reading of existing data
         }
 
         private IFasterEqualityComparer<TPKey> GetUserKeyComparer()
@@ -102,6 +108,8 @@ namespace FASTER.indexes.HashValueIndex
         {
             if (this.RegistrationSettings is null)
                 throw new HashValueIndexArgumentException("RegistrationSettings is required");
+            if (this.RegistrationSettings.Id == Guid.Empty)
+                throw new HashValueIndexArgumentException("RegistrationSettings.Id is required");
             if (this.RegistrationSettings.LogSettings is null)
                 throw new HashValueIndexArgumentException("RegistrationSettings.LogSettings is required");
             if (this.RegistrationSettings.CheckpointSettings is null)

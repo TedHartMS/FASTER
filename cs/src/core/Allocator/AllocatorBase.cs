@@ -1283,6 +1283,7 @@ namespace FASTER.core
                 var localObservers = this.OnReadOnlyObservers;
                 foreach (var observer in localObservers)
                 {
+                    // TODO: Parallelize OPMRO 
                     using var iter = Scan(oldSafeReadOnlyAddress, newSafeReadOnlyAddress, ScanBufferingMode.NoBuffering);
                     observer.OnNext(iter);
                 }

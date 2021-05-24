@@ -145,7 +145,12 @@ namespace FASTER.core
 
             recoveredHLCInfo.info.DebugPrint();
 
-            recoveredICInfo = default;
+            recoveredICInfo = GetCompatibleIndexCheckpointInfo(recoveredHLCInfo);
+        }
+
+        internal IndexCheckpointInfo GetCompatibleIndexCheckpointInfo(HybridLogCheckpointInfo recoveredHLCInfo)
+        {
+            IndexCheckpointInfo recoveredICInfo = default;
             foreach (var indexToken in checkpointManager.GetIndexCheckpointTokens())
             {
                 try
@@ -174,6 +179,8 @@ namespace FASTER.core
             {
                 Debug.WriteLine("No index checkpoint found, recovering from beginning of log");
             }
+
+            return recoveredICInfo;
         }
 
         private bool IsCompatible(in IndexRecoveryInfo indexInfo, in HybridLogRecoveryInfo recoveryInfo)
@@ -277,6 +284,7 @@ namespace FASTER.core
             recoveredHLCInfo.deltaFileDevice?.Dispose();
 
             checkpointManager.OnRecovery(recoveredICInfo.info.token, recoveredHLCInfo.info.guid);
+            this.SecondaryIndexBroker.Recover(recoveredHLCInfo.info.secondaryIndexMetadata);
         }
 
         private async ValueTask InternalRecoverAsync(IndexCheckpointInfo recoveredICInfo, HybridLogCheckpointInfo recoveredHLCInfo, int numPagesToPreload, bool undoNextVersion, CancellationToken cancellationToken)
@@ -320,6 +328,9 @@ namespace FASTER.core
 
             recoveredHLCInfo.deltaLog?.Dispose();
             recoveredHLCInfo.deltaFileDevice?.Dispose();
+
+            checkpointManager.OnRecovery(recoveredICInfo.info.token, recoveredHLCInfo.info.guid);
+            await this.SecondaryIndexBroker.RecoverAsync(recoveredHLCInfo.info.secondaryIndexMetadata);
         }
 
         /// <summary>

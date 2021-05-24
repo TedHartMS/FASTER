@@ -894,7 +894,7 @@ namespace FASTER.core
             {
                 recordInfo.Version = _clientSession.ctx.version;
                 return _clientSession.functions.ConcurrentWriter(ref key, ref src, ref dst)
-                    && _clientSession.fht.UpdateSIForIPU(ref key, ref dst, new RecordId(address, recordInfo), this.SecondaryIndexSessionBroker);
+                    && _clientSession.fht.UpdateSIForIPU(ref key, ref dst, new RecordId(recordInfo, address), this.SecondaryIndexSessionBroker);
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -983,7 +983,7 @@ namespace FASTER.core
             {
                 recordInfo.Version = _clientSession.ctx.version;
                 return _clientSession.functions.InPlaceUpdater(ref key, ref input, ref value)
-                    && _clientSession.fht.UpdateSIForIPU(ref key, ref value, new RecordId(address, recordInfo), this.SecondaryIndexSessionBroker);
+                    && _clientSession.fht.UpdateSIForIPU(ref key, ref value, new RecordId(recordInfo, address), this.SecondaryIndexSessionBroker);
             }
 
             private bool InPlaceUpdaterLock(ref Key key, ref Input input, ref Value value, ref RecordInfo recordInfo, long address)

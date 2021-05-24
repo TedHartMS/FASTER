@@ -2,6 +2,7 @@
 // Licensed under the MIT license.
 
 using FASTER.core;
+using System;
 using System.Runtime.CompilerServices;
 
 namespace FASTER.indexes.HashValueIndex
@@ -9,6 +10,7 @@ namespace FASTER.indexes.HashValueIndex
     public partial class HashValueIndex<TKVKey, TKVValue, TPKey> : ISecondaryValueIndex<TKVKey, TKVValue>
     {
         private SectorAlignedBufferPool bufferPool;
+        private WorkQueueOrdered<long, OrderedRange> readOnlyQueue;
 
         private readonly int keyPointerSize = Utility.GetSize(default(KeyPointer<TPKey>));
         private readonly int recordIdSize = Utility.GetSize(default(RecordId));
@@ -46,6 +48,21 @@ namespace FASTER.indexes.HashValueIndex
             var input = new SecondaryFasterKV<TPKey>.Input();   // TODO remove this if we don't need Input.IsDelete()
             var context = new SecondaryFasterKV<TPKey>.Context { Functions = session.functions };
             return session.IndexInsert(this.secondaryFkv, ref compositeKey.CastToFirstKeyPointerRefAsKeyRef(), recordId, ref input, context);
+        }
+
+        /// <inheritdoc/>
+        public void ScanReadOnlyPages(IFasterScanIterator<TKVKey, TKVValue> iter, SecondaryIndexSessionBroker indexSessionBroker)
+        {
+            if (!readOnlyQueue.TryStartWork(iter.BeginAddress, () => new OrderedRange(iter.BeginAddress, iter.EndAddress, createEvent: true), out var waitingRange))
+            {
+                waitingRange.Wait();
+                waitingRange.Dispose();
+            }
+
+            while (iter.GetNext(out var recordInfo, out TKVKey key, out TKVValue value))
+                this.Upsert(ref key, ref value, new RecordId(recordInfo, iter.CurrentAddress), isMutable: false, indexSessionBroker);
+
+            readOnlyQueue.CompleteWork(iter.BeginAddress, iter.EndAddress);
         }
     }
 }

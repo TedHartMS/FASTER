@@ -32,11 +32,21 @@ namespace MultiPredicateSample
             using (store = new Store())
             {
                 store.RunInitialInserts();
+                await QueryPredicates("Mutable scan only (pre-recovery)", store);
 
-                await QueryPredicates("Mutable scan only", store);
+                store.FlushAndEvict();  // Make all records readonly, which will write them to the HashValueIndex.
+                await QueryPredicates("Index query only (pre-recovery)", store);
 
-                store.FlushAndEvict();
-                var catsOfAge = await QueryPredicates("Index query only", store);
+                Console.WriteLine();
+                Console.WriteLine("Checkpointing and Recovering store");
+                await store.CheckpointAsync();
+            }
+
+            using (store = new Store())
+            { 
+                store.Recover();
+
+                var catsOfAge = await QueryPredicates("Index query only (post-recovery)", store);
 
                 // Update generates new mutable records
                 store.UpdateCats(catsOfAge);

@@ -2,6 +2,7 @@
 // Licensed under the MIT license.
 
 using System;
+using System.IO;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -43,6 +44,14 @@ namespace FASTER.core
             var mi = typeof(Utility).GetMethod("IsBlittable", BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.InvokeMethod);
             var fooRef = mi.MakeGenericMethod(t);
             return (bool)fooRef.Invoke(null, null);
+        }
+
+        internal static byte[] Slice(this byte[] source, int offset, int length)
+        {
+            // ArraySegment doesn't support ToArray() on all platforms we support
+            var result = new byte[length];
+            Array.Copy(source, offset, result, 0, length);
+            return result;
         }
 
         /// <summary>
@@ -358,5 +367,12 @@ namespace FASTER.core
             // make sure any exceptions in the task get unwrapped and exposed to the caller.
             await task.ConfigureAwait(continueOnCapturedContext);
         }
+
+        internal static ICheckpointManager CreateDefaultCheckpointManager(CheckpointSettings checkpointSettings)
+            => new DeviceLogCommitCheckpointManager
+                (new LocalStorageNamedDeviceFactory(),
+                    new DefaultCheckpointNamingScheme(
+                      new DirectoryInfo(checkpointSettings.CheckpointDir ?? ".").FullName), removeOutdated: checkpointSettings.RemoveOutdated);
+
     }
 }

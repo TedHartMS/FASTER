@@ -10,9 +10,9 @@ namespace FASTER.core
     {
         private long word;
 
-        internal RecordId(long address, RecordInfo recordInfo) : this(address, recordInfo.Version) { }
+        internal RecordId(RecordInfo recordInfo, long address) : this(recordInfo.Version, address) { }
 
-        internal RecordId(long address, int version)
+        internal RecordId(int version, long address)
         {
             this.word = default;
             this.Address = address;

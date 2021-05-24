@@ -4,6 +4,8 @@
 using FASTER.core;
 using FASTER.indexes.HashValueIndex;
 using System;
+using System.IO;
+using System.Threading.Tasks;
 
 namespace HashValueIndexSampleCommon
 {
@@ -14,23 +16,23 @@ namespace HashValueIndexSampleCommon
 
         private LogFiles logFiles;
 
-        internal StoreBase(int numGroups, string appName) 
+        internal StoreBase(int numIndexes, string appName) 
         {
-            this.logFiles = new LogFiles(numGroups, appName);
+            this.logFiles = new LogFiles(numIndexes, appName);
             this.AppName = appName;
             this.FasterKV = new FasterKV<Key, Value>(
                                 1L << 20, this.logFiles.LogSettings,
-                                null, // No checkpoints in this sample
+                                new CheckpointSettings { CheckpointDir = logFiles.LogDir, CheckPointType = CheckpointType.FoldOver },
                                 null, new Key.Comparer());
         }
 
-        protected RegistrationSettings<TKey> CreateRegistrationSettings<TKey>(int groupOrdinal, IFasterEqualityComparer<TKey> keyComparer)
+        protected RegistrationSettings<TKey> CreateRegistrationSettings<TKey>(int indexOrdinal, IFasterEqualityComparer<TKey> keyComparer)
         {
             var regSettings = new RegistrationSettings<TKey>
             {
                 HashTableSize = 1L << LogFiles.HashSizeBits,
-                LogSettings = this.logFiles.GroupLogSettings[groupOrdinal],
-                CheckpointSettings = new CheckpointSettings(),  // No checkpoints in this sample
+                LogSettings = this.logFiles.IndexLogSettings[indexOrdinal],
+                CheckpointSettings = new CheckpointSettings { CheckpointDir = $"{logFiles.IndexLogDir(indexOrdinal)}/index{indexOrdinal:D3}", CheckPointType = CheckpointType.FoldOver },
                 KeyComparer = keyComparer
             };
 
@@ -88,6 +90,10 @@ namespace HashValueIndexSampleCommon
 
             Console.WriteLine($"Update completed with {statusPending:N0} pending");
         }
+
+        internal ValueTask<(bool success, Guid token)> CheckpointAsync() => this.FasterKV.TakeFullCheckpointAsync(CheckpointType.FoldOver);
+
+        internal void Recover() => this.FasterKV.Recover();
 
         public virtual void Dispose()
         {

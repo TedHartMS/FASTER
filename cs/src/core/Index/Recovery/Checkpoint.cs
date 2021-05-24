@@ -85,7 +85,8 @@ namespace FASTER.core
 
         internal void InitializeHybridLogCheckpoint(Guid hybridLogToken, int version)
         {
-            _hybridLogCheckpoint.Initialize(hybridLogToken, version, checkpointManager);
+            var indexMetadata = this.SecondaryIndexBroker.GetLatestCheckpointMetadata();
+            _hybridLogCheckpoint.Initialize(hybridLogToken, version, indexMetadata, checkpointManager);
         }
 
         // #endregion

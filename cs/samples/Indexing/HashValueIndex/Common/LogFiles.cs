@@ -10,13 +10,14 @@ namespace HashValueIndexSampleCommon
     {
         private IDevice log;
         private IDevice objLog;
-        private IDevice[] GroupDevices;
+        private IDevice[] IndexDevices;
 
         internal LogSettings LogSettings { get; }
 
-        internal LogSettings[] GroupLogSettings { get; }
+        internal LogSettings[] IndexLogSettings { get; }
 
         internal string LogDir;
+        internal string IndexLogDir(int indexOrdinal) => Path.Combine(this.LogDir, $"Index_{indexOrdinal:D3}");
 
         // Hash and log sizes
         internal const int HashSizeBits = 20;
@@ -24,13 +25,13 @@ namespace HashValueIndexSampleCommon
         private const int SegmentSizeBits = 25;
         private const int PageSizeBits = 20;
 
-        internal LogFiles(int numGroups, string appName)
+        internal LogFiles(int numIndexes, string appName)
         {
-            this.LogDir = Path.Combine(Path.GetTempPath(), appName);
+            this.LogDir = $"d:/temp/{appName}";
 
             // Create files for storing data. We only use one write thread to avoid disk contention.
-            // We set deleteOnClose to true, so logs will auto-delete on completion.
-            this.log = Devices.CreateLogDevice(Path.Combine(this.LogDir, "hlog.log"), deleteOnClose: true);
+            // We do NOT set deleteOnClose to true, so logs will survive store.Close(), which we do as part of the Checkpoint/Recovery sequence.
+            this.log = Devices.CreateLogDevice(Path.Combine(this.LogDir, "hlog.log"));
 
             this.LogSettings = new LogSettings
             {
@@ -43,12 +44,12 @@ namespace HashValueIndexSampleCommon
                 ReadCacheSettings = null
             };
 
-            this.GroupDevices = new IDevice[numGroups];
-            this.GroupLogSettings = new LogSettings[numGroups];
-            for (var ii = 0; ii < numGroups; ++ii)
+            this.IndexDevices = new IDevice[numIndexes];
+            this.IndexLogSettings = new LogSettings[numIndexes];
+            for (var ii = 0; ii < numIndexes; ++ii)
             {
-                this.GroupDevices[ii] = Devices.CreateLogDevice(Path.Combine(this.LogDir, $"shi_group_{ii}.hlog.log"), deleteOnClose: true);
-                this.GroupLogSettings[ii] = new LogSettings { LogDevice = this.GroupDevices[ii], MemorySizeBits = MemorySizeBits, SegmentSizeBits = SegmentSizeBits, PageSizeBits = PageSizeBits };
+                this.IndexDevices[ii] = Devices.CreateLogDevice(Path.Combine(this.IndexLogDir(ii), "hlog.log"));
+                this.IndexLogSettings[ii] = new LogSettings { LogDevice = this.IndexDevices[ii], MemorySizeBits = MemorySizeBits, SegmentSizeBits = SegmentSizeBits, PageSizeBits = PageSizeBits };
                 // Note: ReadCache and CopyReadsToTail are not supported in SubsetIndex FKVs
             }
         }
@@ -66,9 +67,12 @@ namespace HashValueIndexSampleCommon
                 this.objLog = null;
             }
 
-            foreach (var device in this.GroupDevices)
-                device.Dispose();
-            this.GroupDevices = null;
+            if (this.IndexDevices is { })
+            {
+                foreach (var device in this.IndexDevices)
+                    device.Dispose();
+                this.IndexDevices = null;
+            }
         }
     }
 }
