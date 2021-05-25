@@ -685,7 +685,7 @@ namespace FASTER.core
                     ref RecordInfo recordInfo = ref hlog.GetInfo(physicalAddress);
                     if (!recordInfo.Tombstone)
                     {
-                        if (FoldOverSnapshot)
+                        if (UseFoldOverCheckpoint)
                         {
                             Debug.Assert(recordInfo.Version == sessionCtx.version);
                         }
@@ -1725,7 +1725,7 @@ namespace FASTER.core
             }
         }
 
-        internal virtual OperationStatus RetryOperationStatus<Input, Output, Context, FasterSession>(FasterExecutionContext<Input, Output, Context> currentCtx,
+        private protected virtual OperationStatus RetryOperationStatus<Input, Output, Context, FasterSession>(FasterExecutionContext<Input, Output, Context> currentCtx,
                                                                                                ref PendingContext<Input, Output, Context> pendingContext, FasterSession fasterSession)
             where FasterSession : IFasterSession<Key, Value, Input, Output, Context>
         {

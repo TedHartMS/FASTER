@@ -3,6 +3,7 @@
 
 using FASTER.indexes.HashValueIndex;
 using HashValueIndexSampleCommon;
+using System;
 
 namespace BasicPredicateSample
 {

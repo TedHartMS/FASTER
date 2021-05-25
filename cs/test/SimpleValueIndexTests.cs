@@ -22,14 +22,6 @@ namespace FASTER.test.SecondaryIndex.SimpleIndexTests
             public void Upsert(ref TKey key, ref TValue value, RecordId recordId, bool isMutableRecord, SecondaryIndexSessionBroker indexSessionBroker)
                 => BaseUpsert(ref value, recordId, isMutableRecord, indexSessionBroker);
 
-            public void OnPrimaryCheckpoint(int version, long flushedUntilAddress) { }
-
-            public void Recover(int version, long flushedUntilAddress, out int recoveredToVersion, out long recoveredToAddress)
-            {
-                recoveredToVersion = default;
-                recoveredToAddress = default;
-            }
-
             public void OnPrimaryTruncate(long newBeginAddress) { }
 
             public void ScanReadOnlyPages(IFasterScanIterator<TKey, TValue> iter, SecondaryIndexSessionBroker indexSessionBroker)

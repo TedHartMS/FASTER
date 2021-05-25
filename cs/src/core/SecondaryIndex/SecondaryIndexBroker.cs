@@ -220,7 +220,7 @@ namespace FASTER.core
             return checkpointMetadata.Flatten();
         }
 
-        internal void OnPrimaryCheckpointComplete(PrimaryCheckpointInfo pci)
+        internal void OnPrimaryCheckpointCompleted(PrimaryCheckpointInfo pci)
         {
             var ki = this.allKeyIndexes;
             if (ki is { })
@@ -236,7 +236,7 @@ namespace FASTER.core
             }
         }
 
-        internal void Recover(byte[] indexMetadata)
+        internal void Recover(byte[] indexMetadata, bool undoNextVersion)
         {
             // This is called during recovery, before the PrimaryFKV is open for operations, so we do not have to worry about things changing
             // We're not operating in the context of a FasterKV session, so we need our own sessionBroker.
@@ -249,19 +249,19 @@ namespace FASTER.core
             if (ki is { })
             {
                 foreach (var keyIndex in ki)
-                    tasks.Add(Task.Run(() => RecoverIndex(keyIndex, default, checkpointMetadata.GetToken(keyIndex.Id), indexSessionBroker)));
+                    tasks.Add(Task.Run(() => RecoverIndex(keyIndex, default, checkpointMetadata.GetToken(keyIndex.Id), undoNextVersion, indexSessionBroker)));
             }
             var vi = this.allValueIndexes;
             if (vi is { })
             {
                 foreach (var valueIndex in vi)
-                    tasks.Add(Task.Run(() => RecoverIndex(default, valueIndex, checkpointMetadata.GetToken(valueIndex.Id), indexSessionBroker)));
+                    tasks.Add(Task.Run(() => RecoverIndex(default, valueIndex, checkpointMetadata.GetToken(valueIndex.Id), undoNextVersion, indexSessionBroker)));
             }
 
             Task.WaitAll(tasks.ToArray());
         }
 
-        internal Task RecoverAsync(byte[] indexMetadata)
+        internal Task RecoverAsync(byte[] indexMetadata, bool undoNextVersion)
         {
             // This is called during recovery, before the PrimaryFKV is open for operations, so we do not have to worry about things changing
             // We're not operating in the context of a FasterKV session, so we need our own sessionBroker.
@@ -274,27 +274,27 @@ namespace FASTER.core
             if (ki is { })
             {
                 foreach (var keyIndex in ki)
-                    tasks.Add(RecoverIndexAsync(keyIndex, default, checkpointMetadata.GetToken(keyIndex.Id), indexSessionBroker));
+                    tasks.Add(RecoverIndexAsync(keyIndex, default, checkpointMetadata.GetToken(keyIndex.Id), undoNextVersion, indexSessionBroker));
             }
             var vi = this.allValueIndexes;
             if (vi is { })
             {
                 foreach (var valueIndex in vi)
-                    tasks.Add(RecoverIndexAsync(default, valueIndex, checkpointMetadata.GetToken(valueIndex.Id), indexSessionBroker));
+                    tasks.Add(RecoverIndexAsync(default, valueIndex, checkpointMetadata.GetToken(valueIndex.Id), undoNextVersion, indexSessionBroker));
             }
 
             return Task.WhenAll(tasks.ToArray());
         }
 
-        void RecoverIndex(ISecondaryKeyIndex<TKVKey> keyIndex, ISecondaryValueIndex<TKVKey, TKVValue> valueIndex, Guid checkpointToken, SecondaryIndexSessionBroker indexSessionBroker)
+        void RecoverIndex(ISecondaryKeyIndex<TKVKey> keyIndex, ISecondaryValueIndex<TKVKey, TKVValue> valueIndex, Guid checkpointToken, bool undoNextVersion, SecondaryIndexSessionBroker indexSessionBroker)
         {
-            var pci = checkpointToken != Guid.Empty ? ((ISecondaryIndex)keyIndex ?? valueIndex).BeginRecover(checkpointToken) : default;
+            var pci = checkpointToken != Guid.Empty ? ((ISecondaryIndex)keyIndex ?? valueIndex).BeginRecover(checkpointToken, undoNextVersion) : default;
             RollIndexForward(keyIndex, valueIndex, pci, indexSessionBroker);
         }
 
-        async Task RecoverIndexAsync(ISecondaryKeyIndex<TKVKey> keyIndex, ISecondaryValueIndex<TKVKey, TKVValue> valueIndex, Guid checkpointToken, SecondaryIndexSessionBroker indexSessionBroker)
+        async Task RecoverIndexAsync(ISecondaryKeyIndex<TKVKey> keyIndex, ISecondaryValueIndex<TKVKey, TKVValue> valueIndex, Guid checkpointToken, bool undoNextVersion, SecondaryIndexSessionBroker indexSessionBroker)
         {
-            var pci = checkpointToken != Guid.Empty ? await ((ISecondaryIndex)keyIndex ?? valueIndex).BeginRecoverAsync(checkpointToken) : default;
+            var pci = checkpointToken != Guid.Empty ? await ((ISecondaryIndex)keyIndex ?? valueIndex).BeginRecoverAsync(checkpointToken, undoNextVersion) : default;
             await Task.Run(() => RollIndexForward(keyIndex, valueIndex, pci, indexSessionBroker));
         }
 

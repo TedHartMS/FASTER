@@ -2,7 +2,7 @@
 // Licensed under the MIT license.
 
 using FASTER.core;
-using System;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
 namespace FASTER.indexes.HashValueIndex
@@ -10,14 +10,19 @@ namespace FASTER.indexes.HashValueIndex
     public partial class HashValueIndex<TKVKey, TKVValue, TPKey> : ISecondaryValueIndex<TKVKey, TKVValue>
     {
         private SectorAlignedBufferPool bufferPool;
-        private WorkQueueOrdered<long, OrderedRange> readOnlyQueue;
+        private readonly WorkQueueOrdered<long, OrderedRange> readOnlyQueue;
 
         private readonly int keyPointerSize = Utility.GetSize(default(KeyPointer<TPKey>));
         private readonly int recordIdSize = Utility.GetSize(default(RecordId));
 
+        // Tracking the high-water RecordId lets us handle the case where RecordIds are in limbo on query: below Primary FKV's ReadOnlyAddress, but not yet added to the Secondary FKV
+        internal RecordId highWaterRecordId = default;
+
         private unsafe Status ExecuteAndStore(AdvancedClientSession<TPKey, RecordId, SecondaryFasterKV<TPKey>.Input, SecondaryFasterKV<TPKey>.Output, SecondaryFasterKV<TPKey>.Context, SecondaryFasterKV<TPKey>.Functions> session,
                 ref TKVValue kvValue, RecordId recordId)
         {
+            Debug.Assert(recordId.CompareTo(highWaterRecordId) > 0, "Out-of-order RecordId");
+
             // Note: stackalloc is safe because it's copied to a HeapContainer in PendingContext if the operation goes pending.
             var keyMemLen = this.keyPointerSize * this.PredicateCount;
             var keyBytes = stackalloc byte[keyMemLen];
@@ -47,7 +52,10 @@ namespace FASTER.indexes.HashValueIndex
             ref CompositeKey<TPKey> compositeKey = ref Unsafe.AsRef<CompositeKey<TPKey>>(keyBytes);
             var input = new SecondaryFasterKV<TPKey>.Input();   // TODO remove this if we don't need Input.IsDelete()
             var context = new SecondaryFasterKV<TPKey>.Context { Functions = session.functions };
-            return session.IndexInsert(this.secondaryFkv, ref compositeKey.CastToFirstKeyPointerRefAsKeyRef(), recordId, ref input, context);
+            var status = session.IndexInsert(this.secondaryFkv, ref compositeKey.CastToFirstKeyPointerRefAsKeyRef(), recordId, ref input, context);
+            if (status == Status.OK)
+                highWaterRecordId = recordId;
+            return status;
         }
 
         /// <inheritdoc/>

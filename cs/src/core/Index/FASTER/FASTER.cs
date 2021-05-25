@@ -38,7 +38,7 @@ namespace FASTER.core
 
         internal readonly bool UseReadCache;
         private readonly CopyReadsToTail CopyReadsToTail;
-        private readonly bool FoldOverSnapshot;
+        internal readonly bool UseFoldOverCheckpoint;
         internal readonly int sectorSize;
         private readonly bool WriteDefaultOnDelete;
         internal bool RelaxedCPR;
@@ -145,7 +145,7 @@ namespace FASTER.core
             if (checkpointSettings.CheckpointManager == null)
                 disposeCheckpointManager = true;
 
-            FoldOverSnapshot = checkpointSettings.CheckPointType == core.CheckpointType.FoldOver;
+            UseFoldOverCheckpoint = checkpointSettings.CheckPointType == core.CheckpointType.FoldOver;
             CopyReadsToTail = logSettings.CopyReadsToTail;
 
             if (logSettings.ReadCacheSettings != null)
@@ -241,7 +241,7 @@ namespace FASTER.core
         /// operation such as growing the index). Use CompleteCheckpointAsync to wait completion.
         /// </returns>
         public bool TakeFullCheckpoint(out Guid token) 
-            => TakeFullCheckpoint(out token, FoldOverSnapshot ? CheckpointType.FoldOver : CheckpointType.Snapshot);
+            => TakeFullCheckpoint(out token, UseFoldOverCheckpoint ? CheckpointType.FoldOver : CheckpointType.Snapshot);
 
         /// <summary>
         /// Initiate full checkpoint
@@ -334,7 +334,7 @@ namespace FASTER.core
         /// <param name="token">Checkpoint token</param>
         /// <returns>Whether we could initiate the checkpoint. Use CompleteCheckpointAsync to wait completion.</returns>
         public bool TakeHybridLogCheckpoint(out Guid token) 
-            => TakeHybridLogCheckpoint(out token, FoldOverSnapshot ? CheckpointType.FoldOver : CheckpointType.Snapshot, tryIncremental: false);
+            => TakeHybridLogCheckpoint(out token, UseFoldOverCheckpoint ? CheckpointType.FoldOver : CheckpointType.Snapshot, tryIncremental: false);
 
         /// <summary>
         /// Initiate log-only checkpoint

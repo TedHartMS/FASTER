@@ -13,31 +13,31 @@ namespace FASTER.indexes.HashValueIndex
         void PrepareToRecover() => this.checkpointManager.PrepareToRecover();
 
         /// <inheritdoc/>
-        public PrimaryCheckpointInfo BeginRecover(Guid secondaryLogToken)
+        public PrimaryCheckpointInfo BeginRecover(Guid secondaryLogToken, bool undoNextVersion)
         {
             if (!GetCompatibleIndexToken(secondaryLogToken, out var indexToken))
                 return default;
             PrepareToRecover();
             this.latestLogCheckpointToken = secondaryLogToken;
-            this.secondaryFkv.Recover(indexToken, secondaryLogToken, undoNextVersion: false);  // We will do this differently due to the Fishstore-like chains.
+            this.secondaryFkv.Recover(indexToken, secondaryLogToken, undoNextVersion:undoNextVersion);
             this.latestPrimaryCheckpointInfo = this.checkpointManager.primaryCheckpointInfo;
             return this.latestPrimaryCheckpointInfo;
         }
 
         /// <inheritdoc/>
-        public async Task<PrimaryCheckpointInfo> BeginRecoverAsync(Guid secondaryLogToken, CancellationToken cancellationToken = default)
+        public async Task<PrimaryCheckpointInfo> BeginRecoverAsync(Guid secondaryLogToken, bool undoNextVersion, CancellationToken cancellationToken = default)
         {
             if (!GetCompatibleIndexToken(secondaryLogToken, out var indexToken))
                 return default;
             PrepareToRecover();
             this.latestLogCheckpointToken = secondaryLogToken;
-            await this.secondaryFkv.RecoverAsync(indexToken, secondaryLogToken, undoNextVersion: false, cancellationToken: cancellationToken);
+            await this.secondaryFkv.RecoverAsync(indexToken, secondaryLogToken, undoNextVersion: undoNextVersion, cancellationToken: cancellationToken);
             this.latestPrimaryCheckpointInfo = this.checkpointManager.primaryCheckpointInfo;
             return this.latestPrimaryCheckpointInfo;
         }
 
         /// <inheritdoc/>
-        public void EndRecover();
+        public void EndRecover() { /* Currently nothing needed here for HashValueIndex */ }
 
         private bool GetCompatibleIndexToken(Guid logToken, out Guid indexToken)
         {

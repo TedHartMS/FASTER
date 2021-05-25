@@ -284,7 +284,7 @@ namespace FASTER.core
             recoveredHLCInfo.deltaFileDevice?.Dispose();
 
             checkpointManager.OnRecovery(recoveredICInfo.info.token, recoveredHLCInfo.info.guid);
-            this.SecondaryIndexBroker.Recover(recoveredHLCInfo.info.secondaryIndexMetadata);
+            this.SecondaryIndexBroker.Recover(recoveredHLCInfo.info.secondaryIndexMetadata, undoNextVersion);
         }
 
         private async ValueTask InternalRecoverAsync(IndexCheckpointInfo recoveredICInfo, HybridLogCheckpointInfo recoveredHLCInfo, int numPagesToPreload, bool undoNextVersion, CancellationToken cancellationToken)
@@ -330,7 +330,7 @@ namespace FASTER.core
             recoveredHLCInfo.deltaFileDevice?.Dispose();
 
             checkpointManager.OnRecovery(recoveredICInfo.info.token, recoveredHLCInfo.info.guid);
-            await this.SecondaryIndexBroker.RecoverAsync(recoveredHLCInfo.info.secondaryIndexMetadata);
+            await this.SecondaryIndexBroker.RecoverAsync(recoveredHLCInfo.info.secondaryIndexMetadata, undoNextVersion);
         }
 
         /// <summary>
@@ -734,7 +734,7 @@ namespace FASTER.core
             recoveryStatus.flushStatus[pageIndex] = FlushStatus.Done;
         }
 
-        private unsafe bool RecoverFromPage(long startRecoveryAddress,
+        virtual private protected unsafe bool RecoverFromPage(long startRecoveryAddress,
                                      long fromLogicalAddressInPage,
                                      long untilLogicalAddressInPage,
                                      long pageLogicalAddress,
@@ -743,18 +743,10 @@ namespace FASTER.core
         {
             bool touched = false;
 
-            var hash = default(long);
-            var tag = default(ushort);
-            var pointer = default(long);
-            var recordStart = default(long);
-            var bucket = default(HashBucket*);
-            var entry = default(HashBucketEntry);
-            var slot = default(int);
-
-            pointer = fromLogicalAddressInPage;
+            var pointer = fromLogicalAddressInPage;
             while (pointer < untilLogicalAddressInPage)
             {
-                recordStart = pagePhysicalAddress + pointer;
+                var recordStart = pagePhysicalAddress + pointer;
                 ref RecordInfo info = ref hlog.GetInfo(recordStart);
 
                 if (info.IsNull())
@@ -765,30 +757,31 @@ namespace FASTER.core
 
                 if (!info.Invalid)
                 {
-                    hash = comparer.GetHashCode64(ref hlog.GetKey(recordStart));
-                    tag = (ushort)((ulong)hash >> Constants.kHashTagShift);
+                    var hash = comparer.GetHashCode64(ref hlog.GetKey(recordStart));
+                    var tag = (ushort)((ulong)hash >> Constants.kHashTagShift);
 
-                    entry = default;
+                    var bucket = default(HashBucket*);
+                    var slot = default(int);
+                    var entry = default(HashBucketEntry);
                     FindOrCreateTag(hash, tag, ref bucket, ref slot, ref entry, hlog.BeginAddress);
 
+                    entry.Tag = tag;
+                    entry.Pending = false;
+                    entry.Tentative = false;
                     if (info.Version != RecordInfo.GetShortVersion(nextVersion) || !undoNextVersion)
                     {
+                        // This record's version is good, so link the record into the chain.
                         entry.Address = pageLogicalAddress + pointer;
-                        entry.Tag = tag;
-                        entry.Pending = false;
-                        entry.Tentative = false;
                         bucket->bucket_entries[slot] = entry.word;
                     }
                     else
                     {
+                        // This record has a future version, so mark the record as invalid and bypass it in the chain.
                         touched = true;
                         info.Invalid = true;
                         if (info.PreviousAddress < startRecoveryAddress)
                         {
                             entry.Address = info.PreviousAddress;
-                            entry.Tag = tag;
-                            entry.Pending = false;
-                            entry.Tentative = false;
                             bucket->bucket_entries[slot] = entry.word;
                         }
                     }

@@ -61,9 +61,9 @@ namespace FASTER.test.SecondaryIndex.SimpleIndexTests
 
         public void OnPrimaryCheckpointCompleted(PrimaryCheckpointInfo primaryCheckpointInfo) { }
 
-        public PrimaryCheckpointInfo BeginRecover(Guid secondaryLogToken) => default;   // Not used for this class
+        public PrimaryCheckpointInfo BeginRecover(Guid secondaryLogToken, bool undoNextVersion) => default;   // Not used for this class
 
-        public Task<PrimaryCheckpointInfo> BeginRecoverAsync(Guid secondaryLogToken, CancellationToken cancellationToken = default) => default; // Not used for this class
+        public Task<PrimaryCheckpointInfo> BeginRecoverAsync(Guid secondaryLogToken, bool undoNextVersion, CancellationToken cancellationToken = default) => default; // Not used for this class
 
         public void EndRecover() { }
     }
