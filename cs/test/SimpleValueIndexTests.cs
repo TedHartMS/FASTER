@@ -29,6 +29,8 @@ namespace FASTER.test.SecondaryIndex.SimpleIndexTests
                 while (iter.GetNext(out var recordInfo))
                     Upsert(ref iter.GetKey(), ref iter.GetValue(), new RecordId(recordInfo.Version, iter.CurrentAddress), isMutableRecord: false, indexSessionBroker);
             }
+
+            public void RecoveryReplay(IFasterScanIterator<TKey, TValue> iter, SecondaryIndexSessionBroker indexSessionBroker) { }
         }
 
         private const int valueDivisor = 50;

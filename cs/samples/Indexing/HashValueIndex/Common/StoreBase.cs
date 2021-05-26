@@ -4,7 +4,6 @@
 using FASTER.core;
 using FASTER.indexes.HashValueIndex;
 using System;
-using System.Collections.Concurrent;
 using System.Threading.Tasks;
 
 namespace HashValueIndexSampleCommon
@@ -15,7 +14,6 @@ namespace HashValueIndexSampleCommon
         internal string AppName { get; }
 
         private LogFiles logFiles;
-        private ConcurrentDictionary<int, Guid> indexIds = new ConcurrentDictionary<int, Guid>();
 
         internal StoreBase(int numIndexes, string appName) 
         {
@@ -29,10 +27,8 @@ namespace HashValueIndexSampleCommon
 
         protected RegistrationSettings<TKey> CreateRegistrationSettings<TKey>(int indexOrdinal, IFasterEqualityComparer<TKey> keyComparer)
         {
-            var indexId = indexIds.GetOrAdd(indexOrdinal, _ => Guid.NewGuid());
             var regSettings = new RegistrationSettings<TKey>
             {
-                Id = indexId,
                 HashTableSize = 1L << LogFiles.HashSizeBits,
                 LogSettings = this.logFiles.IndexLogSettings[indexOrdinal],
                 CheckpointSettings = new CheckpointSettings { CheckpointDir = $"{logFiles.IndexLogDir(indexOrdinal)}/index{indexOrdinal:D3}", CheckPointType = CheckpointType.FoldOver },

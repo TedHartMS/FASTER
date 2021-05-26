@@ -230,7 +230,7 @@ namespace FASTER.core
     /// </summary>
     public struct HybridLogRecoveryInfo
     {
-        const int CheckpointVersion = 3;
+        const int CheckpointVersion = 2;
 
         /// <summary>
         /// Guid
@@ -295,17 +295,11 @@ namespace FASTER.core
         public long deltaTailAddress;
 
         /// <summary>
-        /// Metadata for the secondary indexes, if any
-        /// </summary>
-        public byte[] secondaryIndexMetadata;
-
-        /// <summary>
         /// Initialize
         /// </summary>
         /// <param name="token"></param>
         /// <param name="_version"></param>
-        /// <param name="indexMetadata"></param>
-        public void Initialize(Guid token, int _version, byte[] indexMetadata)
+        public void Initialize(Guid token, int _version)
         {
             guid = token;
             useSnapshotFile = 0;
@@ -319,8 +313,6 @@ namespace FASTER.core
 
             checkpointTokens = new ConcurrentDictionary<string, CommitPoint>();
             objectLogSegmentOffsets = null;
-
-            secondaryIndexMetadata = indexMetadata;
         }
 
         /// <summary>
@@ -404,23 +396,8 @@ namespace FASTER.core
                 }
             }
 
-            if (cversion >= 3)
-            {
-                value = reader.ReadLine();
-                var numIndexes = int.Parse(value);
-                if (numIndexes > 0)
-                {
-                    var byteString = reader.ReadLine();
-                    secondaryIndexMetadata = byteString.Split('-').Select(str => Convert.ToByte(str)).ToArray();
-                }
-            }
-
             if (cversion != CheckpointVersion)
-            {
-                // 2 is backward compatible with current implementation
-                if (cversion > 2)
-                    throw new FasterException("Invalid version");
-            }
+                 throw new FasterException("Invalid version");
 
             if (checksum != Checksum(continueTokens.Count))
                 throw new FasterException("Invalid checksum for checkpoint");
@@ -486,16 +463,6 @@ namespace FASTER.core
                             writer.WriteLine(objectLogSegmentOffsets[i]);
                         }
                     }
-
-                    if (secondaryIndexMetadata is { })
-                    {
-                        var byteString = BitConverter.ToString(secondaryIndexMetadata);
-                        writer.WriteLine(byteString.Length);
-                        writer.WriteLine(byteString);
-                    } else
-                    {
-                        writer.WriteLine((int)0);
-                    }
                 }
                 return ms.ToArray();
             }
@@ -506,12 +473,6 @@ namespace FASTER.core
             var bytes = guid.ToByteArray();
             var long1 = BitConverter.ToInt64(bytes, 0);
             var long2 = BitConverter.ToInt64(bytes, 8);
-            long indexMetadataHash = 0;
-            if (secondaryIndexMetadata is { })
-            {
-                for (var ii = 0; ii < secondaryIndexMetadata.Length - 8; ++ii)
-                    indexMetadataHash ^= BitConverter.ToInt64(secondaryIndexMetadata, ii * 8 + 8);
-            }
             return long1 ^ long2 ^ version ^ flushedLogicalAddress ^ startLogicalAddress ^ finalLogicalAddress ^ snapshotFinalLogicalAddress ^ headAddress ^ beginAddress
                 ^ checkpointTokensCount ^ (objectLogSegmentOffsets == null ? 0 : objectLogSegmentOffsets.Length);
         }
@@ -554,9 +515,9 @@ namespace FASTER.core
         public SemaphoreSlim flushedSemaphore;
         public int prevVersion;
 
-        public void Initialize(Guid token, int _version, byte[] indexMetadata, ICheckpointManager checkpointManager)
+        public void Initialize(Guid token, int _version, ICheckpointManager checkpointManager)
         {
-            info.Initialize(token, _version, indexMetadata);
+            info.Initialize(token, _version);
             checkpointManager.InitializeLogCheckpoint(token);
         }
 

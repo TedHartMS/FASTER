@@ -11,7 +11,7 @@ namespace FASTER.core
     /// </summary>
     /// <remarks>Should be carried by Secondary Index recovery info to  be returned to the SecondaryIndexBroker
     /// so it knows where to start replaying records to the index.</remarks>
-    public struct PrimaryCheckpointInfo
+    public struct PrimaryCheckpointInfo : IComparable<PrimaryCheckpointInfo>
     {
         /// <summary>
         /// The database version.
@@ -103,6 +103,13 @@ namespace FASTER.core
 
         private readonly long Checksum()
             => this.Version ^ this.FlushedUntilAddress;
+
+        /// <inheritdoc/>
+        public int CompareTo(PrimaryCheckpointInfo other)
+        {
+            var cmp = this.Version.CompareTo(other.Version);
+            return cmp != 0 ? cmp : this.FlushedUntilAddress.CompareTo(other.FlushedUntilAddress);
+        }
 
         #endregion Serialization
     }

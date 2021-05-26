@@ -12,8 +12,6 @@ namespace FASTER.benchmark
     {
         public string Name => "KeyIndex";
 
-        public Guid Id => default;      // not used for this class
-
         public bool IsMutable => true;
 
         public void SetSessionSlot(long slot) { }
@@ -28,22 +26,20 @@ namespace FASTER.benchmark
 
         public void ScanReadOnlyPages<TScanValue>(IFasterScanIterator<Key, TScanValue> iter, SecondaryIndexSessionBroker indexSessionBroker) { }
 
-        public Guid GetLatestCheckpointToken() => default; // not used for this class
+        public void OnPrimaryCheckpointInitiated(PrimaryCheckpointInfo recoveredPci) { }
 
         public void OnPrimaryCheckpointCompleted(PrimaryCheckpointInfo primaryCheckpointInfo) { }
 
-        public PrimaryCheckpointInfo BeginRecover(Guid secondaryLogToken, bool undoNextVersion) => default;   // Not used for this class
+        public PrimaryCheckpointInfo Recover(PrimaryCheckpointInfo recoveredPci, bool undoNextVersion) => default;
 
-        public Task<PrimaryCheckpointInfo> BeginRecoverAsync(Guid secondaryLogToken, bool undoNextVersion, CancellationToken cancellationToken = default) => default; // Not used for this class
+        public Task<PrimaryCheckpointInfo> RecoverAsync(PrimaryCheckpointInfo recoveredPci, bool undoNextVersion, CancellationToken cancellationToken = default) => default;
 
-        public void EndRecover() { }
+        public void RecoveryReplay<TScanValue>(IFasterScanIterator<Key, TScanValue> iter, SecondaryIndexSessionBroker indexSessionBroker) { }
     }
 
     class NullValueIndex<Key, Value> : ISecondaryValueIndex<Key, Value>
     {
         public string Name => "ValueIndex";
-
-        public Guid Id => default;      // not used for this class
 
         public bool IsMutable => true;
 
@@ -59,14 +55,14 @@ namespace FASTER.benchmark
 
         public void ScanReadOnlyPages(IFasterScanIterator<Key, Value> iter, SecondaryIndexSessionBroker indexSessionBroker) { }
 
-        public Guid GetLatestCheckpointToken() => default; // not used for this class
+        public void OnPrimaryCheckpointInitiated(PrimaryCheckpointInfo recoveredPci) { }
 
         public void OnPrimaryCheckpointCompleted(PrimaryCheckpointInfo primaryCheckpointInfo) { }
 
-        public PrimaryCheckpointInfo BeginRecover(Guid secondaryLogToken, bool undoNextVersion) => default;   // Not used for this class
+        public PrimaryCheckpointInfo Recover(PrimaryCheckpointInfo recoveredPci, bool undoNextVersion) => default;
 
-        public Task<PrimaryCheckpointInfo> BeginRecoverAsync(Guid secondaryLogToken, bool undoNextVersion, CancellationToken cancellationToken = default) => default; // Not used for this class
+        public Task<PrimaryCheckpointInfo> RecoverAsync(PrimaryCheckpointInfo recoveredPci, bool undoNextVersion, CancellationToken cancellationToken = default) => default; // Not used for this class
 
-        public void EndRecover() { }
+        public void RecoveryReplay(IFasterScanIterator<Key, Value> iter, SecondaryIndexSessionBroker indexSessionBroker) { }
     }
 }

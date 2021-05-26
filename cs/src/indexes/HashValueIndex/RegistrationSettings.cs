@@ -12,11 +12,6 @@ namespace FASTER.indexes.HashValueIndex
     public class RegistrationSettings<TPKey>
     {
         /// <summary>
-        /// The index identifier. Note that this must be persisted and the same value must be used when re-creating the FasterKV and restoring the index.
-        /// </summary>
-        public Guid Id;
-
-        /// <summary>
         /// The return value from a predicate that indicates the predicate did not match the value.
         /// </summary>
         public TPKey NullIndicator = default;

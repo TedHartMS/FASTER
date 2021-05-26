@@ -4,69 +4,19 @@
 using FASTER.core;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
 
 namespace FASTER.indexes.HashValueIndex
 {
     public partial class HashValueIndex<TKVKey, TKVValue, TPKey> : ISecondaryValueIndex<TKVKey, TKVValue>
     {
-        internal struct HighWatermark
-        {
-            const int MetadataVersion = 1;
-            internal int version;
-            internal long address;
-
-            // Above members, plus long checksum
-            const int SerializedSize = 24;
-
-            internal HighWatermark(RecordId recordId) : this(recordId.Version, recordId.Address) { }
-
-            internal HighWatermark(int version, long address)
-            {
-                this.version = version;
-                this.address = address;
-            }
-
-            private readonly long Checksum() 
-                => this.version ^ this.address;
-
-            internal HighWatermark(byte[] metadata)
-            {
-                var slice = metadata.Slice(0, 4);
-                var metaVersion = BitConverter.ToInt32(slice, 0);
-                if (metaVersion != MetadataVersion)
-                    throw new HashValueIndexException("Unknown metadata version");
-                var offset = slice.Length;
-
-                slice = metadata.Slice(offset, 8);
-                var checksum = BitConverter.ToInt64(slice, 0);
-                offset += slice.Length;
-
-                slice = metadata.Slice(offset, 4);
-                this.version = BitConverter.ToInt32(slice, 0);
-                offset += slice.Length;
-
-                slice = metadata.Slice(offset, 8);
-                this.address = BitConverter.ToInt64(slice, 0);
-                offset += slice.Length;
-
-                Debug.Assert(offset == SerializedSize);
-                if (checksum != Checksum())
-                    throw new FasterException("Invalid checksum for checkpoint");
-            }
-
-            internal bool IsDefault() => this.version == 0 && this.address == 0;
-
-        }
-
         internal class CheckpointManager : ICheckpointManager
         {
             private readonly string indexName;
             internal SecondaryFasterKV<TPKey> secondaryFkv;
             private readonly ICheckpointManager userCheckpointManager;
 
-            internal PrimaryCheckpointInfo primaryCheckpointInfo;
+            internal PrimaryCheckpointInfo lastCompletedPrimaryCheckpointInfo;      // The latest previously-completed PCI
+            internal PrimaryCheckpointInfo lastStartedPrimaryCheckpointInfo;        // The latest previously-started PCI
 
             internal CheckpointManager(string indexName, ICheckpointManager userCheckpointManager)
             {
@@ -76,21 +26,65 @@ namespace FASTER.indexes.HashValueIndex
 
             internal void SetSecondaryFkv(SecondaryFasterKV<TPKey> secondaryFkv) => this.secondaryFkv = secondaryFkv;
 
-            internal void PrepareToCheckpoint(PrimaryCheckpointInfo latestPci) => this.primaryCheckpointInfo = latestPci;
+            internal void PrepareToCheckpoint(PrimaryCheckpointInfo latestPci) => this.lastCompletedPrimaryCheckpointInfo = latestPci;
 
-            internal void PrepareToRecover() => this.primaryCheckpointInfo = default;
+            internal void PrepareToRecover() => this.lastCompletedPrimaryCheckpointInfo = default;
 
-            internal byte[] DetachFrom(byte[] metadata)
+            private static (PrimaryCheckpointInfo completedPci, PrimaryCheckpointInfo startedPCI) GetPCIs(byte[] metadata) 
+                => (new PrimaryCheckpointInfo(metadata.Slice(0, PrimaryCheckpointInfo.SerializedSize)),
+                    new PrimaryCheckpointInfo(metadata.Slice(PrimaryCheckpointInfo.SerializedSize, PrimaryCheckpointInfo.SerializedSize)));
+
+            internal void SetPCIs(PrimaryCheckpointInfo completedPci, PrimaryCheckpointInfo startedPCI)
             {
-                this.primaryCheckpointInfo = new PrimaryCheckpointInfo(metadata.Slice(0, PrimaryCheckpointInfo.SerializedSize));
-                return metadata.Slice(PrimaryCheckpointInfo.SerializedSize, metadata.Length - PrimaryCheckpointInfo.SerializedSize);
+                this.lastCompletedPrimaryCheckpointInfo = completedPci;
+                this.lastStartedPrimaryCheckpointInfo = startedPCI;
             }
+
+            private byte[] DetachFrom(byte[] metadata) 
+                => metadata.Slice(PrimaryCheckpointInfo.SerializedSize, metadata.Length - PrimaryCheckpointInfo.SerializedSize);
 
             private byte[] PrependToLogMetadata(byte[] metadata)
             {
                 var result = new byte[metadata.Length + PrimaryCheckpointInfo.SerializedSize];
-                Array.Copy(this.primaryCheckpointInfo.ToByteArray(), 0, result, PrimaryCheckpointInfo.SerializedSize, metadata.Length);
+                Array.Copy(this.lastCompletedPrimaryCheckpointInfo.ToByteArray(), 0, result, PrimaryCheckpointInfo.SerializedSize, metadata.Length);
                 return result;
+            }
+
+            internal bool GetRecoveryTokens(PrimaryCheckpointInfo recoveredPci, out Guid indexToken, out Guid logToken, out PrimaryCheckpointInfo lastCompletedPci, out PrimaryCheckpointInfo lastStartedPci)
+            {
+                logToken = default;
+                var recoveredHLCInfo = new HybridLogCheckpointInfo();
+                PrimaryCheckpointInfo completedPci = default, currentPci = default;
+                foreach (var token in this.userCheckpointManager.GetLogCheckpointTokens())
+                {
+                    try
+                    {
+                        // Find the first secondary log checkpoint with currentPci < recoveredPci, or == if the checkpoint's currentPci is the same as its startedPci.
+                        var metadata = this.userCheckpointManager.GetLogCheckpointMetadata(token, deltaLog: default);
+                        (completedPci, currentPci) = GetPCIs(metadata);
+                        if ((completedPci.CompareTo(recoveredPci) == 0 && currentPci.CompareTo(recoveredPci) == 0)
+                            || currentPci.CompareTo(recoveredPci) < 0)
+                        {
+                            logToken = token;
+                            recoveredHLCInfo.Recover(logToken, this, this.secondaryFkv.hlog.LogPageSizeBits);
+                            break;
+                        }
+                    }
+                    catch
+                    {
+                        continue;
+                    }
+                }
+
+                if (logToken == Guid.Empty)
+                    throw new SecondaryIndexException($"Unable to find valid index token when recovering secondary index {this.indexName}");
+
+                // We return true even if the index token is default (compatible index token could not be found), in which case we restore the index from the log.
+                var recoveredICInfo = this.secondaryFkv.GetCompatibleIndexCheckpointInfo(recoveredHLCInfo);
+                indexToken = recoveredICInfo.info.token;
+                lastCompletedPci = completedPci;
+                lastStartedPci = currentPci;
+                return true;
             }
 
             #region Wrapped ICheckpointManager methods

@@ -284,7 +284,7 @@ namespace FASTER.core
             recoveredHLCInfo.deltaFileDevice?.Dispose();
 
             checkpointManager.OnRecovery(recoveredICInfo.info.token, recoveredHLCInfo.info.guid);
-            this.SecondaryIndexBroker.Recover(recoveredHLCInfo.info.secondaryIndexMetadata, undoNextVersion);
+            this.SecondaryIndexBroker.Recover(GetCurrentPrimaryCheckpointInfo(recoveredHLCInfo.info), undoNextVersion);
         }
 
         private async ValueTask InternalRecoverAsync(IndexCheckpointInfo recoveredICInfo, HybridLogCheckpointInfo recoveredHLCInfo, int numPagesToPreload, bool undoNextVersion, CancellationToken cancellationToken)
@@ -330,7 +330,7 @@ namespace FASTER.core
             recoveredHLCInfo.deltaFileDevice?.Dispose();
 
             checkpointManager.OnRecovery(recoveredICInfo.info.token, recoveredHLCInfo.info.guid);
-            await this.SecondaryIndexBroker.RecoverAsync(recoveredHLCInfo.info.secondaryIndexMetadata, undoNextVersion);
+            await this.SecondaryIndexBroker.RecoverAsync(GetCurrentPrimaryCheckpointInfo(recoveredHLCInfo.info), undoNextVersion);
         }
 
         /// <summary>

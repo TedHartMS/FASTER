@@ -30,6 +30,8 @@ namespace FASTER.test.SecondaryIndex.SimpleIndexTests
                 while (iter.GetNext(out var recordInfo))
                     Upsert(ref iter.GetKey(), new RecordId(recordInfo.Version, iter.CurrentAddress), isMutableRecord: false, indexSessionBroker);
             }
+
+            public void RecoveryReplay<TKVValue>(IFasterScanIterator<TKey, TKVValue> iter, SecondaryIndexSessionBroker indexSessionBroker) { }
         }
 
         readonly PrimaryFasterKV store = new PrimaryFasterKV();

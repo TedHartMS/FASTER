@@ -66,8 +66,6 @@ namespace FASTER.test.readaddress
 
             public string Name => nameof(InsertValueIndex);
 
-            public Guid Id => default;  // not used for this class
-
             public bool IsMutable => true;
 
             public void SetSessionSlot(long slot) { }
@@ -82,15 +80,15 @@ namespace FASTER.test.readaddress
 
             public void ScanReadOnlyPages(IFasterScanIterator<Key, Value> iter, SecondaryIndexSessionBroker indexSessionBroker) { }
 
-            public Guid GetLatestCheckpointToken() => default; // not used for this class
+            public void OnPrimaryCheckpointInitiated(PrimaryCheckpointInfo recoveredPCI) { }
 
             public void OnPrimaryCheckpointCompleted(PrimaryCheckpointInfo primaryCheckpointInfo) { }
 
-            public PrimaryCheckpointInfo BeginRecover(Guid secondaryLogToken, bool undoNextVersion) => default;   // Not used for this class
+            public PrimaryCheckpointInfo Recover(PrimaryCheckpointInfo recoveredPCI, bool undoNextVersion) => default;
 
-            public Task<PrimaryCheckpointInfo> BeginRecoverAsync(Guid secondaryLogToken, bool undoNextVersion, CancellationToken cancellationToken = default) => default; // Not used for this class
+            public Task<PrimaryCheckpointInfo> RecoverAsync(PrimaryCheckpointInfo recoveredPCI, bool undoNextVersion, CancellationToken cancellationToken = default) => default;
 
-            public void EndRecover() { }
+            public void RecoveryReplay(IFasterScanIterator<Key, Value> iter, SecondaryIndexSessionBroker indexSessionBroker) { }
         }
 
         private static long SetReadOutput(long key, long value) => (key << 32) | value;

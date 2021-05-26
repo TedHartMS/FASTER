@@ -2,7 +2,7 @@
 // Licensed under the MIT license.
 
 using FASTER.core;
-using System;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -10,54 +10,36 @@ namespace FASTER.indexes.HashValueIndex
 {
     public partial class HashValueIndex<TKVKey, TKVValue, TPKey> : ISecondaryValueIndex<TKVKey, TKVValue>
     {
-        void PrepareToRecover() => this.checkpointManager.PrepareToRecover();
-
         /// <inheritdoc/>
-        public PrimaryCheckpointInfo BeginRecover(Guid secondaryLogToken, bool undoNextVersion)
+        public PrimaryCheckpointInfo Recover(PrimaryCheckpointInfo recoveredPci, bool undoNextVersion)
         {
-            if (!GetCompatibleIndexToken(secondaryLogToken, out var indexToken))
+            if (!this.checkpointManager.GetRecoveryTokens(recoveredPci, out var indexToken, out var logToken, out PrimaryCheckpointInfo lastCompletedPci, out PrimaryCheckpointInfo lastStartedPci))
                 return default;
-            PrepareToRecover();
-            this.latestLogCheckpointToken = secondaryLogToken;
-            this.secondaryFkv.Recover(indexToken, secondaryLogToken, undoNextVersion:undoNextVersion);
-            this.latestPrimaryCheckpointInfo = this.checkpointManager.primaryCheckpointInfo;
-            return this.latestPrimaryCheckpointInfo;
+            this.secondaryFkv.Recover(indexToken, logToken, undoNextVersion:undoNextVersion);
+            this.checkpointManager.SetPCIs(lastCompletedPci, lastStartedPci);
+            return this.checkpointManager.lastCompletedPrimaryCheckpointInfo;
         }
 
         /// <inheritdoc/>
-        public async Task<PrimaryCheckpointInfo> BeginRecoverAsync(Guid secondaryLogToken, bool undoNextVersion, CancellationToken cancellationToken = default)
+        public async Task<PrimaryCheckpointInfo> RecoverAsync(PrimaryCheckpointInfo recoveredPci, bool undoNextVersion, CancellationToken cancellationToken = default)
         {
-            if (!GetCompatibleIndexToken(secondaryLogToken, out var indexToken))
+            if (!this.checkpointManager.GetRecoveryTokens(recoveredPci, out var indexToken, out var logToken, out PrimaryCheckpointInfo lastCompletedPci, out PrimaryCheckpointInfo lastStartedPci))
                 return default;
-            PrepareToRecover();
-            this.latestLogCheckpointToken = secondaryLogToken;
-            await this.secondaryFkv.RecoverAsync(indexToken, secondaryLogToken, undoNextVersion: undoNextVersion, cancellationToken: cancellationToken);
-            this.latestPrimaryCheckpointInfo = this.checkpointManager.primaryCheckpointInfo;
-            return this.latestPrimaryCheckpointInfo;
+            await this.secondaryFkv.RecoverAsync(indexToken, logToken, undoNextVersion: undoNextVersion, cancellationToken: cancellationToken);
+            this.checkpointManager.SetPCIs(lastCompletedPci, lastStartedPci);
+            return this.checkpointManager.lastCompletedPrimaryCheckpointInfo;
         }
 
         /// <inheritdoc/>
-        public void EndRecover() { /* Currently nothing needed here for HashValueIndex */ }
-
-        private bool GetCompatibleIndexToken(Guid logToken, out Guid indexToken)
+        public void RecoveryReplay(IFasterScanIterator<TKVKey, TKVValue> iter, SecondaryIndexSessionBroker indexSessionBroker)
         {
-            indexToken = default;
-            if (this.checkpointManager is null)
-                return false;
-            var recoveredHLCInfo = new HybridLogCheckpointInfo();
-            try
+            // On Replay, we have already done undoNextVersion (if specified) in Primary's recovery path, so there will only be valid records to replay.
+            // And because we're in Recovery, we don't need to worry about ReadOnlyAddress changing.
+            while (iter.GetNext(out var recordInfo, out TKVKey key, out TKVValue value))
             {
-                recoveredHLCInfo.Recover(logToken, this.checkpointManager, this.secondaryFkv.hlog.LogPageSizeBits);
+                Debug.Assert(iter.CurrentAddress < this.primaryFkv.Log.ReadOnlyAddress);
+                this.Upsert(ref key, ref value, new RecordId(recordInfo, iter.CurrentAddress), isMutable: false, indexSessionBroker);
             }
-            catch
-            {
-                return false;
-            }
-
-            // We return true even if the index token is default (compatible index token could not be found), in which case we restore the index from the log.
-            var recoveredICInfo = this.secondaryFkv.GetCompatibleIndexCheckpointInfo(recoveredHLCInfo);
-            indexToken = recoveredICInfo.info.token;
-            return true;
         }
     }
 }

@@ -27,8 +27,6 @@ namespace FASTER.test.SecondaryIndex.SimpleIndexTests
 
         public string Name { get; private set; }
 
-        public Guid Id => default;  // not used for this class
-
         public bool IsMutable { get; private set; }
 
         public void SetSessionSlot(long slot) => this.sessionSlot = slot;
@@ -57,15 +55,13 @@ namespace FASTER.test.SecondaryIndex.SimpleIndexTests
             Assert.AreEqual(this.sessionId, session.Id);
         }
 
-        public Guid GetLatestCheckpointToken() => default; // not used for this class
+        public void OnPrimaryCheckpointInitiated(PrimaryCheckpointInfo recoveredPCI) { }
 
         public void OnPrimaryCheckpointCompleted(PrimaryCheckpointInfo primaryCheckpointInfo) { }
 
-        public PrimaryCheckpointInfo BeginRecover(Guid secondaryLogToken, bool undoNextVersion) => default;   // Not used for this class
+        public PrimaryCheckpointInfo Recover(PrimaryCheckpointInfo recoveredPCI, bool undoNextVersion) => default;
 
-        public Task<PrimaryCheckpointInfo> BeginRecoverAsync(Guid secondaryLogToken, bool undoNextVersion, CancellationToken cancellationToken = default) => default; // Not used for this class
-
-        public void EndRecover() { }
+        public Task<PrimaryCheckpointInfo> RecoverAsync(PrimaryCheckpointInfo recoveredPCI, bool undoNextVersion, CancellationToken cancellationToken = default) => default;
     }
 
     class SimpleKeyIndexBase<TKey> : SimpleIndexBase<TKey>

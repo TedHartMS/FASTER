@@ -164,9 +164,7 @@ namespace FASTER.core
 
             IFasterScanIterator<TKVKey, TKVValue> GetIter()
             {
-                var localIter = inputIter is null
-                                   ? primaryFkv.Log.Scan(iter.BeginAddress, iter.EndAddress, ScanBufferingMode.NoBuffering)
-                                   : inputIter;
+                var localIter = inputIter ?? primaryFkv.Log.Scan(iter.BeginAddress, iter.EndAddress, ScanBufferingMode.NoBuffering);
                 inputIter = null;
                 return localIter;
             }
@@ -200,101 +198,95 @@ namespace FASTER.core
             }
         }
 
-        internal byte[] GetLatestCheckpointMetadata()
-        {
-            var checkpointMetadata = new CheckpointMetadata();
-
-            var ki = this.allKeyIndexes;
-            if (ki is { })
-            {
-                foreach (var keyIndex in ki)
-                    checkpointMetadata.Append(keyIndex.Id, keyIndex.GetLatestCheckpointToken());
-            }
-            var vi = this.allValueIndexes;
-            if (vi is { })
-            {
-                foreach (var valueIndex in vi)
-                    checkpointMetadata.Append(valueIndex.Id, valueIndex.GetLatestCheckpointToken());
-            }
-
-            return checkpointMetadata.Flatten();
-        }
-
-        internal void OnPrimaryCheckpointCompleted(PrimaryCheckpointInfo pci)
+        internal void OnPrimaryCheckpointInitiated(PrimaryCheckpointInfo currentPci)
         {
             var ki = this.allKeyIndexes;
             if (ki is { })
             {
                 foreach (var keyIndex in ki)
-                    keyIndex.OnPrimaryCheckpointCompleted(pci);
+                    keyIndex.OnPrimaryCheckpointInitiated(currentPci);
             }
             var vi = this.allValueIndexes;
             if (vi is { })
             {
                 foreach (var valueIndex in vi)
-                    valueIndex.OnPrimaryCheckpointCompleted(pci);
+                    valueIndex.OnPrimaryCheckpointInitiated(currentPci);
             }
         }
 
-        internal void Recover(byte[] indexMetadata, bool undoNextVersion)
+        internal void OnPrimaryCheckpointCompleted(PrimaryCheckpointInfo completedPci)
+        {
+            var ki = this.allKeyIndexes;
+            if (ki is { })
+            {
+                foreach (var keyIndex in ki)
+                    keyIndex.OnPrimaryCheckpointCompleted(completedPci);
+            }
+            var vi = this.allValueIndexes;
+            if (vi is { })
+            {
+                foreach (var valueIndex in vi)
+                    valueIndex.OnPrimaryCheckpointCompleted(completedPci);
+            }
+        }
+
+        internal void Recover(PrimaryCheckpointInfo recoveredPci, bool undoNextVersion)
         {
             // This is called during recovery, before the PrimaryFKV is open for operations, so we do not have to worry about things changing
             // We're not operating in the context of a FasterKV session, so we need our own sessionBroker.
             using var indexSessionBroker = new SecondaryIndexSessionBroker();
 
-            var checkpointMetadata = new CheckpointMetadata(indexMetadata);
             var tasks = new List<Task>();
 
             var ki = this.allKeyIndexes;
             if (ki is { })
             {
                 foreach (var keyIndex in ki)
-                    tasks.Add(Task.Run(() => RecoverIndex(keyIndex, default, checkpointMetadata.GetToken(keyIndex.Id), undoNextVersion, indexSessionBroker)));
+                    tasks.Add(Task.Run(() => RecoverIndex(keyIndex, default, recoveredPci, undoNextVersion, indexSessionBroker)));
             }
             var vi = this.allValueIndexes;
             if (vi is { })
             {
                 foreach (var valueIndex in vi)
-                    tasks.Add(Task.Run(() => RecoverIndex(default, valueIndex, checkpointMetadata.GetToken(valueIndex.Id), undoNextVersion, indexSessionBroker)));
+                    tasks.Add(Task.Run(() => RecoverIndex(default, valueIndex, recoveredPci, undoNextVersion, indexSessionBroker)));
             }
 
             Task.WaitAll(tasks.ToArray());
         }
 
-        internal Task RecoverAsync(byte[] indexMetadata, bool undoNextVersion)
+        internal Task RecoverAsync(PrimaryCheckpointInfo recoveredPci, bool undoNextVersion)
         {
             // This is called during recovery, before the PrimaryFKV is open for operations, so we do not have to worry about things changing
             // We're not operating in the context of a FasterKV session, so we need our own sessionBroker.
             using var indexSessionBroker = new SecondaryIndexSessionBroker();
 
-            var checkpointMetadata = new CheckpointMetadata(indexMetadata);
             var tasks = new List<Task>();
 
             var ki = this.allKeyIndexes;
             if (ki is { })
             {
                 foreach (var keyIndex in ki)
-                    tasks.Add(RecoverIndexAsync(keyIndex, default, checkpointMetadata.GetToken(keyIndex.Id), undoNextVersion, indexSessionBroker));
+                    tasks.Add(RecoverIndexAsync(keyIndex, default, recoveredPci, undoNextVersion, indexSessionBroker));
             }
             var vi = this.allValueIndexes;
             if (vi is { })
             {
                 foreach (var valueIndex in vi)
-                    tasks.Add(RecoverIndexAsync(default, valueIndex, checkpointMetadata.GetToken(valueIndex.Id), undoNextVersion, indexSessionBroker));
+                    tasks.Add(RecoverIndexAsync(default, valueIndex, recoveredPci, undoNextVersion, indexSessionBroker));
             }
 
             return Task.WhenAll(tasks.ToArray());
         }
 
-        void RecoverIndex(ISecondaryKeyIndex<TKVKey> keyIndex, ISecondaryValueIndex<TKVKey, TKVValue> valueIndex, Guid checkpointToken, bool undoNextVersion, SecondaryIndexSessionBroker indexSessionBroker)
+        void RecoverIndex(ISecondaryKeyIndex<TKVKey> keyIndex, ISecondaryValueIndex<TKVKey, TKVValue> valueIndex, PrimaryCheckpointInfo recoveredPci, bool undoNextVersion, SecondaryIndexSessionBroker indexSessionBroker)
         {
-            var pci = checkpointToken != Guid.Empty ? ((ISecondaryIndex)keyIndex ?? valueIndex).BeginRecover(checkpointToken, undoNextVersion) : default;
+            var pci = ((ISecondaryIndex)keyIndex ?? valueIndex).Recover(recoveredPci, undoNextVersion);
             RollIndexForward(keyIndex, valueIndex, pci, indexSessionBroker);
         }
 
-        async Task RecoverIndexAsync(ISecondaryKeyIndex<TKVKey> keyIndex, ISecondaryValueIndex<TKVKey, TKVValue> valueIndex, Guid checkpointToken, bool undoNextVersion, SecondaryIndexSessionBroker indexSessionBroker)
+        async Task RecoverIndexAsync(ISecondaryKeyIndex<TKVKey> keyIndex, ISecondaryValueIndex<TKVKey, TKVValue> valueIndex, PrimaryCheckpointInfo recoveredPci, bool undoNextVersion, SecondaryIndexSessionBroker indexSessionBroker)
         {
-            var pci = checkpointToken != Guid.Empty ? await ((ISecondaryIndex)keyIndex ?? valueIndex).BeginRecoverAsync(checkpointToken, undoNextVersion) : default;
+            var pci = await ((ISecondaryIndex)keyIndex ?? valueIndex).RecoverAsync(recoveredPci, undoNextVersion);
             await Task.Run(() => RollIndexForward(keyIndex, valueIndex, pci, indexSessionBroker));
         }
 
@@ -302,7 +294,9 @@ namespace FASTER.core
         {
             if (pci.FlushedUntilAddress < primaryFkv.Log.TailAddress)
             {
-                using var iter = primaryFkv.Log.Scan(pci.FlushedUntilAddress, primaryFkv.Log.TailAddress, ScanBufferingMode.NoBuffering);
+                var startAddress = Math.Max(pci.FlushedUntilAddress, primaryFkv.Log.BeginAddress);
+                var endAddress = ((ISecondaryIndex)keyIndex ?? valueIndex).IsMutable ? primaryFkv.Log.TailAddress : primaryFkv.Log.ReadOnlyAddress;
+                using var iter = primaryFkv.Log.Scan(startAddress, primaryFkv.Log.TailAddress, ScanBufferingMode.NoBuffering);
                 if (keyIndex is { })
                 {
                     while (iter.GetNext(out var recordInfo))

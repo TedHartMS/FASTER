@@ -85,10 +85,15 @@ namespace FASTER.core
 
         internal void InitializeHybridLogCheckpoint(Guid hybridLogToken, int version)
         {
-            var indexMetadata = this.SecondaryIndexBroker.GetLatestCheckpointMetadata();
-            _hybridLogCheckpoint.Initialize(hybridLogToken, version, indexMetadata, checkpointManager);
+            this.SecondaryIndexBroker.OnPrimaryCheckpointInitiated(GetCurrentPrimaryCheckpointInfo());
+            _hybridLogCheckpoint.Initialize(hybridLogToken, version, checkpointManager);
         }
 
+        internal PrimaryCheckpointInfo GetCurrentPrimaryCheckpointInfo()
+            => GetCurrentPrimaryCheckpointInfo(_hybridLogCheckpoint.info);
+
+        internal PrimaryCheckpointInfo GetCurrentPrimaryCheckpointInfo(HybridLogRecoveryInfo info)
+            => new PrimaryCheckpointInfo(info.version, UseFoldOverCheckpoint ? info.finalLogicalAddress : info.flushedLogicalAddress);
         // #endregion
     }
 }
