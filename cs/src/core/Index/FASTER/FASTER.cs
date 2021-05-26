@@ -241,18 +241,8 @@ namespace FASTER.core
         /// fail if we are already taking a checkpoint or performing some other
         /// operation such as growing the index). Use CompleteCheckpointAsync to wait completion.
         /// </returns>
-        public bool TakeFullCheckpoint(out Guid token)
-        {
-            ISynchronizationTask backend;
-            if (FoldOverSnapshot)
-                backend = new FoldOverCheckpointTask();
-            else
-                backend = new SnapshotCheckpointTask();
-
-            var result = StartStateMachine(new FullCheckpointStateMachine(backend, -1));
-            token = _hybridLogCheckpointToken;
-            return result;
-        }
+        public bool TakeFullCheckpoint(out Guid token) 
+            => TakeFullCheckpoint(out token, this.FoldOverSnapshot ? CheckpointType.FoldOver : CheckpointType.Snapshot);
 
         /// <summary>
         /// Initiate full checkpoint
@@ -300,7 +290,7 @@ namespace FASTER.core
             var success = TakeFullCheckpoint(out Guid token, checkpointType);
 
             if (success)
-                await CompleteCheckpointAsync(cancellationToken);
+                await CompleteCheckpointAsync(cancellationToken).ConfigureAwait(false);
 
             return (success, token);
         }
@@ -334,7 +324,7 @@ namespace FASTER.core
             var success = TakeIndexCheckpoint(out Guid token);
 
             if (success)
-                await CompleteCheckpointAsync(cancellationToken);
+                await CompleteCheckpointAsync(cancellationToken).ConfigureAwait(false);
 
             return (success, token);
         }
@@ -403,7 +393,7 @@ namespace FASTER.core
             var success = TakeHybridLogCheckpoint(out Guid token, checkpointType, tryIncremental);
 
             if (success)
-                await CompleteCheckpointAsync(cancellationToken);
+                await CompleteCheckpointAsync(cancellationToken).ConfigureAwait(false);
 
             return (success, token);
         }
@@ -499,7 +489,7 @@ namespace FASTER.core
                 foreach (var task in valueTasks)
                 {
                     if (!task.IsCompleted)
-                        await task;
+                        await task.ConfigureAwait(false);
                 }
             }
         }
@@ -729,7 +719,7 @@ namespace FASTER.core
                 Debug.Assert(status == Status.OK);
 
                 // No need to lock here; we have just written a new record with a tombstone, so it will not be changed
-                // TODO - but this can race with an INSERT...
+                // TODO - but this can race with an INSERT of the same key...
                 this.UpdateSIForDelete(ref key, new RecordId(pcontext.logicalAddress, pcontext.recordInfo), isNewRecord: true, fasterSession.SecondaryIndexSessionBroker);
             }
 
