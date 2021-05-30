@@ -49,7 +49,7 @@ namespace FASTER.indexes.HashValueIndex
                         SecondaryFasterKV<TPKey>.Output output = default;
                         if (!QueryNext(sessions.SecondarySession, input, ref output, querySettings, ref recordInfo, context))
                             recordInfo.PreviousAddress = core.Constants.kInvalidAddress;
-                        else if (output.RecordId.Address <= continuationToken.PrimaryStartAddress && ResolveRecord(sessions.PrimarySession, output.RecordId, out var record))
+                        else if (output.RecordId.Address <= continuationToken.CrossoverAddress && ResolveRecord(sessions.PrimarySession, output.RecordId, out var record))
                         {
                             yield return record;
                             ++count;
@@ -117,7 +117,7 @@ namespace FASTER.indexes.HashValueIndex
                                 continue;
                             }
                             queryIter[ii].RecordId = output.RecordId;
-                        } while (queryIter[ii].RecordId.Address > continuationToken.PrimaryStartAddress && !querySettings.IsCanceled);
+                        } while (queryIter[ii].RecordId.Address > continuationToken.CrossoverAddress && !querySettings.IsCanceled);
                     }
                 }
 
@@ -242,7 +242,7 @@ namespace FASTER.indexes.HashValueIndex
                         if (status != Status.OK)
                             break;
 
-                        if (output.RecordId.Address <= continuationToken.PrimaryStartAddress)
+                        if (output.RecordId.Address <= continuationToken.CrossoverAddress)
                         {
                             var queryRecord = await ResolveRecordAsync(sessions.PrimarySession, output.RecordId, querySettings);
                             if (queryRecord is { })
@@ -321,7 +321,7 @@ namespace FASTER.indexes.HashValueIndex
                             }
                             queryIter[ii].RecordId = output.RecordId;
                             queryIter[ii].RecordInfo.PreviousAddress = output.PreviousAddress;
-                        } while (queryIter[ii].RecordId.Address > continuationToken.PrimaryStartAddress && !querySettings.IsCanceled);
+                        } while (queryIter[ii].RecordId.Address > continuationToken.CrossoverAddress && !querySettings.IsCanceled);
                     }
                 }
 
@@ -385,9 +385,13 @@ namespace FASTER.indexes.HashValueIndex
             }
             else
             {
+                // There may be a "lag" between the time Primary updates its ReadOnlyAddress and the time we have put all records below that into the index.
+                // So we start by going from highWaterRecordId -> end of Primary, then when we cross over to the index, we skip anything above the
+                // highWaterRecordId we started with.
+                var crossoverAddress = highWaterRecordId.Address;
                 startAddress = this.primaryFkv.Log.ReadOnlyAddress;
                 endAddress = this.primaryFkv.Log.TailAddress;
-                continuationToken.SetPrimaryAddresses(startAddress, endAddress);
+                continuationToken.SetPrimaryAddresses(startAddress, endAddress, crossoverAddress);
             }
             return this.primaryFkv.Log.Scan(startAddress, endAddress);
         }

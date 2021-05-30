@@ -46,7 +46,7 @@ namespace FASTER.test.SecondaryIndex.SimpleIndexTests
             => new SimpleKeyIndex<int>($"{TestContext.CurrentContext.Test.Name}_mutable_{(isAsync ? "async" : "sync")}", isMutable);
 
         [Test]
-        [Category("FasterKV"), Category("Index")]
+        [Category(TestUtils.SecondaryIndexCategory)]
         public void MutableInsertTest([Values] bool useAdvancedFunctions, [Values] bool useRMW, [Values] bool isAsync)
         {
             var secondaryIndex = CreateIndex(isMutable: true, isAsync);
@@ -56,7 +56,7 @@ namespace FASTER.test.SecondaryIndex.SimpleIndexTests
         }
 
         [Test]
-        [Category("FasterKV"), Category("Index")]
+        [Category(TestUtils.SecondaryIndexCategory)]
         public void ImmutableInsertTest([Values] bool useAdvancedFunctions, [Values] bool useRMW, [Values] bool isAsync)
         {
             var secondaryIndex = CreateIndex(isMutable: false, isAsync);
@@ -66,7 +66,7 @@ namespace FASTER.test.SecondaryIndex.SimpleIndexTests
         }
 
         [Test]
-        [Category("FasterKV"), Category("Index")]
+        [Category(TestUtils.SecondaryIndexCategory)]
         public void MixedInsertTest([Values] bool useAdvancedFunctions, [Values] bool useRMW, [Values] bool isAsync)
         {
             var mutableIndex = CreateIndex(isMutable: true, isAsync);

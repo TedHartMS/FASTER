@@ -8,6 +8,9 @@ namespace FASTER.test
 {
     internal static class TestUtils
     {
+        internal const string SecondaryIndexCategory = "SecondaryIndex";
+        internal const string HashValueIndexCategory = "HashValueIndex";
+
         internal static void DeleteDirectory(string path)
         {
             foreach (string directory in Directory.GetDirectories(path))

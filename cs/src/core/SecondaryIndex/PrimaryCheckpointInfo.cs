@@ -37,31 +37,25 @@ namespace FASTER.core
         /// </summary>
         public bool IsDefault() => this.Version == 0 && this.FlushedUntilAddress == 0;
 
+        /// <inheritdoc/>
+        /// <remarks>We only consider version here</remarks>
+        public int CompareTo(PrimaryCheckpointInfo other) => this.Version.CompareTo(other.Version);
+
         #region Serialization
 
-        const int MetadataVersion = 1;
-
         /// <summary>
-        /// Serialized byte size, including data members, MetadataVersion, and long checksum
+        /// Serialized byte size of data members
         /// </summary>
-        public const int SerializedSize = 24;
+        public const int SerializedSize = 8 + 4;
 
         /// <summary>
         /// Constructs from a byte array.
         /// </summary>
         public PrimaryCheckpointInfo(byte[] metadata)
         {
+            var offset = 0;
+
             var slice = metadata.Slice(0, 4);
-            var metaVersion = BitConverter.ToInt32(slice, 0);
-            if (metaVersion != MetadataVersion)
-                throw new SecondaryIndexException("Unknown metadata version");
-            var offset = slice.Length;
-
-            slice = metadata.Slice(offset, 8);
-            var checksum = BitConverter.ToInt64(slice, 0);
-            offset += slice.Length;
-
-            slice = metadata.Slice(offset, 4);
             this.Version = BitConverter.ToInt32(slice, 0);
             offset += slice.Length;
 
@@ -70,8 +64,6 @@ namespace FASTER.core
             offset += slice.Length;
 
             Debug.Assert(offset == SerializedSize);
-            if (checksum != Checksum())
-                throw new SecondaryIndexException("Invalid checksum for checkpoint");
         }
 
         /// <summary>
@@ -81,15 +73,9 @@ namespace FASTER.core
         public byte[] ToByteArray()
         {
             var result = new byte[SerializedSize];
-            var bytes = BitConverter.GetBytes(MetadataVersion);
-            Array.Copy(bytes, 0, result, 0, bytes.Length);
-            var offset = bytes.Length;
+            var offset = 0;
 
-            bytes = BitConverter.GetBytes(Checksum());
-            Array.Copy(bytes, 0, result, offset, bytes.Length);
-            offset += bytes.Length;
-
-            bytes = BitConverter.GetBytes(Version);
+            var bytes = BitConverter.GetBytes(Version);
             Array.Copy(bytes, 0, result, offset, bytes.Length);
             offset += bytes.Length;
 
@@ -101,15 +87,7 @@ namespace FASTER.core
             return result;
         }
 
-        private readonly long Checksum()
-            => this.Version ^ this.FlushedUntilAddress;
-
-        /// <inheritdoc/>
-        public int CompareTo(PrimaryCheckpointInfo other)
-        {
-            var cmp = this.Version.CompareTo(other.Version);
-            return cmp != 0 ? cmp : this.FlushedUntilAddress.CompareTo(other.FlushedUntilAddress);
-        }
+        public readonly long Checksum() => this.Version ^ this.FlushedUntilAddress;
 
         #endregion Serialization
     }

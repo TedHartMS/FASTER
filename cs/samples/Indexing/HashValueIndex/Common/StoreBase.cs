@@ -90,7 +90,13 @@ namespace HashValueIndexSampleCommon
             Console.WriteLine($"Update completed with {statusPending:N0} pending");
         }
 
-        internal ValueTask<(bool success, Guid token)> CheckpointAsync() => this.FasterKV.TakeFullCheckpointAsync(CheckpointType.FoldOver);
+        internal virtual async ValueTask<(bool success, Guid token)> CheckpointAsync()
+        {
+            var result = await this.FasterKV.TakeFullCheckpointAsync(CheckpointType.FoldOver);
+            if (!result.success)
+                throw new ApplicationException("Cannot checkpoint Primary FKV");
+            return result;
+        }
 
         internal void Recover() => this.FasterKV.Recover();
 

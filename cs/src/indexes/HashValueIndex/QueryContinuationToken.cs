@@ -13,6 +13,7 @@ namespace FASTER.indexes.HashValueIndex
     {
         public long PrimaryStartAddress;
         public long PrimaryEndAddress;
+        public long CrossoverAddress;
         public SerializedPredicate[] Predicates;
         public bool IsSecondaryStarted;
         public bool IsCanceled;
@@ -24,10 +25,11 @@ namespace FASTER.indexes.HashValueIndex
         internal ref SerializedPredicate this[int index] => ref this.Predicates[index];
 
         internal bool IsPrimaryStarted => this.PrimaryStartAddress != FASTER.core.Constants.kInvalidAddress;
-        internal void SetPrimaryAddresses(long start, long end)
+        internal void SetPrimaryAddresses(long start, long end, long crossover)
         {
             this.PrimaryStartAddress = start;
             this.PrimaryEndAddress = end;
+            this.CrossoverAddress = crossover;
         }
         internal bool IsPrimaryComplete => this.IsPrimaryStarted && this.PrimaryStartAddress >= this.PrimaryEndAddress;
 

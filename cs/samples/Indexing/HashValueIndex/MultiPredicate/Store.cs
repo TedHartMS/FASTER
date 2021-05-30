@@ -1,8 +1,11 @@
 ﻿// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT license.
 
+using FASTER.core;
 using FASTER.indexes.HashValueIndex;
 using HashValueIndexSampleCommon;
+using System;
+using System.Threading.Tasks;
 
 namespace MultiPredicateSample
 {
@@ -21,6 +24,15 @@ namespace MultiPredicateSample
             this.AddIndex(this.index);
             this.CombinedPetPred = this.index.GetPredicate(nameof(this.CombinedPetPred));
             this.CombinedAgePred = this.index.GetPredicate(nameof(this.CombinedAgePred));
+        }
+
+        internal override async ValueTask<(bool success, Guid token)> CheckpointAsync()
+        {
+            var primaryResult = await base.CheckpointAsync();
+            var (success, _) = await this.index.TakeFullCheckpointAsync(CheckpointType.FoldOver);
+            if (!success)
+                throw new ApplicationException("Cannot checkpoint Primary FKV");
+            return primaryResult;
         }
     }
 }

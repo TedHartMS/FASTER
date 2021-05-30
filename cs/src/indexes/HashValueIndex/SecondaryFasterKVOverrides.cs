@@ -109,6 +109,5 @@ namespace FASTER.indexes.HashValueIndex
 
             return touched;
         }
-
     }
 }

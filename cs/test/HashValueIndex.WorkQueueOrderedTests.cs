@@ -8,7 +8,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 
-namespace FASTER.test.SecondaryIndex.HashValueIndexTests
+namespace FASTER.test.SecondaryIndex.HashValueIndexTests.WorkQueueOrderedTests
 {
     class WorkQueueOrderedTests
     {
@@ -110,7 +110,7 @@ namespace FASTER.test.SecondaryIndex.HashValueIndexTests
         }
 
         [Test]
-        [Category("HashValueIndex"), Category("Index")]
+        [Category(TestUtils.SecondaryIndexCategory), Category(TestUtils.HashValueIndexCategory)]
         public void WQOInsertForwardSequenceTest()
         {
             // Don't sleep here as it's sequential
@@ -123,7 +123,7 @@ namespace FASTER.test.SecondaryIndex.HashValueIndexTests
         }
 
         [Test]
-        [Category("HashValueIndex"), Category("Index")]
+        [Category(TestUtils.SecondaryIndexCategory), Category(TestUtils.HashValueIndexCategory)]
         public void WQOInsertReverseSequenceTest([Values]bool sleep)
         {
             Thread[] workers = new Thread[NumItems];
@@ -136,7 +136,7 @@ namespace FASTER.test.SecondaryIndex.HashValueIndexTests
         }
 
         [Test]
-        [Category("HashValueIndex"), Category("Index")]
+        [Category(TestUtils.SecondaryIndexCategory), Category(TestUtils.HashValueIndexCategory)]
         public void WQOInsertRandomWaitTest([Values]bool sleep)
         {
             Thread[] workers = new Thread[NumItems];
@@ -151,7 +151,7 @@ namespace FASTER.test.SecondaryIndex.HashValueIndexTests
         }
 
         [Test]
-        [Category("HashValueIndex"), Category("Index")]
+        [Category(TestUtils.SecondaryIndexCategory), Category(TestUtils.HashValueIndexCategory)]
         public void WQOInsertRandomSequenceTest([Values] bool sleep)
         {
             var ordinals = Shuffle(Enumerable.Range(0, NumItems).ToArray());

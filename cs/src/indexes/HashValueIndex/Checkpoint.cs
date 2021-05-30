@@ -11,10 +11,10 @@ namespace FASTER.indexes.HashValueIndex
     public partial class HashValueIndex<TKVKey, TKVValue, TPKey> : ISecondaryValueIndex<TKVKey, TKVValue>
     {
         /// <inheritdoc/>
-        public void OnPrimaryCheckpointInitiated(PrimaryCheckpointInfo currentCheckpointInfo) => this.checkpointManager.lastStartedPrimaryCheckpointInfo = currentCheckpointInfo;
+        public void OnPrimaryCheckpointInitiated(PrimaryCheckpointInfo currentCheckpointInfo) => this.checkpointManager.secondaryMetadata.lastStartedPrimaryCheckpointInfo = currentCheckpointInfo;
 
         /// <inheritdoc/>
-        public void OnPrimaryCheckpointCompleted(PrimaryCheckpointInfo completedCheckpointInfo) => this.checkpointManager.lastCompletedPrimaryCheckpointInfo = completedCheckpointInfo;
+        public void OnPrimaryCheckpointCompleted(PrimaryCheckpointInfo completedCheckpointInfo) => this.checkpointManager.secondaryMetadata.lastCompletedPrimaryCheckpointInfo = completedCheckpointInfo;
 
         /// <summary>
         /// Initiate full checkpoint
