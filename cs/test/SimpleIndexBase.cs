@@ -10,7 +10,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace FASTER.test.SecondaryIndex.SimpleIndexTests
+namespace FASTER.test.SecondaryIndex.SimpleIndex
 {
     class SimpleIndexBase<TKey>
     {

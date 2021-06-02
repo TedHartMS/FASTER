@@ -8,7 +8,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 
-namespace FASTER.test.SecondaryIndex.HashValueIndexTests.WorkQueueOrderedTests
+namespace FASTER.test.HashValueIndex.WorkQueueOrdered
 {
     class WorkQueueOrderedTests
     {

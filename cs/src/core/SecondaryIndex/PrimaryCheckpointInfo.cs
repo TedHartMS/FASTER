@@ -87,8 +87,14 @@ namespace FASTER.core
             return result;
         }
 
+        /// <summary>
+        /// Calculates checksum of data members
+        /// </summary>
         public readonly long Checksum() => this.Version ^ this.FlushedUntilAddress;
 
         #endregion Serialization
+
+        /// <inheritdoc/>
+        public override string ToString() => $"{nameof(Version)} {Version}, {nameof(FlushedUntilAddress)} {FlushedUntilAddress}";
     }
 }

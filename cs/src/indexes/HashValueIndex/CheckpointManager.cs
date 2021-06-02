@@ -100,9 +100,8 @@ namespace FASTER.indexes.HashValueIndex
 
         internal void PrepareToRecover() => this.secondaryMetadata.lastCompletedPrimaryCheckpointInfo = default;
 
-        private static (PrimaryCheckpointInfo completedPci, PrimaryCheckpointInfo startedPCI) GetPCIs(byte[] metadata) 
-            => (new PrimaryCheckpointInfo(metadata.Slice(0, PrimaryCheckpointInfo.SerializedSize)),
-                new PrimaryCheckpointInfo(metadata.Slice(PrimaryCheckpointInfo.SerializedSize, PrimaryCheckpointInfo.SerializedSize)));
+        private static SecondaryCheckpointMetadata GetSecondaryMetadata(byte[] metadata) 
+            => new SecondaryCheckpointMetadata(metadata.Slice(0, SecondaryCheckpointMetadata.SerializedSize));
 
         internal void SetPCIs(PrimaryCheckpointInfo completedPci, PrimaryCheckpointInfo startedPCI)
         {
@@ -129,18 +128,18 @@ namespace FASTER.indexes.HashValueIndex
         {
             logToken = default;
             var recoveredHLCInfo = new HybridLogCheckpointInfo();
-            PrimaryCheckpointInfo completedPci = default, currentPci = default;
+            SecondaryCheckpointMetadata secondaryMetadata = default;
             foreach (var token in this.userCheckpointManager.GetLogCheckpointTokens())
             {
                 try
                 {
                     // Find the first secondary log checkpoint with currentPci < recoveredPci.
                     var metadata = this.userCheckpointManager.GetLogCheckpointMetadata(token, deltaLog: default);
-                    (completedPci, currentPci) = GetPCIs(metadata);
-                    if (currentPci.CompareTo(recoveredPci) < 0)
+                    secondaryMetadata = GetSecondaryMetadata(metadata);
+                    if (secondaryMetadata.lastStartedPrimaryCheckpointInfo.CompareTo(recoveredPci) < 0)
                     {
                         logToken = token;
-                        recoveredHLCInfo.Recover(logToken, this, this.secondaryFkv.hlog.LogPageSizeBits);
+                        RecoverHLCInfo(ref recoveredHLCInfo, logToken);
                         break;
                     }
                 }
@@ -151,15 +150,23 @@ namespace FASTER.indexes.HashValueIndex
             }
 
             if (logToken == Guid.Empty)
-                throw new SecondaryIndexException($"Unable to find valid index token when recovering secondary index {this.indexName}");
+            {
+                // No secondary checkpoints available, so we'll replay from the beginning
+                indexToken = logToken = default;
+                lastCompletedPci = lastStartedPci = default;
+                return true;
+            }
 
             // We return true even if the index token is default (compatible index token could not be found), in which case we restore the index from the log.
-            var recoveredICInfo = this.secondaryFkv.GetCompatibleIndexCheckpointInfo(recoveredHLCInfo);
-            indexToken = recoveredICInfo.info.token;
-            lastCompletedPci = completedPci;
-            lastStartedPci = currentPci;
+            indexToken = GetCompatibleIndexToken(recoveredHLCInfo);
+            lastCompletedPci = secondaryMetadata.lastCompletedPrimaryCheckpointInfo;
+            lastStartedPci = secondaryMetadata.lastStartedPrimaryCheckpointInfo;
             return true;
         }
+
+        // Virtual for test
+        internal virtual void RecoverHLCInfo(ref HybridLogCheckpointInfo recoveredHLCInfo, Guid logToken) => recoveredHLCInfo.Recover(logToken, this, this.secondaryFkv.hlog.LogPageSizeBits);
+        internal virtual Guid GetCompatibleIndexToken(HybridLogCheckpointInfo recoveredHLCInfo) => this.secondaryFkv.GetCompatibleIndexCheckpointInfo(recoveredHLCInfo).info.token;
 
         #region Wrapped ICheckpointManager methods
 

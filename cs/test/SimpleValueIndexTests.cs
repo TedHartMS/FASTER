@@ -5,7 +5,7 @@ using System;
 using FASTER.core;
 using NUnit.Framework;
 
-namespace FASTER.test.SecondaryIndex.SimpleIndexTests
+namespace FASTER.test.SecondaryIndex.SimpleIndex
 {
     class SimpleValueIndexTests
     {
