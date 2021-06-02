@@ -158,7 +158,7 @@ namespace FASTER.indexes.HashValueIndex
             }
 
             // We return true even if the index token is default (compatible index token could not be found), in which case we restore the index from the log.
-            indexToken = GetCompatibleIndexToken(recoveredHLCInfo);
+            indexToken = GetCompatibleIndexToken(ref recoveredHLCInfo);
             lastCompletedPci = secondaryMetadata.lastCompletedPrimaryCheckpointInfo;
             lastStartedPci = secondaryMetadata.lastStartedPrimaryCheckpointInfo;
             return true;
@@ -166,7 +166,7 @@ namespace FASTER.indexes.HashValueIndex
 
         // Virtual for test
         internal virtual void RecoverHLCInfo(ref HybridLogCheckpointInfo recoveredHLCInfo, Guid logToken) => recoveredHLCInfo.Recover(logToken, this, this.secondaryFkv.hlog.LogPageSizeBits);
-        internal virtual Guid GetCompatibleIndexToken(HybridLogCheckpointInfo recoveredHLCInfo) => this.secondaryFkv.GetCompatibleIndexCheckpointInfo(recoveredHLCInfo).info.token;
+        internal virtual Guid GetCompatibleIndexToken(ref HybridLogCheckpointInfo recoveredHLCInfo) => this.secondaryFkv.GetCompatibleIndexCheckpointInfo(ref recoveredHLCInfo).info.token;
 
         #region Wrapped ICheckpointManager methods
 

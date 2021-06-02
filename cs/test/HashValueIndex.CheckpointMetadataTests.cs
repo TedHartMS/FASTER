@@ -33,8 +33,8 @@ namespace FASTER.test.HashValueIndex.CheckpointMetadata
 
         internal const int RecordsPerChunk = 1000;
         internal const int BA = 64; // BeginAddress
-        private readonly CheckpointManager<int> outerCheckpointManager;
-        private readonly ICheckpointManager innerCheckpointManager;
+        protected readonly CheckpointManager<int> outerCheckpointManager;
+        protected readonly ICheckpointManager innerCheckpointManager;
 
         // Per-TestSequence variables.
         private Guid lastPrimaryCommitToken;
@@ -105,8 +105,7 @@ namespace FASTER.test.HashValueIndex.CheckpointMetadata
                         secondaryTailAddresses[rowCount] = stail;
                         break;
                     case Op.P1: case Op.P2: case Op.P3:
-                        this.lastPrimaryCommitToken = CommitPrimary(out int pversion);
-                        this.lastPrimaryVersion = pversion;
+                        this.lastPrimaryCommitToken = CommitPrimary(out this.lastPrimaryVersion);
                         break;
                     case Op.S1: case Op.S2: case Op.S3:
                         CommitSecondary();
@@ -147,12 +146,12 @@ namespace FASTER.test.HashValueIndex.CheckpointMetadata
             Assert.AreEqual(expectedRecoveryState.startedPci.Version, lastStartedPci.Version);
         }
 
-        internal virtual Guid CommitPrimary(out int pversion)
+        internal virtual Guid CommitPrimary(out int lastPrimaryVer)
         {
             // TODO: extend this to show separate start/completed intermixing
-            pversion = ++this.defaultPrimaryVersion;
-            this.lastCompletedPci = new PrimaryCheckpointInfo(pversion, primaryTailAddresses[rowCount]);
-            this.lastStartedPci = new PrimaryCheckpointInfo(pversion, primaryTailAddresses[rowCount]);
+            lastPrimaryVer = ++this.defaultPrimaryVersion;
+            this.lastCompletedPci = new PrimaryCheckpointInfo(lastPrimaryVer, primaryTailAddresses[rowCount]);
+            this.lastStartedPci = new PrimaryCheckpointInfo(lastPrimaryVer, primaryTailAddresses[rowCount]);
             return Guid.NewGuid();
         }
 
@@ -259,7 +258,7 @@ namespace FASTER.test.HashValueIndex.CheckpointMetadata
 
         // We don't exercise these here.
         internal override void RecoverHLCInfo(ref HybridLogCheckpointInfo recoveredHLCInfo, Guid logToken) { }
-        internal override Guid GetCompatibleIndexToken(HybridLogCheckpointInfo recoveredHLCInfo) => default;
+        internal override Guid GetCompatibleIndexToken(ref HybridLogCheckpointInfo recoveredHLCInfo) => default;
     }
 
     internal class CheckpointMetadataTests
@@ -281,6 +280,8 @@ namespace FASTER.test.HashValueIndex.CheckpointMetadata
         {
             this.outerCheckpointManager?.Dispose();
             this.outerCheckpointManager = null;
+            this.innerCheckpointManager?.Dispose();
+            this.innerCheckpointManager = null;
         }
 
         [Test]

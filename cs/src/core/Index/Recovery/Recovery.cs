@@ -145,10 +145,10 @@ namespace FASTER.core
 
             recoveredHLCInfo.info.DebugPrint();
 
-            recoveredICInfo = GetCompatibleIndexCheckpointInfo(recoveredHLCInfo);
+            recoveredICInfo = GetCompatibleIndexCheckpointInfo(ref recoveredHLCInfo);
         }
 
-        internal IndexCheckpointInfo GetCompatibleIndexCheckpointInfo(HybridLogCheckpointInfo recoveredHLCInfo)
+        internal IndexCheckpointInfo GetCompatibleIndexCheckpointInfo(ref HybridLogCheckpointInfo recoveredHLCInfo)
         {
             IndexCheckpointInfo recoveredICInfo = default;
             foreach (var indexToken in checkpointManager.GetIndexCheckpointTokens())

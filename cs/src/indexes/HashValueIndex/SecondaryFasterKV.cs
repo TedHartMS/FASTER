@@ -2,10 +2,11 @@
 // Licensed under the MIT license.
 
 using FASTER.core;
+using System;
 
 namespace FASTER.indexes.HashValueIndex
 {
-    public partial class HashValueIndex<TKVKey, TKVValue, TPKey> : ISecondaryValueIndex<TKVKey, TKVValue>
+    public partial class HashValueIndex<TKVKey, TKVValue, TPKey> : ISecondaryValueIndex<TKVKey, TKVValue>, IDisposable
     {
         internal SecondaryFasterKV<TPKey> secondaryFkv;
         CheckpointManager<TPKey> checkpointManager; 
@@ -15,8 +16,9 @@ namespace FASTER.indexes.HashValueIndex
             CheckpointSettings checkpointSettings = default;
             if (this.RegistrationSettings.CheckpointSettings is { }) {
                 // Because we have to augment the metadata, we need to have a checkpoint manager wrapper, not just a directory.
-                this.checkpointManager = new CheckpointManager<TPKey>(this.Name,
-                        this.RegistrationSettings.CheckpointSettings.CheckpointManager ?? Utility.CreateDefaultCheckpointManager(this.RegistrationSettings.CheckpointSettings));
+                // For test, we may have a derived wrapper instance already.
+                var userCheckpointManager = this.RegistrationSettings.CheckpointSettings.CheckpointManager ?? Utility.CreateDefaultCheckpointManager(this.RegistrationSettings.CheckpointSettings);
+                this.checkpointManager = (userCheckpointManager as CheckpointManager<TPKey>) ?? new CheckpointManager<TPKey>(this.Name, userCheckpointManager);
                 checkpointSettings = new CheckpointSettings {
                     CheckpointManager = this.checkpointManager,
                     CheckPointType = this.RegistrationSettings.CheckpointSettings.CheckPointType,
@@ -40,6 +42,13 @@ namespace FASTER.indexes.HashValueIndex
 
         /// <inheritdoc/>
         public void OnPrimaryTruncate(long newBeginAddress) { }
+
+        /// <inheritdoc/>
+        public void Dispose()
+        {
+            // Caller disposes the log device, just like it does for primary FKV.
+            this.secondaryFkv.Dispose();
+        }
     }
 
     internal partial class SecondaryFasterKV<TPKey> : FasterKV<TPKey, RecordId>
