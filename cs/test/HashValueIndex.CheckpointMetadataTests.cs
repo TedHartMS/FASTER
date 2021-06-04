@@ -33,67 +33,78 @@ namespace FASTER.test.HashValueIndex.CheckpointMetadata
 
         internal const int RecordsPerChunk = 1000;
         internal const int BA = 64; // BeginAddress
-        protected readonly CheckpointManager<int> outerCheckpointManager;
-        protected readonly ICheckpointManager innerCheckpointManager;
+        protected CheckpointManager<int> outerCheckpointManager;
+        protected ICheckpointManager innerCheckpointManager;
 
         // Per-TestSequence variables.
         private Guid lastPrimaryCommitToken;
-        int lastPrimaryVersion = 0;
-        long rowCount = 0;
+        internal int lastPrimaryVersion = 0;
+        internal long rowCount = 0;
 
         // For the default Test implementation; used by methods that are overridden by the HashValueIndex implementation.
         int defaultPrimaryVersion = 0;
-        readonly Dictionary<long, long> primaryTailAddresses = new Dictionary<long, long>() { [0] = 0, [BA] = BA};
-        readonly Dictionary<long, long> secondaryTailAddresses = new Dictionary<long, long>() { [0] = 0, [BA] = BA };
-        PrimaryCheckpointInfo lastCompletedPci;
-        PrimaryCheckpointInfo lastStartedPci;
+        protected readonly Dictionary<long, long> primaryTailAddresses = new Dictionary<long, long>() { [0] = 0, [BA] = BA};
+        protected Dictionary<long, long> secondaryTailAddresses = new Dictionary<long, long>() { [0] = 0, [BA] = BA };
+        protected PrimaryCheckpointInfo lastCompletedPci;
+        protected PrimaryCheckpointInfo lastStartedPci;
 
         // Recovery is done following the last Op here. The structures are initialized using rowcounts for addresses; these are mapped in the test (because the
-        // simple test does not do inserts; see HashValueIndex for that).
+        // simple test does not do inserts; see HashValueIndex.CompatibleRecoveryTests for that).
         internal Dictionary<string, TestSequence> testSequences = new Dictionary<string, TestSequence>{
-            [nameof(CheckpointMetadataTests.NoDataRestoreTest)] = 
+            [nameof(CheckpointMetadataTests.NoCheckpointsTest)] = 
                 new TestSequence { opSequence = new Op[] { Op.S1, Op.P1 },
                                    expected = new ExpectedRecoveryState {PrePTail = BA, PreSTail = BA, PostPTail = BA, PostSTail = BA,
                                                                          completedPci = new PrimaryCheckpointInfo (0, 0), startedPci = new PrimaryCheckpointInfo(0, 0)} },
-            [nameof(CheckpointMetadataTests.NoSecondaryCheckpointRestoreTest)] =
+            [nameof(CheckpointMetadataTests.PrimaryOnlyCheckpointTest)] = 
+                new TestSequence { opSequence = new Op[] { Op.S1, Op.P1 },
+                                   expected = new ExpectedRecoveryState {PrePTail = BA, PreSTail = BA, PostPTail = BA, PostSTail = BA,
+                                                                         completedPci = new PrimaryCheckpointInfo (0, 0), startedPci = new PrimaryCheckpointInfo(0, 0)} },
+            [nameof(CheckpointMetadataTests.NoDataRecoveredTest)] = 
+                new TestSequence { opSequence = new Op[] { Op.S1, Op.P1 },
+                                   expected = new ExpectedRecoveryState {PrePTail = BA, PreSTail = BA, PostPTail = BA, PostSTail = BA,
+                                                                         completedPci = new PrimaryCheckpointInfo (0, 0), startedPci = new PrimaryCheckpointInfo(0, 0)} },
+            [nameof(CheckpointMetadataTests.RecoverPrimaryWithNoSecondaryTest)] =
                 new TestSequence { opSequence = new Op[] { Op.I, Op.S1, Op.P1 },
                                    expected = new ExpectedRecoveryState {PrePTail = 1000, PreSTail = 1000, PostPTail = 1000, PostSTail = BA,
                                                                          completedPci = new PrimaryCheckpointInfo (0, 0), startedPci = new PrimaryCheckpointInfo(0, 0)} },
-            [nameof(CheckpointMetadataTests.RestoreOneChunkTest)] = 
+            [nameof(CheckpointMetadataTests.RecoverOneChunkTest)] = 
                 new TestSequence { opSequence = new Op[] { Op.I, Op.P1, Op.S1, Op.P2 },
                                    expected = new ExpectedRecoveryState {PrePTail = 1000, PreSTail = 1000, PostPTail = 1000, PostSTail = 1000,
                                                                          completedPci = new PrimaryCheckpointInfo (1, 1000), startedPci = new PrimaryCheckpointInfo(1, 0)} },
-            [nameof(CheckpointMetadataTests.RestoreOneChunkButNotTheOtherTest1)] =
-                new TestSequence { opSequence = new Op[] { Op.I, Op.P1, Op.I, Op.S1, Op.P2 },
-                                   expected = new ExpectedRecoveryState {PrePTail = 2000, PreSTail = 2000, PostPTail = 2000, PostSTail = 1000,
-                                                                         completedPci = new PrimaryCheckpointInfo (1, 1000), startedPci = new PrimaryCheckpointInfo(1, 0)} },
-            [nameof(CheckpointMetadataTests.RestoreOneChunkButNotTheOtherTest2)] =
+            [nameof(CheckpointMetadataTests.RecoverOneChunkButNotTheOtherTest)] =
                 new TestSequence { opSequence = new Op[] { Op.I, Op.P1, Op.S1, Op.I, Op.P2 },
                                    expected = new ExpectedRecoveryState {PrePTail = 2000, PreSTail = 2000, PostPTail = 2000, PostSTail = 1000,
                                                                          completedPci = new PrimaryCheckpointInfo (1, 1000), startedPci = new PrimaryCheckpointInfo(1, 0)} },
-            [nameof(CheckpointMetadataTests.RestoreOneChunkButNotTheOther2Test1)] =
+            [nameof(CheckpointMetadataTests.RecoverTwoChunksButReplayTheSecondTest)] =
+                new TestSequence { opSequence = new Op[] { Op.I, Op.P1, Op.I, Op.S1, Op.P2 },
+                                   expected = new ExpectedRecoveryState {PrePTail = 2000, PreSTail = 2000, PostPTail = 2000, PostSTail = 2000,
+                                                                         completedPci = new PrimaryCheckpointInfo (1, 1000), startedPci = new PrimaryCheckpointInfo(1, 0)} },
+            [nameof(CheckpointMetadataTests.RecoverOneChunkButNotTheOther2Test1)] =
                 new TestSequence { opSequence = new Op[] { Op.I, Op.P1, Op.I, Op.S1, Op.I, Op.P2 },
                                    expected = new ExpectedRecoveryState {PrePTail = 3000, PreSTail = 3000, PostPTail = 3000, PostSTail = 2000,
                                                                          completedPci = new PrimaryCheckpointInfo (1, 1000), startedPci = new PrimaryCheckpointInfo(1, 0)} },
-            [nameof(CheckpointMetadataTests.RestoreOneChunkButNotTheOther2Test2)] =
+            [nameof(CheckpointMetadataTests.RecoverOneChunkButNotTheOther2Test2)] =
                 new TestSequence { opSequence = new Op[] { Op.I, Op.P1, Op.I, Op.S1, Op.I, Op.P2, Op.S2 },
                                    expected = new ExpectedRecoveryState {PrePTail = 3000, PreSTail = 3000, PostPTail = 3000, PostSTail = 2000,
                                                                          completedPci = new PrimaryCheckpointInfo (1, 1000), startedPci = new PrimaryCheckpointInfo(1, 0)} },
-            [nameof(CheckpointMetadataTests.RestoreTwoChunksTest)] =
+            [nameof(CheckpointMetadataTests.RecoverTwoChunksTest)] =
                 new TestSequence { opSequence = new Op[] { Op.I, Op.P1, Op.I, Op.S1, Op.I, Op.P2, Op.S2, Op.P3 },
                                    expected = new ExpectedRecoveryState {PrePTail = 3000, PreSTail = 3000, PostPTail = 3000, PostSTail = 3000,
                                                                          completedPci = new PrimaryCheckpointInfo (2, 3000), startedPci = new PrimaryCheckpointInfo(2, 0)} },
         };
 
         internal CheckpointRecoveryTester(CheckpointManager<int> outerCheckpointManager, ICheckpointManager innerCheckpointManager)
+            => ResetCheckpointManagers(outerCheckpointManager, innerCheckpointManager);
+
+        internal void ResetCheckpointManagers(CheckpointManager<int> outerCheckpointManager, ICheckpointManager innerCheckpointManager)
         {
             this.outerCheckpointManager = outerCheckpointManager;
             this.innerCheckpointManager = innerCheckpointManager;
         }
 
-        internal void Run(string testName)
+        internal virtual void Run(string testName, bool usePrimarySnapshot_IsNotUsedInTheDefaultImplementation = false)
         {
-            // This needs testName to take advantage of setup/teardown by running one test at a time
+            // This needs testName to take advantage of setup/teardown by running one test at a time.
             var testSeq = this.testSequences[testName];
             foreach (var op in testSeq.opSequence)
             {
@@ -322,58 +333,72 @@ namespace FASTER.test.HashValueIndex.CheckpointMetadata
 
         [Test]
         [Category(TestUtils.SecondaryIndexCategory), Category(TestUtils.HashValueIndexCategory)]
-        public void NoDataRestoreTest()
+        public void NoCheckpointsTest()
         {
-            tester.Run(TestContext.CurrentContext.Test.Name);
+            tester.Run(TestContext.CurrentContext.Test.MethodName);
         }
 
         [Test]
         [Category(TestUtils.SecondaryIndexCategory), Category(TestUtils.HashValueIndexCategory)]
-        public void NoSecondaryCheckpointRestoreTest()
+        public void PrimaryOnlyCheckpointTest()
         {
-            tester.Run(TestContext.CurrentContext.Test.Name);
+            tester.Run(TestContext.CurrentContext.Test.MethodName);
         }
 
         [Test]
         [Category(TestUtils.SecondaryIndexCategory), Category(TestUtils.HashValueIndexCategory)]
-        public void RestoreOneChunkTest()
+        public void NoDataRecoveredTest()
         {
-            tester.Run(TestContext.CurrentContext.Test.Name);
+            tester.Run(TestContext.CurrentContext.Test.MethodName);
         }
 
         [Test]
         [Category(TestUtils.SecondaryIndexCategory), Category(TestUtils.HashValueIndexCategory)]
-        public void RestoreOneChunkButNotTheOtherTest1()
+        public void RecoverPrimaryWithNoSecondaryTest()
         {
-            tester.Run(TestContext.CurrentContext.Test.Name);
+            tester.Run(TestContext.CurrentContext.Test.MethodName);
         }
 
         [Test]
         [Category(TestUtils.SecondaryIndexCategory), Category(TestUtils.HashValueIndexCategory)]
-        public void RestoreOneChunkButNotTheOtherTest2()
+        public void RecoverOneChunkTest()
         {
-            tester.Run(TestContext.CurrentContext.Test.Name);
+            tester.Run(TestContext.CurrentContext.Test.MethodName);
         }
 
         [Test]
         [Category(TestUtils.SecondaryIndexCategory), Category(TestUtils.HashValueIndexCategory)]
-        public void RestoreOneChunkButNotTheOther2Test1()
+        public void RecoverOneChunkButNotTheOtherTest()
         {
-            tester.Run(TestContext.CurrentContext.Test.Name);
+            tester.Run(TestContext.CurrentContext.Test.MethodName);
         }
 
         [Test]
         [Category(TestUtils.SecondaryIndexCategory), Category(TestUtils.HashValueIndexCategory)]
-        public void RestoreOneChunkButNotTheOther2Test2()
+        public void RecoverTwoChunksButReplayTheSecondTest()
         {
-            tester.Run(TestContext.CurrentContext.Test.Name);
+            tester.Run(TestContext.CurrentContext.Test.MethodName);
         }
 
         [Test]
         [Category(TestUtils.SecondaryIndexCategory), Category(TestUtils.HashValueIndexCategory)]
-        public void RestoreTwoChunksTest()
+        public void RecoverOneChunkButNotTheOther2Test1()
         {
-            tester.Run(TestContext.CurrentContext.Test.Name);
+            tester.Run(TestContext.CurrentContext.Test.MethodName);
+        }
+
+        [Test]
+        [Category(TestUtils.SecondaryIndexCategory), Category(TestUtils.HashValueIndexCategory)]
+        public void RecoverOneChunkButNotTheOther2Test2()
+        {
+            tester.Run(TestContext.CurrentContext.Test.MethodName);
+        }
+
+        [Test]
+        [Category(TestUtils.SecondaryIndexCategory), Category(TestUtils.HashValueIndexCategory)]
+        public void RecoverTwoChunksTest()
+        {
+            tester.Run(TestContext.CurrentContext.Test.MethodName);
         }
     }
 }

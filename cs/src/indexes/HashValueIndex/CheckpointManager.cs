@@ -100,7 +100,7 @@ namespace FASTER.indexes.HashValueIndex
 
         internal void PrepareToRecover() => this.secondaryMetadata.lastCompletedPrimaryCheckpointInfo = default;
 
-        private static SecondaryCheckpointMetadata GetSecondaryMetadata(byte[] metadata) 
+        internal static SecondaryCheckpointMetadata GetSecondaryMetadata(byte[] metadata) 
             => new SecondaryCheckpointMetadata(metadata.Slice(0, SecondaryCheckpointMetadata.SerializedSize));
 
         internal void SetPCIs(PrimaryCheckpointInfo completedPci, PrimaryCheckpointInfo startedPCI)
@@ -109,7 +109,7 @@ namespace FASTER.indexes.HashValueIndex
             this.secondaryMetadata.lastStartedPrimaryCheckpointInfo = startedPCI;
         }
 
-        private byte[] RemoveFrom(byte[] metadata) 
+        private static byte[] RemoveFrom(byte[] metadata) 
             => metadata.Slice(SecondaryCheckpointMetadata.SerializedSize, metadata.Length - SecondaryCheckpointMetadata.SerializedSize);
 
         private byte[] PrependToLogMetadata(byte[] metadata)
@@ -124,7 +124,7 @@ namespace FASTER.indexes.HashValueIndex
             return result;
         }
 
-        internal bool GetRecoveryTokens(PrimaryCheckpointInfo recoveredPci, out Guid indexToken, out Guid logToken, out PrimaryCheckpointInfo lastCompletedPci, out PrimaryCheckpointInfo lastStartedPci)
+        internal bool GetRecoveryTokens(PrimaryCheckpointInfo primaryRecoveredPci, out Guid indexToken, out Guid logToken, out PrimaryCheckpointInfo lastCompletedPci, out PrimaryCheckpointInfo lastStartedPci)
         {
             logToken = default;
             var recoveredHLCInfo = new HybridLogCheckpointInfo();
@@ -133,10 +133,10 @@ namespace FASTER.indexes.HashValueIndex
             {
                 try
                 {
-                    // Find the first secondary log checkpoint with currentPci < recoveredPci.
+                    // Find the first secondary log checkpoint with startedPci < recoveredPci.
                     var metadata = this.userCheckpointManager.GetLogCheckpointMetadata(token, deltaLog: default);
                     secondaryMetadata = GetSecondaryMetadata(metadata);
-                    if (secondaryMetadata.lastStartedPrimaryCheckpointInfo.CompareTo(recoveredPci) < 0)
+                    if (secondaryMetadata.lastStartedPrimaryCheckpointInfo.Version > 0 && secondaryMetadata.lastStartedPrimaryCheckpointInfo.CompareTo(primaryRecoveredPci) < 0)
                     {
                         logToken = token;
                         RecoverHLCInfo(ref recoveredHLCInfo, logToken);

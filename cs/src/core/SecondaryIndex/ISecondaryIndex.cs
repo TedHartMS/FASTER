@@ -47,22 +47,22 @@ namespace FASTER.core
         /// Sychronous function to begin recovery of a secondary index; the index recovers itself here and returns a <see cref="PrimaryCheckpointInfo"/> indicating the last Primary FasterKV
         /// checkpoint to which it recovered. The <see cref="SecondaryIndexBroker{TKVKey, TKVValue}"/> will replay records since then, until the index is up to date with the Primary FasterKV.
         /// </summary>
-        /// <param name="recoveredPci">Info of the checkpoint token that was just recovered by the Primary FasterKV; we need to find the most recent Secondary checkpoint whose currentCheckpoint is earlier</param>
+        /// <param name="primaryRecoveredPci">Info of the checkpoint token that was just recovered by the Primary FasterKV; we need to find the most recent Secondary checkpoint whose currentCheckpoint is earlier</param>
         /// <param name="undoNextVersion">Whether records with versions beyond checkpoint version need to be undone (and invalidated on log)</param>
         /// <returns>A task wrapping the Primary FasterKV checkpoint info stored in the secondary index checkpoint that was recovered, or default if not found.</returns>
         /// <remarks>This is called after the Primary FKV has recovered itself and before it is open for operations.</remarks>
-        PrimaryCheckpointInfo Recover(PrimaryCheckpointInfo recoveredPci, bool undoNextVersion);
+        PrimaryCheckpointInfo Recover(PrimaryCheckpointInfo primaryRecoveredPci, bool undoNextVersion);
 
         /// <summary>
         /// Asychronous function to begin recovery of a secondary index; the index recovers itself here and returns a <see cref="PrimaryCheckpointInfo"/> indicating the last Primary FasterKV
         /// checkpoint to which it recovered. The <see cref="SecondaryIndexBroker{TKVKey, TKVValue}"/> will replay records since then, until the index is up to date with the Primary FasterKV.
         /// </summary>
-        /// <param name="recoveredPci">Info of the checkpoint token that was just recovered by the Primary FasterKV; we need to find the most recent Secondary checkpoint whose currentCheckpoint is earlier</param>
+        /// <param name="primaryRecoveredPci">Info of the checkpoint token that was just recovered by the Primary FasterKV; we need to find the most recent Secondary checkpoint whose currentCheckpoint is earlier</param>
         /// <param name="undoNextVersion">Whether records with versions beyond checkpoint version need to be undone (and invalidated on log)</param>
         /// <param name="cancellationToken">Allow cancellation of the operation</param>
         /// <returns>A task wrapping the Primary FasterKV checkpoint info stored in the secondary index checkpoint that was recovered, or default if not found.</returns>
         /// <remarks>This is called after the Primary FKV has recovered itself and before it is open for operations.</remarks>
-        Task<PrimaryCheckpointInfo> RecoverAsync(PrimaryCheckpointInfo recoveredPci, bool undoNextVersion, CancellationToken cancellationToken = default);
+        Task<PrimaryCheckpointInfo> RecoverAsync(PrimaryCheckpointInfo primaryRecoveredPci, bool undoNextVersion, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Called when the Primary FKV has set the new BeginAddress.

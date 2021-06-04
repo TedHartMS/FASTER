@@ -113,5 +113,11 @@ namespace FASTER.indexes.HashValueIndex
         /// </returns>
         public ValueTask<(bool success, Guid token)> TakeHybridLogCheckpointAsync(CheckpointType checkpointType, bool tryIncremental = false, CancellationToken cancellationToken = default) 
             => this.secondaryFkv.TakeHybridLogCheckpointAsync(checkpointType, tryIncremental, cancellationToken);
+
+        /// <summary>
+        /// Wait for ongoing checkpoint to complete
+        /// </summary>
+        /// <returns></returns>
+        public ValueTask CompleteCheckpointAsync(CancellationToken token = default) => this.secondaryFkv.CompleteCheckpointAsync(token);
     }
 }

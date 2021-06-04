@@ -11,28 +11,35 @@ namespace FASTER.indexes.HashValueIndex
 {
     public partial class HashValueIndex<TKVKey, TKVValue, TPKey> : ISecondaryValueIndex<TKVKey, TKVValue>
     {
+        internal PrimaryCheckpointInfo primaryRecoveredPci;
+        internal long recoveredTailAddress;
+        internal RecordId recoveredHighWaterRecordId;
+
         /// <inheritdoc/>
-        public PrimaryCheckpointInfo Recover(PrimaryCheckpointInfo recoveredPci, bool undoNextVersion)
+        public PrimaryCheckpointInfo Recover(PrimaryCheckpointInfo primaryRecoveredPci, bool undoNextVersion)
         {
-            if (!this.BeginRecovery(recoveredPci, out var indexToken, out var logToken, out PrimaryCheckpointInfo lastCompletedPci, out PrimaryCheckpointInfo lastStartedPci))
+            if (!this.BeginRecovery(primaryRecoveredPci, out var indexToken, out var logToken, out PrimaryCheckpointInfo lastCompletedPci, out PrimaryCheckpointInfo lastStartedPci))
                 return default;
-            this.secondaryFkv.Recover(indexToken, logToken, undoNextVersion:undoNextVersion);
+            if (logToken != Guid.Empty)
+                this.secondaryFkv.Recover(indexToken, logToken, undoNextVersion:undoNextVersion);
             return this.EndRecovery(lastCompletedPci, lastStartedPci);
         }
 
         /// <inheritdoc/>
-        public async Task<PrimaryCheckpointInfo> RecoverAsync(PrimaryCheckpointInfo recoveredPci, bool undoNextVersion, CancellationToken cancellationToken = default)
+        public async Task<PrimaryCheckpointInfo> RecoverAsync(PrimaryCheckpointInfo primaryRecoveredPci, bool undoNextVersion, CancellationToken cancellationToken = default)
         {
-            if (!this.BeginRecovery(recoveredPci, out var indexToken, out var logToken, out PrimaryCheckpointInfo lastCompletedPci, out PrimaryCheckpointInfo lastStartedPci))
+            if (!this.BeginRecovery(primaryRecoveredPci, out var indexToken, out var logToken, out PrimaryCheckpointInfo lastCompletedPci, out PrimaryCheckpointInfo lastStartedPci))
                 return default;
-            await this.secondaryFkv.RecoverAsync(indexToken, logToken, undoNextVersion: undoNextVersion, cancellationToken: cancellationToken);
+            if (logToken != Guid.Empty)
+                await this.secondaryFkv.RecoverAsync(indexToken, logToken, undoNextVersion: undoNextVersion, cancellationToken: cancellationToken);
             return this.EndRecovery(lastCompletedPci, lastStartedPci);
         }
 
-        private bool BeginRecovery(PrimaryCheckpointInfo recoveredPci, out Guid indexToken, out Guid logToken, out PrimaryCheckpointInfo lastCompletedPci, out PrimaryCheckpointInfo lastStartedPci)
+        private bool BeginRecovery(PrimaryCheckpointInfo primaryRecoveredPci, out Guid indexToken, out Guid logToken, out PrimaryCheckpointInfo lastCompletedPci, out PrimaryCheckpointInfo lastStartedPci)
         {
+            this.primaryRecoveredPci = primaryRecoveredPci;
             highWaterRecordId = default;
-            return this.checkpointManager.GetRecoveryTokens(recoveredPci, out indexToken, out logToken, out lastCompletedPci, out lastStartedPci);
+            return this.checkpointManager.GetRecoveryTokens(primaryRecoveredPci, out indexToken, out logToken, out lastCompletedPci, out lastStartedPci);
         }
 
         PrimaryCheckpointInfo EndRecovery(PrimaryCheckpointInfo lastCompletedPci, PrimaryCheckpointInfo lastStartedPci)
@@ -42,6 +49,7 @@ namespace FASTER.indexes.HashValueIndex
             {
                 RecoverHighWaterRecordId();
             }
+            recoveredTailAddress = this.secondaryFkv.Log.TailAddress;
             return this.checkpointManager.secondaryMetadata.lastCompletedPrimaryCheckpointInfo;
         }
 
@@ -66,6 +74,7 @@ namespace FASTER.indexes.HashValueIndex
             using var iter = this.secondaryFkv.hlog.Scan(startLogicalAddress, endLogicalAddress);
             while (iter.GetNext(out _))
                 highWaterRecordId = iter.GetValue();
+            recoveredHighWaterRecordId = highWaterRecordId;
         }
     }
 }

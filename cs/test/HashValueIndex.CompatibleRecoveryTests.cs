@@ -7,92 +7,108 @@ using FASTER.test.HashValueIndex.CheckpointMetadata;
 using System;
 using NUnit.Framework;
 using System.IO;
+using System.Linq;
 
 namespace FASTER.test.HashValueIndex.CompatibleRecoveryTests
 {
-    class HashValueIndexCheckpointManagerTest : CheckpointManager<int>
-    {
-        internal PrimaryCheckpointInfo recoveredPci;
-
-        internal HashValueIndexCheckpointManagerTest(string indexName, ICheckpointManager userCheckpointManager)
-            : base(indexName, userCheckpointManager)
-        { }
-
-        internal override void RecoverHLCInfo(ref HybridLogCheckpointInfo recoveredHLCInfo, Guid logToken)
-        {
-            base.RecoverHLCInfo(ref recoveredHLCInfo, logToken);
-            this.recoveredPci = new PrimaryCheckpointInfo(recoveredHLCInfo.info.version,
-                                                          recoveredHLCInfo.info.useSnapshotFile != 0? recoveredHLCInfo.info.finalLogicalAddress : recoveredHLCInfo.info.flushedLogicalAddress);
-        }
-
-        internal override Guid GetCompatibleIndexToken(ref HybridLogCheckpointInfo recoveredHLCInfo) => base.GetCompatibleIndexToken(ref recoveredHLCInfo);
-    }
-
     class HashValueIndexCheckpointRecoveryTester : CheckpointRecoveryTester
     {
-        private readonly FasterKV<int, int> primaryFkv;
-        internal HashValueIndex<int, int, int> index;
+        private readonly RecoveryTests testContainer;
+        bool usePrimarySnapshot;
 
-        internal HashValueIndexCheckpointRecoveryTester(CheckpointManager<int> outerCheckpointManager, ICheckpointManager innerCheckpointManager, FasterKV<int, int> primaryFkv, HashValueIndex<int, int, int> index)
-            : base(outerCheckpointManager,  innerCheckpointManager)
+        internal HashValueIndexCheckpointRecoveryTester(RecoveryTests tester)
+            : base(tester.outerCheckpointManager,  tester.innerCheckpointManager)
         {
-            this.primaryFkv = primaryFkv;
-            this.index = index;
+            this.testContainer = tester;
+        }
+
+        internal override void Run(string testName, bool usePrimarySnapshot)
+        {
+            this.usePrimarySnapshot = usePrimarySnapshot;
+            base.Run(testName);
         }
 
         internal override void Recover(Guid primaryToken, ExpectedRecoveryState expectedRecoveryState)
         {
+            Assert.AreEqual(expectedRecoveryState.PrePTail, testContainer.primaryFkv.Log.TailAddress);
+            Assert.AreEqual(expectedRecoveryState.PreSTail, testContainer.index.secondaryFkv.Log.TailAddress);
+
             // We recover from the last Primary Checkpoint, and we always take full checkpoints in this test.
-            this.primaryFkv.Recover(primaryToken);
-            var hviCheckpointManager = base.outerCheckpointManager as HashValueIndexCheckpointManagerTest;
+            testContainer.PrepareToRecover();
+            base.ResetCheckpointManagers(testContainer.outerCheckpointManager, testContainer.innerCheckpointManager);
+            testContainer.primaryFkv.Recover(primaryToken);
 
-            var recoveredPci = hviCheckpointManager.recoveredPci;
+            bool expectedToRecoverSecondary = expectedRecoveryState.PostSTail > testContainer.index.secondaryFkv.Log.BeginAddress;
+            if (expectedToRecoverSecondary)
+            {
+                // Verify the expected primaryRecoveredPci was passed to secondary Recover().
+                Assert.AreEqual(base.lastCompletedPci.Version, testContainer.index.primaryRecoveredPci.Version);
+                Assert.AreEqual(base.lastCompletedPci.FlushedUntilAddress, testContainer.index.primaryRecoveredPci.FlushedUntilAddress);
+            }
 
-            Assert.IsTrue(this.outerCheckpointManager.GetRecoveryTokens(recoveredPci, out _ /* indexToken */, out var logToken, out var lastCompletedPci, out var lastStartedPci));
+            // Verify primary recovery.
+            Assert.AreEqual(expectedRecoveryState.PostPTail, testContainer.primaryFkv.Log.TailAddress);
 
-            // We don't support inserts with this default implementation.
+            // Secondary recovery is verified in two parts:
+            // 1. How far did we recover during the FasterKV Recover phase. recoveryTailAddress is 0 if no checkpoint was found.
+            Assert.AreEqual(expectedRecoveryState.PostSTail, 
+                            testContainer.index.recoveredTailAddress != 0 ? testContainer.index.recoveredTailAddress : testContainer.index.secondaryFkv.Log.BeginAddress);
+            // 2. How far did we roll forward. Note the use of rowCount here, because PostSTail is the pre-rollback record count.
+            Assert.AreEqual(base.rowCount != 0 ? base.secondaryTailAddresses[base.rowCount] : testContainer.index.secondaryFkv.Log.BeginAddress,
+                            testContainer.index.secondaryFkv.Log.TailAddress);
+
+            // This is similar to the foregoing, to verify the expected handling of primaryRecoveredPci -> secondaryLogToken was correct and expectedRecoveryState is correct.
+            Assert.IsTrue(this.outerCheckpointManager.GetRecoveryTokens(testContainer.index.primaryRecoveredPci, out _ /* indexToken */, out var logToken, out var localLastCompletedPci, out var localLastStartedPci));
+
             if (logToken == Guid.Empty)
             {
-                Assert.AreEqual(0, lastCompletedPci.Version);
-                Assert.AreEqual(0, lastCompletedPci.FlushedUntilAddress);
-                Assert.AreEqual(0, lastStartedPci.Version);
+                Assert.AreEqual(0, localLastCompletedPci.Version);
+                Assert.AreEqual(0, localLastCompletedPci.FlushedUntilAddress);
+                Assert.AreEqual(0, localLastStartedPci.Version);
                 return;
             }
-            Assert.AreEqual(expectedRecoveryState.completedPci.Version, lastCompletedPci.Version);
-            Assert.AreEqual(expectedRecoveryState.completedPci.FlushedUntilAddress, lastCompletedPci.FlushedUntilAddress);
-            Assert.AreEqual(expectedRecoveryState.startedPci.Version, lastStartedPci.Version);
+            Assert.AreEqual(expectedRecoveryState.completedPci.Version, localLastCompletedPci.Version);
+            Assert.AreEqual(expectedRecoveryState.completedPci.FlushedUntilAddress, localLastCompletedPci.FlushedUntilAddress);
+            Assert.AreEqual(expectedRecoveryState.startedPci.Version, localLastStartedPci.Version);
         }
 
         internal override Guid CommitPrimary(out int lastPrimaryVer)
         {
             // We always take full checkpoints in this test. TODO: extend this to show separate start/completed intermixing
-            this.primaryFkv.TakeFullCheckpoint(out Guid primaryLogToken);
-            this.primaryFkv.CompleteCheckpointAsync().GetAwaiter().GetResult(); // Do not do this in production
+            testContainer.primaryFkv.TakeFullCheckpoint(out Guid primaryLogToken, this.usePrimarySnapshot ? CheckpointType.Snapshot : CheckpointType.FoldOver);
+            testContainer.primaryFkv.CompleteCheckpointAsync().GetAwaiter().GetResult(); // Do not do this in production
 
             var hlci = new HybridLogCheckpointInfo();
-            hlci.Recover(primaryLogToken, primaryFkv.checkpointManager, default);
+            hlci.Recover(primaryLogToken, testContainer.primaryFkv.checkpointManager, default);
 
-            var hviCheckpointManager = base.outerCheckpointManager as HashValueIndexCheckpointManagerTest;
+            base.lastCompletedPci = outerCheckpointManager.secondaryMetadata.lastCompletedPrimaryCheckpointInfo;
             lastPrimaryVer = hlci.info.version;
-            Assert.AreEqual(lastPrimaryVer, hviCheckpointManager.secondaryMetadata.lastCompletedPrimaryCheckpointInfo.Version);
+            Assert.AreEqual(lastPrimaryVer, base.lastCompletedPci.Version);
             return primaryLogToken;
         }
 
         internal override void CommitSecondary()
         {
             // We always take full checkpoints in this test.
-            this.index.TakeFullCheckpoint(out _);
+            testContainer.index.TakeFullCheckpoint(out var logToken);
+            testContainer.index.CompleteCheckpointAsync().GetAwaiter().GetResult(); // Do not do this in production
+
+            // Return the metadata from the inner checkpoint manager so it is not stripped of the wrapper metadata.
+            var metadata = this.innerCheckpointManager.GetLogCheckpointMetadata(logToken, default);
+            var secondaryMetadata = CheckpointManager<int>.GetSecondaryMetadata(metadata);
+            Assert.AreEqual(base.lastPrimaryVersion, secondaryMetadata.lastCompletedPrimaryCheckpointInfo.Version);
         }
 
         internal override (long ptail, long stail) DoInserts()
         {
-            using var session = this.primaryFkv.For(new SimpleFunctions<int, int>()).NewSession<SimpleFunctions<int, int>>();
-            for (int ii = 0; ii < CheckpointRecoveryTester.RecordsPerChunk; ++ii)
+            using var session = testContainer.primaryFkv.For(new SimpleFunctions<int, int>()).NewSession<SimpleFunctions<int, int>>();
+            for (int ii = 0; ii < RecordsPerChunk; ++ii)
             {
                 session.Upsert(ii, ii);
             }
             session.CompletePending(true);
-            return (this.primaryFkv.Log.TailAddress, this.index.secondaryFkv.Log.TailAddress);
+            testContainer.primaryFkv.Log.FlushAndEvict(wait: true);
+            return (testContainer.primaryFkv.Log.TailAddress, testContainer.index.secondaryFkv.Log.TailAddress);
         }
     }
 
@@ -105,21 +121,23 @@ namespace FASTER.test.HashValueIndex.CompatibleRecoveryTests
         private const int PageSizeBits = 20;
         private const string IndexName = "IntIndex";
 
-        private string testDir;
+        private string testBaseDir, testDir;
         private IDevice primaryLog;
         private IDevice secondaryLog;
-        private FasterKV<int, int> primaryFkv;
+
+        // Used by HashValueIndexCheckpointRecoveryTester
+        internal FasterKV<int, int> primaryFkv;
         internal HashValueIndex<int, int, int> index;
         internal IPredicate intPred;
-
-        CheckpointManager<int> outerCheckpointManager;
-        ICheckpointManager innerCheckpointManager;
-        CheckpointRecoveryTester tester;
+        internal CheckpointManager<int> outerCheckpointManager;
+        internal ICheckpointManager innerCheckpointManager;
+        internal CheckpointRecoveryTester tester;
 
         [SetUp]
         public void Setup()
         {
-            this.testDir = $"{TestContext.CurrentContext.TestDirectory}/{TestContext.CurrentContext.Test.Name}";
+            this.testBaseDir = Path.Combine(TestContext.CurrentContext.TestDirectory, TestContext.CurrentContext.Test.ClassName.Split('.').Last());
+            this.testDir = Path.Combine(this.testBaseDir, TestContext.CurrentContext.Test.MethodName);
             var primaryDir = Path.Combine(this.testDir, "PrimaryFKV");
             var secondaryDir = Path.Combine(this.testDir, "SecondaryFKV");
 
@@ -152,10 +170,9 @@ namespace FASTER.test.HashValueIndex.CompatibleRecoveryTests
                                 1L << 20, primaryLogSettings,
                                 new CheckpointSettings { CheckpointDir = primaryDir, CheckPointType = CheckpointType.FoldOver });
 
-
             var secondaryCheckpointSettings = new CheckpointSettings { CheckpointDir = secondaryDir, CheckPointType = CheckpointType.FoldOver };
             innerCheckpointManager = Utility.CreateDefaultCheckpointManager(secondaryCheckpointSettings);
-            this.outerCheckpointManager = new HashValueIndexCheckpointManagerTest(IndexName, innerCheckpointManager);
+            this.outerCheckpointManager = new CheckpointManager<int>(IndexName, innerCheckpointManager);
             secondaryCheckpointSettings.CheckpointManager = this.outerCheckpointManager;
 
             var secondaryRegSettings = new RegistrationSettings<int>
@@ -169,11 +186,13 @@ namespace FASTER.test.HashValueIndex.CompatibleRecoveryTests
             this.primaryFkv.SecondaryIndexBroker.AddIndex(this.index);
             this.intPred = this.index.GetPredicate(nameof(this.intPred));
 
-            this.tester = new HashValueIndexCheckpointRecoveryTester(this.outerCheckpointManager, this.innerCheckpointManager, this.primaryFkv, this.index);
+            this.tester = new HashValueIndexCheckpointRecoveryTester(this);
         }
 
         [TearDown]
-        public void TearDown()
+        public void TearDown() => TearDown(deleteDir: true);
+
+        public void TearDown(bool deleteDir)
         {
             this.primaryFkv?.Dispose();
             this.primaryFkv = null;
@@ -183,67 +202,90 @@ namespace FASTER.test.HashValueIndex.CompatibleRecoveryTests
             this.primaryLog = null;
             this.secondaryLog.Dispose();
             this.secondaryLog = null;
-            
+
             this.outerCheckpointManager?.Dispose();
             this.outerCheckpointManager = null;
             this.innerCheckpointManager?.Dispose();
             this.innerCheckpointManager = null;
+
+            if (deleteDir)
+                TestUtils.DeleteDirectory(this.testBaseDir);
+        }
+
+        internal void PrepareToRecover()
+        {
+            TearDown(deleteDir:false);
+            Setup();
         }
 
         [Test]
         [Category(TestUtils.SecondaryIndexCategory), Category(TestUtils.HashValueIndexCategory)]
-        public void NoDataRestoreTest()
+        public void NoCheckpointsTest([Values]bool usePrimarySnapshot)
         {
-            tester.Run(TestContext.CurrentContext.Test.Name);
+            tester.Run(TestContext.CurrentContext.Test.MethodName, usePrimarySnapshot);
         }
 
         [Test]
         [Category(TestUtils.SecondaryIndexCategory), Category(TestUtils.HashValueIndexCategory)]
-        public void NoSecondaryCheckpointRestoreTest()
+        public void PrimaryOnlyCheckpointTest([Values] bool usePrimarySnapshot)
         {
-            tester.Run(TestContext.CurrentContext.Test.Name);
+            tester.Run(TestContext.CurrentContext.Test.MethodName, usePrimarySnapshot);
         }
 
         [Test]
         [Category(TestUtils.SecondaryIndexCategory), Category(TestUtils.HashValueIndexCategory)]
-        public void RestoreOneChunkTest()
+        public void NoDataRecoveredTest([Values] bool usePrimarySnapshot)
         {
-            tester.Run(TestContext.CurrentContext.Test.Name);
+            tester.Run(TestContext.CurrentContext.Test.MethodName, usePrimarySnapshot);
         }
 
         [Test]
         [Category(TestUtils.SecondaryIndexCategory), Category(TestUtils.HashValueIndexCategory)]
-        public void RestoreOneChunkButNotTheOtherTest1()
+        public void RecoverPrimaryWithNoSecondaryTest([Values] bool usePrimarySnapshot)
         {
-            tester.Run(TestContext.CurrentContext.Test.Name);
+            tester.Run(TestContext.CurrentContext.Test.MethodName, usePrimarySnapshot);
         }
 
         [Test]
         [Category(TestUtils.SecondaryIndexCategory), Category(TestUtils.HashValueIndexCategory)]
-        public void RestoreOneChunkButNotTheOtherTest2()
+        public void RecoverOneChunkTest([Values] bool usePrimarySnapshot)
         {
-            tester.Run(TestContext.CurrentContext.Test.Name);
+            tester.Run(TestContext.CurrentContext.Test.MethodName, usePrimarySnapshot);
         }
 
         [Test]
         [Category(TestUtils.SecondaryIndexCategory), Category(TestUtils.HashValueIndexCategory)]
-        public void RestoreOneChunkButNotTheOther2Test1()
+        public void RecoverOneChunkButNotTheOtherTest([Values] bool usePrimarySnapshot)
         {
-            tester.Run(TestContext.CurrentContext.Test.Name);
+            tester.Run(TestContext.CurrentContext.Test.MethodName, usePrimarySnapshot);
         }
 
         [Test]
         [Category(TestUtils.SecondaryIndexCategory), Category(TestUtils.HashValueIndexCategory)]
-        public void RestoreOneChunkButNotTheOther2Test2()
+        public void RecoverTwoChunksButReplayTheSecondTest([Values] bool usePrimarySnapshot)
         {
-            tester.Run(TestContext.CurrentContext.Test.Name);
+            tester.Run(TestContext.CurrentContext.Test.MethodName, usePrimarySnapshot);
         }
 
         [Test]
         [Category(TestUtils.SecondaryIndexCategory), Category(TestUtils.HashValueIndexCategory)]
-        public void RestoreTwoChunksTest()
+        public void RecoverOneChunkButNotTheOther2Test1([Values] bool usePrimarySnapshot)
         {
-            tester.Run(TestContext.CurrentContext.Test.Name);
+            tester.Run(TestContext.CurrentContext.Test.MethodName, usePrimarySnapshot);
+        }
+
+        [Test]
+        [Category(TestUtils.SecondaryIndexCategory), Category(TestUtils.HashValueIndexCategory)]
+        public void RecoverOneChunkButNotTheOther2Test2([Values] bool usePrimarySnapshot)
+        {
+            tester.Run(TestContext.CurrentContext.Test.MethodName, usePrimarySnapshot);
+        }
+
+        [Test]
+        [Category(TestUtils.SecondaryIndexCategory), Category(TestUtils.HashValueIndexCategory)]
+        public void RecoverTwoChunksTest([Values] bool usePrimarySnapshot)
+        {
+            tester.Run(TestContext.CurrentContext.Test.MethodName, usePrimarySnapshot);
         }
     }
 }

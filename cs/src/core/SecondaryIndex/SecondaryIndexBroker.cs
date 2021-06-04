@@ -230,7 +230,7 @@ namespace FASTER.core
             }
         }
 
-        internal void Recover(PrimaryCheckpointInfo recoveredPci, bool undoNextVersion)
+        internal void Recover(PrimaryCheckpointInfo primaryRecoveredPci, bool undoNextVersion)
         {
             // This is called during recovery, before the PrimaryFKV is open for operations, so we do not have to worry about things changing
             // We're not operating in the context of a FasterKV session, so we need our own sessionBroker.
@@ -242,19 +242,19 @@ namespace FASTER.core
             if (ki is { })
             {
                 foreach (var keyIndex in ki)
-                    tasks.Add(Task.Run(() => RecoverIndex(keyIndex, default, recoveredPci, undoNextVersion, indexSessionBroker)));
+                    tasks.Add(Task.Run(() => RecoverIndex(keyIndex, default, primaryRecoveredPci, undoNextVersion, indexSessionBroker)));
             }
             var vi = this.allValueIndexes;
             if (vi is { })
             {
                 foreach (var valueIndex in vi)
-                    tasks.Add(Task.Run(() => RecoverIndex(default, valueIndex, recoveredPci, undoNextVersion, indexSessionBroker)));
+                    tasks.Add(Task.Run(() => RecoverIndex(default, valueIndex, primaryRecoveredPci, undoNextVersion, indexSessionBroker)));
             }
 
             Task.WaitAll(tasks.ToArray());
         }
 
-        internal Task RecoverAsync(PrimaryCheckpointInfo recoveredPci, bool undoNextVersion)
+        internal Task RecoverAsync(PrimaryCheckpointInfo primaryRecoveredPci, bool undoNextVersion)
         {
             // This is called during recovery, before the PrimaryFKV is open for operations, so we do not have to worry about things changing
             // We're not operating in the context of a FasterKV session, so we need our own sessionBroker.
@@ -266,13 +266,13 @@ namespace FASTER.core
             if (ki is { })
             {
                 foreach (var keyIndex in ki)
-                    tasks.Add(RecoverIndexAsync(keyIndex, default, recoveredPci, undoNextVersion, indexSessionBroker));
+                    tasks.Add(RecoverIndexAsync(keyIndex, default, primaryRecoveredPci, undoNextVersion, indexSessionBroker));
             }
             var vi = this.allValueIndexes;
             if (vi is { })
             {
                 foreach (var valueIndex in vi)
-                    tasks.Add(RecoverIndexAsync(default, valueIndex, recoveredPci, undoNextVersion, indexSessionBroker));
+                    tasks.Add(RecoverIndexAsync(default, valueIndex, primaryRecoveredPci, undoNextVersion, indexSessionBroker));
             }
 
             return Task.WhenAll(tasks.ToArray());
@@ -294,18 +294,17 @@ namespace FASTER.core
         {
             if (pci.FlushedUntilAddress < primaryFkv.Log.TailAddress)
             {
+                var index = (ISecondaryIndex)keyIndex ?? valueIndex;
                 var startAddress = Math.Max(pci.FlushedUntilAddress, primaryFkv.Log.BeginAddress);
-                var endAddress = ((ISecondaryIndex)keyIndex ?? valueIndex).IsMutable ? primaryFkv.Log.TailAddress : primaryFkv.Log.ReadOnlyAddress;
-                using var iter = primaryFkv.Log.Scan(startAddress, primaryFkv.Log.TailAddress, ScanBufferingMode.NoBuffering);
+                var endAddress = index.IsMutable ? primaryFkv.Log.TailAddress : primaryFkv.Log.ReadOnlyAddress;
+                using var iter = primaryFkv.Log.Scan(startAddress, endAddress);
                 if (keyIndex is { })
                 {
-                    while (iter.GetNext(out var recordInfo))
-                        keyIndex.Upsert(ref iter.GetKey(), new RecordId(recordInfo, iter.CurrentAddress), isMutableRecord: false, indexSessionBroker);
+                    keyIndex.RecoveryReplay(iter, indexSessionBroker);
                 }
                 else
                 {
-                    while (iter.GetNext(out var recordInfo))
-                        valueIndex.Upsert(ref iter.GetKey(), ref iter.GetValue(), new RecordId(recordInfo, iter.CurrentAddress), isMutableRecord: false, indexSessionBroker);
+                    valueIndex.RecoveryReplay(iter, indexSessionBroker);
                 }
             }
         }
