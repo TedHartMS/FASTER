@@ -10,6 +10,7 @@ namespace FASTER.indexes.HashValueIndex
 {
     internal struct SecondaryCheckpointMetadata
     {
+        // Increment this for both changes to SecondaryMetadata *and* changes to log data layout.
         const int MetadataVersion = 1;
 
         /// <summary>
@@ -133,7 +134,7 @@ namespace FASTER.indexes.HashValueIndex
             {
                 try
                 {
-                    // Find the first secondary log checkpoint with startedPci < recoveredPci.
+                    // Find the first secondary log checkpoint with startedPci < recoveredPci. If the metadata version is not compatible, this will throw and we'll skip it.
                     var metadata = this.userCheckpointManager.GetLogCheckpointMetadata(token, deltaLog: default);
                     secondaryMetadata = GetSecondaryMetadata(metadata);
                     if (secondaryMetadata.lastStartedPrimaryCheckpointInfo.Version > 0 && secondaryMetadata.lastStartedPrimaryCheckpointInfo.CompareTo(primaryRecoveredPci) < 0)

@@ -9,7 +9,7 @@
   <!-- Local NuGet to be removed -->
   <PropertyGroup>
     <PackageId>Microsoft.FASTER.Core</PackageId>
-    <Version>1.9.3-tag1</Version>
+    <Version>1.9.3-tag3</Version>
     <PackageOutputPath>$(SolutionDir)\build_output\packages</PackageOutputPath>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
   </PropertyGroup>
