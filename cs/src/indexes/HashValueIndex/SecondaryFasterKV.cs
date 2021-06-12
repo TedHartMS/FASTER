@@ -53,6 +53,8 @@ namespace FASTER.indexes.HashValueIndex
 
     internal partial class SecondaryFasterKV<TPKey> : FasterKV<TPKey, RecordId>
     {
+        internal RecordId highWaterRecordId = default;
+
         internal SecondaryFasterKV(long size, LogSettings logSettings,
             CheckpointSettings checkpointSettings = null, SerializerSettings<TPKey, RecordId> serializerSettings = null,
             IFasterEqualityComparer<TPKey> comparer = null,

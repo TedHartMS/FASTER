@@ -16,12 +16,16 @@ namespace FASTER.indexes.HashValueIndex
         private readonly int recordIdSize = Utility.GetSize(default(RecordId));
 
         // Tracking the high-water RecordId lets us handle the case where RecordIds are in limbo on query: below Primary FKV's ReadOnlyAddress, but not yet added to the Secondary FKV
-        internal RecordId highWaterRecordId = default;
+        internal RecordId HighWaterRecordId
+        {
+            get => this.secondaryFkv.highWaterRecordId;
+            set => this.secondaryFkv.highWaterRecordId = value;
+        }
 
         private unsafe Status ExecuteAndStore(AdvancedClientSession<TPKey, RecordId, SecondaryFasterKV<TPKey>.Input, SecondaryFasterKV<TPKey>.Output, SecondaryFasterKV<TPKey>.Context, SecondaryFasterKV<TPKey>.Functions> session,
                 ref TKVValue kvValue, RecordId recordId)
         {
-            Debug.Assert(recordId.CompareTo(highWaterRecordId) > 0, "Out-of-order RecordId");
+            Debug.Assert(recordId.CompareTo(HighWaterRecordId) > 0, "Out-of-order RecordId");
 
             // Note: stackalloc is safe because it's copied to a HeapContainer in PendingContext if the operation goes pending.
             var keyMemLen = this.keyPointerSize * this.PredicateCount;
@@ -54,7 +58,7 @@ namespace FASTER.indexes.HashValueIndex
             var context = new SecondaryFasterKV<TPKey>.Context { Functions = session.functions };
             var status = session.IndexInsert(this.secondaryFkv, ref compositeKey.CastToFirstKeyPointerRefAsKeyRef(), recordId, ref input, context);
             if (status == Status.OK)
-                highWaterRecordId = recordId;
+                HighWaterRecordId = recordId;
             return status;
         }
 

@@ -71,7 +71,7 @@ namespace FASTER.indexes.HashValueIndex
                               params (string name, Func<TKVValue, TPKey> func)[] predFuncs)
             : this(name, fkv, registrationSettings)
         {
-            UpdatePredicates(this.predicates = predFuncs.Select((tup, ord) => new Predicate<TKVKey, TKVValue, TPKey>(this, ord, tup.name, tup.func)).ToArray());
+            UpdatePredicates(predFuncs.Select((tup, ord) => new Predicate<TKVKey, TKVValue, TPKey>(this, ord, tup.name, tup.func)).ToArray());
             CreateSecondaryFkv();
         }
 
@@ -120,7 +120,7 @@ namespace FASTER.indexes.HashValueIndex
             // TODO: ensure that update/query operations take a local copy of this.predicates as it may change during the operation
             lock (this.predicateNames)
             {
-                if (newPredicates.Length + this.predicateNames.Count > 1)
+                if (newPredicates.Length > 0 && this.predicateNames.Count > 0)
                 {
                     var dupSet = newPredicates.Select(p => p.Name).Aggregate(new HashSet<string>(), (set, name) => { if (this.predicateNames.ContainsKey(name)) { set.Add(name); } return set; });
                     if (dupSet.Count > 0)

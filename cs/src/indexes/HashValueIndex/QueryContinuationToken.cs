@@ -25,11 +25,16 @@ namespace FASTER.indexes.HashValueIndex
         internal ref SerializedPredicate this[int index] => ref this.Predicates[index];
 
         internal bool IsPrimaryStarted => this.PrimaryStartAddress != FASTER.core.Constants.kInvalidAddress;
-        internal void SetPrimaryAddresses(long start, long end, long crossover)
+
+        internal void SetPrimaryAddresses(long start, long end)
         {
             this.PrimaryStartAddress = start;
             this.PrimaryEndAddress = end;
-            this.CrossoverAddress = crossover;
+
+            // There may be a lag between the time Primary updates its ReadOnlyAddress and the time we have put all records below that into the index.
+            // So we start by going from highWaterRecordId + 1 -> end of Primary, then when we cross over to the index, we skip anything above the
+            // highWaterRecordId we started with, which we remember as the crossoverAddress.
+            this.CrossoverAddress = start;
         }
         internal bool IsPrimaryComplete => this.IsPrimaryStarted && this.PrimaryStartAddress >= this.PrimaryEndAddress;
 

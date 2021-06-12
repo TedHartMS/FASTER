@@ -86,7 +86,7 @@ namespace FASTER.indexes.HashValueIndex
                 int count = 0;
                 bool needMoreRecords() => numRecords == Constants.kGetAllRecords || count < numRecords;
 
-                // Primary FKV mutable region scan: start at ReadOnlyAddress.
+                // Primary FKV mutable region scan: starting at CrossoverAddress.
                 if (!continuationToken.IsPrimaryComplete)
                 {
                     var scanner = GetPrimaryFkvScanner(continuationToken);
@@ -209,7 +209,7 @@ namespace FASTER.indexes.HashValueIndex
                 int count = 0;
                 bool needMoreRecords() => numRecords == Constants.kGetAllRecords || count < numRecords;
 
-                // Primary FKV mutable region scan: start at ReadOnlyAddress.
+                // Primary FKV mutable region scan: start at CrossoverAddress.
                 if (!continuationToken.IsPrimaryComplete)
                 {
                     var scanner = GetPrimaryFkvScanner(continuationToken);
@@ -385,15 +385,16 @@ namespace FASTER.indexes.HashValueIndex
             }
             else
             {
-                // There may be a "lag" between the time Primary updates its ReadOnlyAddress and the time we have put all records below that into the index.
-                // So we start by going from highWaterRecordId -> end of Primary, then when we cross over to the index, we skip anything above the
-                // highWaterRecordId we started with.
-                var crossoverAddress = highWaterRecordId.Address;
-                startAddress = this.primaryFkv.Log.ReadOnlyAddress;
+                startAddress = HighWaterRecordId.Address;
                 endAddress = this.primaryFkv.Log.TailAddress;
-                continuationToken.SetPrimaryAddresses(startAddress, endAddress, crossoverAddress);
+                continuationToken.SetPrimaryAddresses(startAddress, endAddress);
             }
-            return this.primaryFkv.Log.Scan(startAddress, endAddress);
+
+            // We already have the record at HighWaterRecordId, so skip over it if necessary (don't look for it in the PrimaryFKV; wait until we cross over to the index).
+            var scanner = this.primaryFkv.Log.Scan(startAddress, endAddress);
+            if (startAddress == HighWaterRecordId.Address)
+                scanner.GetNext(out _);
+            return scanner;
         }
 
         private bool IsMatch(IFasterScanIterator<TKVKey, TKVValue> scanner, SecondaryFasterKV<TPKey>.Input input)

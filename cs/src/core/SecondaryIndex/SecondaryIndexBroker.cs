@@ -254,7 +254,7 @@ namespace FASTER.core
             Task.WaitAll(tasks.ToArray());
         }
 
-        internal Task RecoverAsync(PrimaryCheckpointInfo primaryRecoveredPci, bool undoNextVersion)
+        internal async Task RecoverAsync(PrimaryCheckpointInfo primaryRecoveredPci, bool undoNextVersion)
         {
             // This is called during recovery, before the PrimaryFKV is open for operations, so we do not have to worry about things changing
             // We're not operating in the context of a FasterKV session, so we need our own sessionBroker.
@@ -275,7 +275,8 @@ namespace FASTER.core
                     tasks.Add(RecoverIndexAsync(default, valueIndex, primaryRecoveredPci, undoNextVersion, indexSessionBroker));
             }
 
-            return Task.WhenAll(tasks.ToArray());
+            // Must await so we don't Dispose indexSessionBroker before the tasks complete.
+            await Task.WhenAll(tasks.ToArray());
         }
 
         void RecoverIndex(ISecondaryKeyIndex<TKVKey> keyIndex, ISecondaryValueIndex<TKVKey, TKVValue> valueIndex, PrimaryCheckpointInfo recoveredPci, bool undoNextVersion, SecondaryIndexSessionBroker indexSessionBroker)
@@ -292,20 +293,16 @@ namespace FASTER.core
 
         private void RollIndexForward(ISecondaryKeyIndex<TKVKey> keyIndex, ISecondaryValueIndex<TKVKey, TKVValue> valueIndex, PrimaryCheckpointInfo pci, SecondaryIndexSessionBroker indexSessionBroker)
         {
-            if (pci.FlushedUntilAddress < primaryFkv.Log.TailAddress)
+            var index = (ISecondaryIndex)keyIndex ?? valueIndex;
+            var endAddress = index.IsMutable ? primaryFkv.Log.TailAddress : primaryFkv.Log.ReadOnlyAddress;
+            if (pci.FlushedUntilAddress < endAddress)
             {
-                var index = (ISecondaryIndex)keyIndex ?? valueIndex;
                 var startAddress = Math.Max(pci.FlushedUntilAddress, primaryFkv.Log.BeginAddress);
-                var endAddress = index.IsMutable ? primaryFkv.Log.TailAddress : primaryFkv.Log.ReadOnlyAddress;
                 using var iter = primaryFkv.Log.Scan(startAddress, endAddress);
                 if (keyIndex is { })
-                {
                     keyIndex.RecoveryReplay(iter, indexSessionBroker);
-                }
                 else
-                {
                     valueIndex.RecoveryReplay(iter, indexSessionBroker);
-                }
             }
         }
     }
