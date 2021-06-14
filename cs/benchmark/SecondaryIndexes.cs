@@ -2,7 +2,6 @@
 // Licensed under the MIT license.
 
 using FASTER.core;
-using System;
 using System.Threading;
 using System.Threading.Tasks;
 

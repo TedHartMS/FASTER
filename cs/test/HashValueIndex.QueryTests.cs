@@ -49,7 +49,7 @@ namespace FASTER.test.HashValueIndex.QueryTests
 
             // Insert the first half of the records
             var sw = Stopwatch.StartNew();
-            ThreadInserter(numThreads, 0, half);
+            Insert(numThreads, 0, half);
             Console.WriteLine($"ThreadInserter with {half} records: {sw.ElapsedMilliseconds} ms");
 
             // Tests query over mutable portion of primary log
@@ -67,7 +67,7 @@ namespace FASTER.test.HashValueIndex.QueryTests
 
             // Insert the second half of the records
             sw.Restart();
-            ThreadInserter(numThreads, half, numRecs);
+            Insert(numThreads, half, numRecs);
             Console.WriteLine($"ThreadInserter with {half} records: {sw.ElapsedMilliseconds} ms");
 
             // Tests query over mutable portion of primary log, then across secondary index
@@ -103,7 +103,7 @@ namespace FASTER.test.HashValueIndex.QueryTests
             Console.WriteLine($"Query with 0 primary, {numRecs} SI records, {numQueryRecs} queried records: {sw.ElapsedMilliseconds} ms");
         }
 
-        void ThreadInserter(int numThreads, int startRec, int numRecs)
+        void Insert(int numThreads, int startRec, int numRecs)
         {
             void insert(int threadId)
             {

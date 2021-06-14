@@ -46,14 +46,6 @@ namespace FASTER.core
             return (bool)fooRef.Invoke(null, null);
         }
 
-        internal static byte[] Slice(this byte[] source, int offset, int length)
-        {
-            // ArraySegment doesn't support ToArray() on all platforms we support
-            var result = new byte[length];
-            Array.Copy(source, offset, result, 0, length);
-            return result;
-        }
-
         /// <summary>
         /// Is type blittable
         /// </summary>
@@ -75,6 +67,14 @@ namespace FASTER.core
                 return false;
             }
             return true;
+        }
+
+        internal static byte[] Slice(this byte[] source, int offset, int length)
+        {
+            // ArraySegment doesn't support ToArray() on all platforms we support
+            var result = new byte[length];
+            Array.Copy(source, offset, result, 0, length);
+            return result;
         }
 
         /// <summary>
@@ -373,6 +373,5 @@ namespace FASTER.core
                 (new LocalStorageNamedDeviceFactory(),
                     new DefaultCheckpointNamingScheme(
                       new DirectoryInfo(checkpointSettings.CheckpointDir ?? ".").FullName), removeOutdated: checkpointSettings.RemoveOutdated);
-
     }
 }
