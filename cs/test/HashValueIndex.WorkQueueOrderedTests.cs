@@ -10,6 +10,7 @@ using System.Threading;
 
 namespace FASTER.test.HashValueIndex.WorkQueueOrdered
 {
+    [TestFixture]
     class WorkQueueOrderedTests
     {
         const int NumItems = 3000;

@@ -6,19 +6,19 @@ using FASTER.indexes.HashValueIndex;
 using FASTER.test.HashValueIndex.CheckpointMetadata;
 using System;
 using NUnit.Framework;
-using System.IO;
-using System.Linq;
 
 namespace FASTER.test.HashValueIndex.CompatibleRecoveryTests
 {
     class HashValueIndexCheckpointRecoveryTester : CheckpointRecoveryTester
     {
+        private HashValueIndexTestBase testBase;
         private readonly RecoveryTests testContainer;
         bool usePrimarySnapshot;
 
-        internal HashValueIndexCheckpointRecoveryTester(RecoveryTests tester)
-            : base(tester.outerCheckpointManager,  tester.innerCheckpointManager)
+        internal HashValueIndexCheckpointRecoveryTester(HashValueIndexTestBase testBase, RecoveryTests tester)
+            : base(testBase.outerCheckpointManager,  testBase.innerCheckpointManager)
         {
+            this.testBase = testBase;
             this.testContainer = tester;
         }
 
@@ -30,35 +30,35 @@ namespace FASTER.test.HashValueIndex.CompatibleRecoveryTests
 
         internal override void Recover(Guid primaryToken, ExpectedRecoveryState expectedRecoveryState)
         {
-            Assert.AreEqual(expectedRecoveryState.PrePTail, testContainer.primaryFkv.Log.TailAddress);
-            Assert.AreEqual(expectedRecoveryState.PreSTail, testContainer.index.secondaryFkv.Log.TailAddress);
+            Assert.AreEqual(expectedRecoveryState.PrePTail, testBase.primaryFkv.Log.TailAddress);
+            Assert.AreEqual(expectedRecoveryState.PreSTail, testBase.index.secondaryFkv.Log.TailAddress);
 
             // We recover from the last Primary Checkpoint, and we always take full checkpoints in this test.
-            testContainer.PrepareToRecover();
-            base.ResetCheckpointManagers(testContainer.outerCheckpointManager, testContainer.innerCheckpointManager);
-            testContainer.primaryFkv.Recover(primaryToken);
+            testBase = testContainer.PrepareToRecover();
+            base.ResetCheckpointManagers(testBase.outerCheckpointManager, testBase.innerCheckpointManager);
+            testBase.primaryFkv.Recover(primaryToken);
 
-            bool expectedToRecoverSecondary = expectedRecoveryState.PostSTail > testContainer.index.secondaryFkv.Log.BeginAddress;
+            bool expectedToRecoverSecondary = expectedRecoveryState.PostSTail > testBase.index.secondaryFkv.Log.BeginAddress;
             if (expectedToRecoverSecondary)
             {
                 // Verify the expected primaryRecoveredPci was passed to secondary Recover().
-                Assert.AreEqual(base.lastCompletedPci.Version, testContainer.index.primaryRecoveredPci.Version);
-                Assert.AreEqual(base.lastCompletedPci.FlushedUntilAddress, testContainer.index.primaryRecoveredPci.FlushedUntilAddress);
+                Assert.AreEqual(base.lastCompletedPci.Version, testBase.index.primaryRecoveredPci.Version);
+                Assert.AreEqual(base.lastCompletedPci.FlushedUntilAddress, testBase.index.primaryRecoveredPci.FlushedUntilAddress);
             }
 
             // Verify primary recovery.
-            Assert.AreEqual(expectedRecoveryState.PostPTail, testContainer.primaryFkv.Log.TailAddress);
+            Assert.AreEqual(expectedRecoveryState.PostPTail, testBase.primaryFkv.Log.TailAddress);
 
             // Secondary recovery is verified in two parts:
             // 1. How far did we recover during the FasterKV Recover phase. recoveryTailAddress is 0 if no checkpoint was found.
-            Assert.AreEqual(expectedRecoveryState.PostSTail, 
-                            testContainer.index.recoveredTailAddress != 0 ? testContainer.index.recoveredTailAddress : testContainer.index.secondaryFkv.Log.BeginAddress);
+            Assert.AreEqual(expectedRecoveryState.PostSTail,
+                            testBase.index.recoveredTailAddress != 0 ? testBase.index.recoveredTailAddress : testBase.index.secondaryFkv.Log.BeginAddress);
             // 2. How far did we roll forward. Note the use of rowCount here, because PostSTail is the pre-rollback record count.
-            Assert.AreEqual(base.rowCount != 0 ? base.secondaryTailAddresses[base.rowCount] : testContainer.index.secondaryFkv.Log.BeginAddress,
-                            testContainer.index.secondaryFkv.Log.TailAddress);
+            Assert.AreEqual(base.rowCount != 0 ? base.secondaryTailAddresses[base.rowCount] : testBase.index.secondaryFkv.Log.BeginAddress,
+                            testBase.index.secondaryFkv.Log.TailAddress);
 
             // This is similar to the foregoing, to verify the expected handling of primaryRecoveredPci -> secondaryLogToken was correct and expectedRecoveryState is correct.
-            Assert.IsTrue(this.outerCheckpointManager.GetRecoveryTokens(testContainer.index.primaryRecoveredPci, out _ /* indexToken */, out var logToken, out var localLastCompletedPci, out var localLastStartedPci));
+            Assert.IsTrue(this.outerCheckpointManager.GetRecoveryTokens(testBase.index.primaryRecoveredPci, out _ /* indexToken */, out var logToken, out var localLastCompletedPci, out var localLastStartedPci));
 
             if (logToken == Guid.Empty)
             {
@@ -75,11 +75,11 @@ namespace FASTER.test.HashValueIndex.CompatibleRecoveryTests
         internal override Guid CommitPrimary(out int lastPrimaryVer)
         {
             // We always take full checkpoints in this test. TODO: extend this to show separate start/completed intermixing
-            testContainer.primaryFkv.TakeFullCheckpoint(out Guid primaryLogToken, this.usePrimarySnapshot ? CheckpointType.Snapshot : CheckpointType.FoldOver);
-            testContainer.primaryFkv.CompleteCheckpointAsync().GetAwaiter().GetResult(); // Do not do this in production
+            testBase.primaryFkv.TakeFullCheckpoint(out Guid primaryLogToken, this.usePrimarySnapshot ? CheckpointType.Snapshot : CheckpointType.FoldOver);
+            testBase.primaryFkv.CompleteCheckpointAsync().GetAwaiter().GetResult(); // Do not do this in production
 
             var hlci = new HybridLogCheckpointInfo();
-            hlci.Recover(primaryLogToken, testContainer.primaryFkv.checkpointManager, default);
+            hlci.Recover(primaryLogToken, testBase.primaryFkv.checkpointManager, default);
 
             base.lastCompletedPci = outerCheckpointManager.secondaryMetadata.lastCompletedPrimaryCheckpointInfo;
             lastPrimaryVer = hlci.info.version;
@@ -90,8 +90,8 @@ namespace FASTER.test.HashValueIndex.CompatibleRecoveryTests
         internal override void CommitSecondary()
         {
             // We always take full checkpoints in this test.
-            testContainer.index.TakeFullCheckpoint(out var logToken);
-            testContainer.index.CompleteCheckpointAsync().GetAwaiter().GetResult(); // Do not do this in production
+            testBase.index.TakeFullCheckpoint(out var logToken);
+            testBase.index.CompleteCheckpointAsync().GetAwaiter().GetResult(); // Do not do this in production
 
             // Return the metadata from the inner checkpoint manager so it is not stripped of the wrapper metadata.
             var metadata = this.innerCheckpointManager.GetLogCheckpointMetadata(logToken, default);
@@ -101,92 +101,28 @@ namespace FASTER.test.HashValueIndex.CompatibleRecoveryTests
 
         internal override (long ptail, long stail) DoInserts()
         {
-            using var session = testContainer.primaryFkv.For(new SimpleFunctions<int, int>()).NewSession<SimpleFunctions<int, int>>();
+            using var session = testBase.primaryFkv.For(new SimpleFunctions<int, int>()).NewSession<SimpleFunctions<int, int>>();
             for (int ii = 0; ii < RecordsPerChunk; ++ii)
             {
                 session.Upsert(ii, ii);
             }
             session.CompletePending(true);
-            testContainer.primaryFkv.Log.FlushAndEvict(wait: true);
-            return (testContainer.primaryFkv.Log.TailAddress, testContainer.index.secondaryFkv.Log.TailAddress);
+            testBase.primaryFkv.Log.FlushAndEvict(wait: true);
+            return (testBase.primaryFkv.Log.TailAddress, testBase.index.secondaryFkv.Log.TailAddress);
         }
     }
 
+    [TestFixture]
     internal class RecoveryTests
     {
-        // Hash and log sizes
-        internal const int HashSizeBits = 20;
-        private const int MemorySizeBits = 29;
-        private const int SegmentSizeBits = 25;
-        private const int PageSizeBits = 20;
-        private const string IndexName = "IntIndex";
-
-        private string testBaseDir, testDir;
-        private IDevice primaryLog;
-        private IDevice secondaryLog;
-
-        // Used by HashValueIndexCheckpointRecoveryTester
-        internal FasterKV<int, int> primaryFkv;
-        internal HashValueIndex<int, int, int> index;
-        internal IPredicate intPred;
-        internal CheckpointManager<int> outerCheckpointManager;
-        internal ICheckpointManager innerCheckpointManager;
+        HashValueIndexTestBase testBase;
         internal CheckpointRecoveryTester tester;
 
         [SetUp]
         public void Setup()
         {
-            this.testBaseDir = Path.Combine(TestContext.CurrentContext.TestDirectory, TestContext.CurrentContext.Test.ClassName.Split('.').Last());
-            this.testDir = Path.Combine(this.testBaseDir, TestContext.CurrentContext.Test.MethodName);
-            var primaryDir = Path.Combine(this.testDir, "PrimaryFKV");
-            var secondaryDir = Path.Combine(this.testDir, "SecondaryFKV");
-
-            this.primaryLog = Devices.CreateLogDevice(Path.Combine(primaryDir, "hlog.log"));
-
-            var primaryLogSettings = new LogSettings
-            {
-                LogDevice = primaryLog,
-                ObjectLogDevice = default,
-                MemorySizeBits = MemorySizeBits,
-                SegmentSizeBits = SegmentSizeBits,
-                PageSizeBits = PageSizeBits,
-                CopyReadsToTail = CopyReadsToTail.None,
-                ReadCacheSettings = null
-            };
-
-            this.secondaryLog = Devices.CreateLogDevice(Path.Combine(secondaryDir, "hlog.log"));
-
-            var secondaryLogSettings = new LogSettings
-            {
-                LogDevice = secondaryLog,
-                MemorySizeBits = MemorySizeBits,
-                SegmentSizeBits = SegmentSizeBits,
-                PageSizeBits = PageSizeBits,
-                CopyReadsToTail = CopyReadsToTail.None,
-                ReadCacheSettings = null
-            };
-
-            this.primaryFkv = new FasterKV<int, int>(
-                                1L << 20, primaryLogSettings,
-                                new CheckpointSettings { CheckpointDir = primaryDir, CheckPointType = CheckpointType.FoldOver });
-
-            var secondaryCheckpointSettings = new CheckpointSettings { CheckpointDir = secondaryDir, CheckPointType = CheckpointType.FoldOver };
-            innerCheckpointManager = Utility.CreateDefaultCheckpointManager(secondaryCheckpointSettings);
-            this.outerCheckpointManager = new CheckpointManager<int>(IndexName, innerCheckpointManager);
-            secondaryCheckpointSettings.CheckpointManager = this.outerCheckpointManager;
-
-            var secondaryRegSettings = new RegistrationSettings<int>
-            {
-                HashTableSize = 1L << HashSizeBits,
-                LogSettings = secondaryLogSettings,
-                CheckpointSettings = secondaryCheckpointSettings
-            };
-
-            this.index = new HashValueIndex<int, int, int>(IndexName, this.primaryFkv, secondaryRegSettings, nameof(this.intPred), v => v);
-            this.primaryFkv.SecondaryIndexBroker.AddIndex(this.index);
-            this.intPred = this.index.GetPredicate(nameof(this.intPred));
-
-            this.tester = new HashValueIndexCheckpointRecoveryTester(this);
+            this.testBase = new HashValueIndexTestBase(1);
+            this.tester = new HashValueIndexCheckpointRecoveryTester(this.testBase, this);
         }
 
         [TearDown]
@@ -194,28 +130,16 @@ namespace FASTER.test.HashValueIndex.CompatibleRecoveryTests
 
         public void TearDown(bool deleteDir)
         {
-            this.primaryFkv?.Dispose();
-            this.primaryFkv = null;
-            this.index?.Dispose();
-            this.index = null;
-            this.primaryLog.Dispose();
-            this.primaryLog = null;
-            this.secondaryLog.Dispose();
-            this.secondaryLog = null;
-
-            this.outerCheckpointManager?.Dispose();
-            this.outerCheckpointManager = null;
-            this.innerCheckpointManager?.Dispose();
-            this.innerCheckpointManager = null;
-
-            if (deleteDir)
-                TestUtils.DeleteDirectory(this.testBaseDir);
+            testBase.TearDown(deleteDir);
+            testBase = null;
+            tester = null;
         }
 
-        internal void PrepareToRecover()
+        internal HashValueIndexTestBase PrepareToRecover()
         {
             TearDown(deleteDir:false);
             Setup();
+            return this.testBase;
         }
 
         [Test]

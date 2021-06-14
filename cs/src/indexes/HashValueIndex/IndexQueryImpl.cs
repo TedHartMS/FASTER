@@ -392,7 +392,7 @@ namespace FASTER.indexes.HashValueIndex
 
             // We already have the record at HighWaterRecordId, so skip over it if necessary (don't look for it in the PrimaryFKV; wait until we cross over to the index).
             var scanner = this.primaryFkv.Log.Scan(startAddress, endAddress);
-            if (startAddress == HighWaterRecordId.Address)
+            if (startAddress == HighWaterRecordId.Address && !HighWaterRecordId.IsDefault())
                 scanner.GetNext(out _);
             return scanner;
         }

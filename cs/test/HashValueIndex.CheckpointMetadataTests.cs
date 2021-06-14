@@ -272,6 +272,7 @@ namespace FASTER.test.HashValueIndex.CheckpointMetadata
         internal override Guid GetCompatibleIndexToken(ref HybridLogCheckpointInfo recoveredHLCInfo) => default;
     }
 
+    [TestFixture]
     internal class CheckpointMetadataTests
     {
         CheckpointManager<int> outerCheckpointManager;
