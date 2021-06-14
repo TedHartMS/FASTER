@@ -5,7 +5,7 @@ using System;
 using FASTER.core;
 using NUnit.Framework;
 
-namespace FASTER.test.SubsetIndex.SimpleIndexTests
+namespace FASTER.test.SecondaryIndex.SimpleIndex
 {
     class SimpleKeyIndexTests
     {
@@ -23,15 +23,15 @@ namespace FASTER.test.SubsetIndex.SimpleIndexTests
             public void Upsert(ref TKey key, RecordId recordId, bool isMutableRecord, SecondaryIndexSessionBroker indexSessionBroker)
                 => BaseUpsert(ref key, isMutableRecord, indexSessionBroker);
 
-            public void OnPrimaryCheckpoint(int version, long flushedUntilAddress) { }
+            public void OnPrimaryTruncate(long newBeginAddress) { }
 
-            public void OnPrimaryRecover(int version, long flushedUntilAddress, out int recoveredToVersion, out long recoveredToAddress)
+            public void ScanReadOnlyPages<TKVValue>(IFasterScanIterator<TKey, TKVValue> iter, SecondaryIndexSessionBroker indexSessionBroker)
             {
-                recoveredToVersion = default;
-                recoveredToAddress = default;
+                while (iter.GetNext(out var recordInfo))
+                    Upsert(ref iter.GetKey(), new RecordId(recordInfo.Version, iter.CurrentAddress), isMutableRecord: false, indexSessionBroker);
             }
 
-            public void OnPrimaryTruncate(long newBeginAddress) { }
+            public void RecoveryReplay<TKVValue>(IFasterScanIterator<TKey, TKVValue> iter, SecondaryIndexSessionBroker indexSessionBroker) { }
         }
 
         readonly PrimaryFasterKV store = new PrimaryFasterKV();
@@ -46,7 +46,7 @@ namespace FASTER.test.SubsetIndex.SimpleIndexTests
             => new SimpleKeyIndex<int>($"{TestContext.CurrentContext.Test.Name}_mutable_{(isAsync ? "async" : "sync")}", isMutable);
 
         [Test]
-        [Category("FasterKV"), Category("Index")]
+        [Category(TestUtils.SecondaryIndexCategory)]
         public void MutableInsertTest([Values] bool useAdvancedFunctions, [Values] bool useRMW, [Values] bool isAsync)
         {
             var secondaryIndex = CreateIndex(isMutable: true, isAsync);
@@ -56,7 +56,7 @@ namespace FASTER.test.SubsetIndex.SimpleIndexTests
         }
 
         [Test]
-        [Category("FasterKV"), Category("Index")]
+        [Category(TestUtils.SecondaryIndexCategory)]
         public void ImmutableInsertTest([Values] bool useAdvancedFunctions, [Values] bool useRMW, [Values] bool isAsync)
         {
             var secondaryIndex = CreateIndex(isMutable: false, isAsync);
@@ -66,7 +66,7 @@ namespace FASTER.test.SubsetIndex.SimpleIndexTests
         }
 
         [Test]
-        [Category("FasterKV"), Category("Index")]
+        [Category(TestUtils.SecondaryIndexCategory)]
         public void MixedInsertTest([Values] bool useAdvancedFunctions, [Values] bool useRMW, [Values] bool isAsync)
         {
             var mutableIndex = CreateIndex(isMutable: true, isAsync);

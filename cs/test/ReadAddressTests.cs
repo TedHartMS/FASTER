@@ -76,15 +76,19 @@ namespace FASTER.test.readaddress
 
             public void Upsert(ref Key key, ref Value value, RecordId recordId, bool isMutableRecord, SecondaryIndexSessionBroker indexSessionBroker) { }
 
-            public void OnPrimaryCheckpoint(int version, long flushedUntilAddress) { }
-
-            public void OnPrimaryRecover(int version, long flushedUntilAddress, out int recoveredToVersion, out long recoveredToAddress)
-            {
-                recoveredToVersion = default;
-                recoveredToAddress = default;
-            }
-
             public void OnPrimaryTruncate(long newBeginAddress) { }
+
+            public void ScanReadOnlyPages(IFasterScanIterator<Key, Value> iter, SecondaryIndexSessionBroker indexSessionBroker) { }
+
+            public void OnPrimaryCheckpointInitiated(PrimaryCheckpointInfo recoveredPCI) { }
+
+            public void OnPrimaryCheckpointCompleted(PrimaryCheckpointInfo primaryCheckpointInfo) { }
+
+            public PrimaryCheckpointInfo Recover(PrimaryCheckpointInfo recoveredPCI, bool undoNextVersion) => default;
+
+            public Task<PrimaryCheckpointInfo> RecoverAsync(PrimaryCheckpointInfo recoveredPCI, bool undoNextVersion, CancellationToken cancellationToken = default) => default;
+
+            public void RecoveryReplay(IFasterScanIterator<Key, Value> iter, SecondaryIndexSessionBroker indexSessionBroker) { }
         }
 
         private static long SetReadOutput(long key, long value) => (key << 32) | value;

@@ -36,7 +36,7 @@ namespace FASTER.core
 
                         // No need to lock here; we have just written a new record with a tombstone, so it will not be changed
                         // TODO - but this can race with an INSERT of the same key...
-                        fasterKV.UpdateSIForDelete(ref pendingContext.key.Get(), new RecordId(pendingContext.logicalAddress, pendingContext.recordInfo), isNewRecord: true, fasterSession.SecondaryIndexSessionBroker);
+                        fasterKV.UpdateSIForDelete(ref pendingContext.key.Get(), new RecordId(pendingContext.recordInfo, pendingContext.logicalAddress), isNewRecord: true, fasterSession.SecondaryIndexSessionBroker);
                     }
                 }
                 return TranslateStatus(internalStatus);
@@ -125,7 +125,7 @@ namespace FASTER.core
 
                         // No need to lock here; we have just written a new record with a tombstone, so it will not be changed
                         // TODO - but this can race with an INSERT of the same key...
-                        this.UpdateSIForDelete(ref key, new RecordId(pcontext.logicalAddress, pcontext.recordInfo), isNewRecord: true, fasterSession.SecondaryIndexSessionBroker);
+                        this.UpdateSIForDelete(ref key, new RecordId(pcontext.recordInfo, pcontext.logicalAddress), isNewRecord: true, fasterSession.SecondaryIndexSessionBroker);
                     }
                     return new ValueTask<DeleteAsyncResult<Input, Output, Context>>(new DeleteAsyncResult<Input, Output, Context>((Status)internalStatus));
                 }

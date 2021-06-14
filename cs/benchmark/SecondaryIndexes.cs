@@ -2,6 +2,8 @@
 // Licensed under the MIT license.
 
 using FASTER.core;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace FASTER.benchmark
 {
@@ -19,15 +21,19 @@ namespace FASTER.benchmark
 
         public void Upsert(ref Key key, RecordId recordId, bool isMutableRecord, SecondaryIndexSessionBroker indexSessionBroker) { }
 
-        public void OnPrimaryCheckpoint(int version, long flushedUntilAddress) { }
-
-        public void OnPrimaryRecover(int version, long flushedUntilAddress, out int recoveredToVersion, out long recoveredToAddress)
-        {
-            recoveredToVersion = default;
-            recoveredToAddress = default;
-        }
-
         public void OnPrimaryTruncate(long newBeginAddress) { }
+
+        public void ScanReadOnlyPages<TScanValue>(IFasterScanIterator<Key, TScanValue> iter, SecondaryIndexSessionBroker indexSessionBroker) { }
+
+        public void OnPrimaryCheckpointInitiated(PrimaryCheckpointInfo recoveredPci) { }
+
+        public void OnPrimaryCheckpointCompleted(PrimaryCheckpointInfo primaryCheckpointInfo) { }
+
+        public PrimaryCheckpointInfo Recover(PrimaryCheckpointInfo recoveredPci, bool undoNextVersion) => default;
+
+        public Task<PrimaryCheckpointInfo> RecoverAsync(PrimaryCheckpointInfo recoveredPci, bool undoNextVersion, CancellationToken cancellationToken = default) => default;
+
+        public void RecoveryReplay<TScanValue>(IFasterScanIterator<Key, TScanValue> iter, SecondaryIndexSessionBroker indexSessionBroker) { }
     }
 
     class NullValueIndex<Key, Value> : ISecondaryValueIndex<Key, Value>
@@ -44,14 +50,18 @@ namespace FASTER.benchmark
 
         public void Upsert(ref Key key, ref Value value, RecordId recordId, bool isMutableRecord, SecondaryIndexSessionBroker indexSessionBroker) { }
 
-        public void OnPrimaryCheckpoint(int version, long flushedUntilAddress) { }
-
-        public void OnPrimaryRecover(int version, long flushedUntilAddress, out int recoveredToVersion, out long recoveredToAddress)
-        {
-            recoveredToVersion = default;
-            recoveredToAddress = default;
-        }
-
         public void OnPrimaryTruncate(long newBeginAddress) { }
+
+        public void ScanReadOnlyPages(IFasterScanIterator<Key, Value> iter, SecondaryIndexSessionBroker indexSessionBroker) { }
+
+        public void OnPrimaryCheckpointInitiated(PrimaryCheckpointInfo recoveredPci) { }
+
+        public void OnPrimaryCheckpointCompleted(PrimaryCheckpointInfo primaryCheckpointInfo) { }
+
+        public PrimaryCheckpointInfo Recover(PrimaryCheckpointInfo recoveredPci, bool undoNextVersion) => default;
+
+        public Task<PrimaryCheckpointInfo> RecoverAsync(PrimaryCheckpointInfo recoveredPci, bool undoNextVersion, CancellationToken cancellationToken = default) => default; // Not used for this class
+
+        public void RecoveryReplay(IFasterScanIterator<Key, Value> iter, SecondaryIndexSessionBroker indexSessionBroker) { }
     }
 }

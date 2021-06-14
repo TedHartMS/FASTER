@@ -2,7 +2,10 @@
 // Licensed under the MIT license.
 
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
 
 #pragma warning disable IDE0056 // Use index operator (^ is not supported on .NET Framework or NETCORE pre-3.0)
 
@@ -106,7 +109,7 @@ namespace FASTER.core
         {
             var mki = this.mutableKeyIndexes;
             foreach (var keyIndex in mki)
-                keyIndex.Upsert(ref key, recordId, isMutableRecord: true, indexSessionBroker);
+                keyIndex.Upsert(ref key, recordId, isMutableRecord: false, indexSessionBroker);
         }
         #endregion Mutable KeyIndexes
 
@@ -155,19 +158,151 @@ namespace FASTER.core
         /// <summary>
         /// Upserts a readonly key into all secondary key indexes and readonly values into secondary value indexes.
         /// </summary>
-        public void UpsertReadOnly(ref TKVKey key, ref TKVValue value, RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker)
+        internal void ScanReadOnlyPages(IFasterScanIterator<TKVKey, TKVValue> iter, SecondaryIndexSessionBroker indexSessionBroker)
         {
+            var inputIter = iter;
+
+            IFasterScanIterator<TKVKey, TKVValue> GetIter()
+            {
+                var localIter = inputIter ?? primaryFkv.Log.Scan(iter.BeginAddress, iter.EndAddress, ScanBufferingMode.NoBuffering);
+                inputIter = null;
+                return localIter;
+            }
+
+            void ReleaseIter(IFasterScanIterator<TKVKey, TKVValue> localIter)
+            {
+                if (localIter != iter)
+                    localIter.Dispose();
+            }
+
+            // TODO: Parallelize ScanReadOnlyPages
             var ki = this.allKeyIndexes;
-            var vi = this.allValueIndexes;
             if (ki is { })
             {
                 foreach (var keyIndex in ki)
-                    keyIndex.Upsert(ref key, recordId, isMutableRecord: false, indexSessionBroker);
+                {
+                    var localIter = GetIter();
+                    keyIndex.ScanReadOnlyPages(localIter, indexSessionBroker);
+                    ReleaseIter(localIter);
+                }
             }
+            var vi = this.allValueIndexes;
             if (vi is { })
             {
                 foreach (var valueIndex in vi)
-                    valueIndex.Upsert(ref key, ref value, recordId, isMutableRecord: false, indexSessionBroker);
+                {
+                    var localIter = GetIter();
+                    valueIndex.ScanReadOnlyPages(localIter, indexSessionBroker);
+                    ReleaseIter(localIter);
+                }
+            }
+        }
+
+        internal void OnPrimaryCheckpointInitiated(PrimaryCheckpointInfo currentPci)
+        {
+            var ki = this.allKeyIndexes;
+            if (ki is { })
+            {
+                foreach (var keyIndex in ki)
+                    keyIndex.OnPrimaryCheckpointInitiated(currentPci);
+            }
+            var vi = this.allValueIndexes;
+            if (vi is { })
+            {
+                foreach (var valueIndex in vi)
+                    valueIndex.OnPrimaryCheckpointInitiated(currentPci);
+            }
+        }
+
+        internal void OnPrimaryCheckpointCompleted(PrimaryCheckpointInfo completedPci)
+        {
+            var ki = this.allKeyIndexes;
+            if (ki is { })
+            {
+                foreach (var keyIndex in ki)
+                    keyIndex.OnPrimaryCheckpointCompleted(completedPci);
+            }
+            var vi = this.allValueIndexes;
+            if (vi is { })
+            {
+                foreach (var valueIndex in vi)
+                    valueIndex.OnPrimaryCheckpointCompleted(completedPci);
+            }
+        }
+
+        internal void Recover(PrimaryCheckpointInfo primaryRecoveredPci, bool undoNextVersion)
+        {
+            // This is called during recovery, before the PrimaryFKV is open for operations, so we do not have to worry about things changing
+            // We're not operating in the context of a FasterKV session, so we need our own sessionBroker.
+            using var indexSessionBroker = new SecondaryIndexSessionBroker();
+
+            var tasks = new List<Task>();
+
+            var ki = this.allKeyIndexes;
+            if (ki is { })
+            {
+                foreach (var keyIndex in ki)
+                    tasks.Add(Task.Run(() => RecoverIndex(keyIndex, default, primaryRecoveredPci, undoNextVersion, indexSessionBroker)));
+            }
+            var vi = this.allValueIndexes;
+            if (vi is { })
+            {
+                foreach (var valueIndex in vi)
+                    tasks.Add(Task.Run(() => RecoverIndex(default, valueIndex, primaryRecoveredPci, undoNextVersion, indexSessionBroker)));
+            }
+
+            Task.WaitAll(tasks.ToArray());
+        }
+
+        internal async Task RecoverAsync(PrimaryCheckpointInfo primaryRecoveredPci, bool undoNextVersion)
+        {
+            // This is called during recovery, before the PrimaryFKV is open for operations, so we do not have to worry about things changing
+            // We're not operating in the context of a FasterKV session, so we need our own sessionBroker.
+            using var indexSessionBroker = new SecondaryIndexSessionBroker();
+
+            var tasks = new List<Task>();
+
+            var ki = this.allKeyIndexes;
+            if (ki is { })
+            {
+                foreach (var keyIndex in ki)
+                    tasks.Add(RecoverIndexAsync(keyIndex, default, primaryRecoveredPci, undoNextVersion, indexSessionBroker));
+            }
+            var vi = this.allValueIndexes;
+            if (vi is { })
+            {
+                foreach (var valueIndex in vi)
+                    tasks.Add(RecoverIndexAsync(default, valueIndex, primaryRecoveredPci, undoNextVersion, indexSessionBroker));
+            }
+
+            // Must await so we don't Dispose indexSessionBroker before the tasks complete.
+            await Task.WhenAll(tasks.ToArray());
+        }
+
+        void RecoverIndex(ISecondaryKeyIndex<TKVKey> keyIndex, ISecondaryValueIndex<TKVKey, TKVValue> valueIndex, PrimaryCheckpointInfo recoveredPci, bool undoNextVersion, SecondaryIndexSessionBroker indexSessionBroker)
+        {
+            var pci = ((ISecondaryIndex)keyIndex ?? valueIndex).Recover(recoveredPci, undoNextVersion);
+            RollIndexForward(keyIndex, valueIndex, pci, indexSessionBroker);
+        }
+
+        async Task RecoverIndexAsync(ISecondaryKeyIndex<TKVKey> keyIndex, ISecondaryValueIndex<TKVKey, TKVValue> valueIndex, PrimaryCheckpointInfo recoveredPci, bool undoNextVersion, SecondaryIndexSessionBroker indexSessionBroker)
+        {
+            var pci = await ((ISecondaryIndex)keyIndex ?? valueIndex).RecoverAsync(recoveredPci, undoNextVersion);
+            await Task.Run(() => RollIndexForward(keyIndex, valueIndex, pci, indexSessionBroker));
+        }
+
+        private void RollIndexForward(ISecondaryKeyIndex<TKVKey> keyIndex, ISecondaryValueIndex<TKVKey, TKVValue> valueIndex, PrimaryCheckpointInfo pci, SecondaryIndexSessionBroker indexSessionBroker)
+        {
+            var index = (ISecondaryIndex)keyIndex ?? valueIndex;
+            var endAddress = index.IsMutable ? primaryFkv.Log.TailAddress : primaryFkv.Log.ReadOnlyAddress;
+            if (pci.FlushedUntilAddress < endAddress)
+            {
+                var startAddress = Math.Max(pci.FlushedUntilAddress, primaryFkv.Log.BeginAddress);
+                using var iter = primaryFkv.Log.Scan(startAddress, endAddress);
+                if (keyIndex is { })
+                    keyIndex.RecoveryReplay(iter, indexSessionBroker);
+                else
+                    valueIndex.RecoveryReplay(iter, indexSessionBroker);
             }
         }
     }

@@ -7,8 +7,10 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
-namespace FASTER.test
+namespace FASTER.test.SecondaryIndex.SimpleIndex
 {
     class SimpleIndexBase<TKey>
     {
@@ -52,6 +54,14 @@ namespace FASTER.test
             }
             Assert.AreEqual(this.sessionId, session.Id);
         }
+
+        public void OnPrimaryCheckpointInitiated(PrimaryCheckpointInfo recoveredPCI) { }
+
+        public void OnPrimaryCheckpointCompleted(PrimaryCheckpointInfo primaryCheckpointInfo) { }
+
+        public PrimaryCheckpointInfo Recover(PrimaryCheckpointInfo recoveredPCI, bool undoNextVersion) => default;
+
+        public Task<PrimaryCheckpointInfo> RecoverAsync(PrimaryCheckpointInfo recoveredPCI, bool undoNextVersion, CancellationToken cancellationToken = default) => default;
     }
 
     class SimpleKeyIndexBase<TKey> : SimpleIndexBase<TKey>

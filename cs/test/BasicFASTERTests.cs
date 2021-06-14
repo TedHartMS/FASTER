@@ -2,6 +2,7 @@
 // Licensed under the MIT license.
 
 using System;
+using System.Diagnostics;
 using System.Linq;
 using FASTER.core;
 using NUnit.Framework;
@@ -228,21 +229,28 @@ namespace FASTER.test
         public unsafe void TestShiftHeadAddress()
         {
             InputStruct input = default;
+            const int RandSeed = 10;
+            const int RandRange = 10000;
+            const int NumRecs = 5000;
 
-            Random r = new Random(10);
-            for (int c = 0; c < 1000; c++)
+            Random r = new Random(RandSeed);
+            var sw = Stopwatch.StartNew();
+
+            for (int c = 0; c < NumRecs; c++)
             {
-                var i = r.Next(10000);
+                var i = r.Next(RandRange);
                 var key1 = new KeyStruct { kfield1 = i, kfield2 = i + 1 };
                 var value = new ValueStruct { vfield1 = i, vfield2 = i + 1 };
                 session.Upsert(ref key1, ref value, Empty.Default, 0);
             }
+            Console.WriteLine($"Time to insert {NumRecs} records: {sw.ElapsedMilliseconds} ms");
 
-            r = new Random(10);
+            r = new Random(RandSeed);
+            sw.Restart();
 
-            for (int c = 0; c < 1000; c++)
+            for (int c = 0; c < NumRecs; c++)
             {
-                var i = r.Next(10000);
+                var i = r.Next(RandRange);
                 OutputStruct output = default;
                 var key1 = new KeyStruct { kfield1 = i, kfield2 = i + 1 };
                 var value = new ValueStruct { vfield1 = i, vfield2 = i + 1 };
@@ -255,19 +263,29 @@ namespace FASTER.test
                 Assert.IsTrue(output.value.vfield1 == value.vfield1);
                 Assert.IsTrue(output.value.vfield2 == value.vfield2);
             }
+            Console.WriteLine($"Time to read {NumRecs} in-memory records: {sw.ElapsedMilliseconds} ms");
 
             // Shift head and retry - should not find in main memory now
             fht.Log.FlushAndEvict(true);
 
-            r = new Random(10);
-            for (int c = 0; c < 1000; c++)
+            r = new Random(RandSeed);
+            sw.Restart();
+
+            for (int c = 0; c < NumRecs; c++)
             {
-                var i = r.Next(10000);
+                var i = r.Next(RandRange);
                 OutputStruct output = default;
                 var key1 = new KeyStruct { kfield1 = i, kfield2 = i + 1 };
+                var value = new ValueStruct { vfield1 = i, vfield2 = i + 1 };
+
                 Assert.IsTrue(session.Read(ref key1, ref input, ref output, Empty.Default, 0) == Status.PENDING);
-                session.CompletePending(true);
+                session.CompletePendingWithOutputs(out var outputs, wait: true);
+                Assert.IsTrue(outputs.Next());
+                Assert.IsTrue(outputs.Current.Output.value.vfield1 == value.vfield1);
+                outputs.Current.Dispose();
+                Assert.IsFalse(outputs.Next());
             }
+            Console.WriteLine($"Time to read {NumRecs} on-disk records: {sw.ElapsedMilliseconds} ms");
         }
 
         [Test]

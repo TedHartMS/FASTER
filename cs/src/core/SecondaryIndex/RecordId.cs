@@ -1,18 +1,20 @@
 ﻿// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT license.
 
+using System;
+
 namespace FASTER.core
 {
     /// <summary>
     /// Encapsulates the address and version of a record in the log
     /// </summary>
-    public struct RecordId
+    public struct RecordId : IComparable<RecordId>
     {
         private long word;
 
-        internal RecordId(long address, RecordInfo recordInfo) : this(address, recordInfo.Version) { }
+        internal RecordId(RecordInfo recordInfo, long address) : this(recordInfo.Version, address) { }
 
-        internal RecordId(long address, int version)
+        internal RecordId(int version, long address)
         {
             this.word = default;
             this.Address = address;
@@ -49,6 +51,13 @@ namespace FASTER.core
                 word &= ~RecordInfo.kPreviousAddressMask;
                 word |= (value & RecordInfo.kPreviousAddressMask);
             }
+        }
+
+        /// <inheritdoc/>
+        public int CompareTo(RecordId other)
+        {
+            var cmp = this.Address.CompareTo(other.Address);
+            return cmp == 0 ? this.Version.CompareTo(other.Version) : cmp;
         }
 
         /// <summary>

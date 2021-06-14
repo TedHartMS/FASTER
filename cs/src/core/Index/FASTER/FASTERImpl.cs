@@ -188,7 +188,7 @@ namespace FASTER.core
                 if (!pendingContext.recordInfo.Tombstone)
                 {
                     fasterSession.SingleReader(ref key, ref input, ref hlog.GetValue(physicalAddress), ref output, logicalAddress);
-                    if (CopyReadsToTail == CopyReadsToTail.FromReadOnly)
+                    if (CopyReadsToTail == CopyReadsToTail.FromReadOnly && !pendingContext.SkipReadCache)
                     {
                         var container = hlog.GetValueContainer(ref hlog.GetValue(physicalAddress));
                         InternalUpsert(ref key, ref container.Get(), ref userContext, ref pendingContext, fasterSession, sessionCtx, lsn);
@@ -685,7 +685,7 @@ namespace FASTER.core
                     ref RecordInfo recordInfo = ref hlog.GetInfo(physicalAddress);
                     if (!recordInfo.Tombstone)
                     {
-                        if (FoldOverSnapshot)
+                        if (UseFoldOverCheckpoint)
                         {
                             Debug.Assert(recordInfo.Version == sessionCtx.version);
                         }
@@ -2269,12 +2269,12 @@ namespace FASTER.core
                         }
                     }
                 }
-                logicalAddress += allocatedSize;
                 if ((logicalAddress & readcache.PageSizeMask) + allocatedSize > readcache.PageSize)
                 {
                     logicalAddress = (1 + (logicalAddress >> readcache.LogPageSizeBits)) << readcache.LogPageSizeBits;
                     continue;
                 }
+                logicalAddress += allocatedSize;
             }
         }
 

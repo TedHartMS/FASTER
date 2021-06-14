@@ -249,7 +249,7 @@ namespace FASTER.core
         /// </summary>
         public int nextVersion;
         /// <summary>
-        /// Flushed logical address
+        /// Flushed logical address; indicates the latest immutable address on the main FASTER log at recovery time.
         /// </summary>
         public long flushedLogicalAddress;
         /// <summary>

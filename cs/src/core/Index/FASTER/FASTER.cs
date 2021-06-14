@@ -5,7 +5,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
@@ -35,7 +34,7 @@ namespace FASTER.core
 
         internal readonly bool UseReadCache;
         private readonly CopyReadsToTail CopyReadsToTail;
-        private readonly bool FoldOverSnapshot;
+        internal readonly bool UseFoldOverCheckpoint;
         internal readonly int sectorSize;
         private readonly bool WriteDefaultOnDelete;
         internal bool RelaxedCPR;
@@ -136,17 +135,13 @@ namespace FASTER.core
             }
             else
             {
-                checkpointManager = checkpointSettings.CheckpointManager ??
-                    new DeviceLogCommitCheckpointManager
-                    (new LocalStorageNamedDeviceFactory(),
-                        new DefaultCheckpointNamingScheme(
-                          new DirectoryInfo(checkpointSettings.CheckpointDir ?? ".").FullName), removeOutdated: checkpointSettings.RemoveOutdated);
+                checkpointManager = checkpointSettings.CheckpointManager ?? Utility.CreateDefaultCheckpointManager(checkpointSettings);
             }
 
             if (checkpointSettings.CheckpointManager == null)
                 disposeCheckpointManager = true;
 
-            FoldOverSnapshot = checkpointSettings.CheckPointType == core.CheckpointType.FoldOver;
+            UseFoldOverCheckpoint = checkpointSettings.CheckPointType == core.CheckpointType.FoldOver;
             CopyReadsToTail = logSettings.CopyReadsToTail;
 
             if (logSettings.ReadCacheSettings != null)
@@ -242,7 +237,7 @@ namespace FASTER.core
         /// operation such as growing the index). Use CompleteCheckpointAsync to wait completion.
         /// </returns>
         public bool TakeFullCheckpoint(out Guid token) 
-            => TakeFullCheckpoint(out token, this.FoldOverSnapshot ? CheckpointType.FoldOver : CheckpointType.Snapshot);
+            => TakeFullCheckpoint(out token, this.UseFoldOverCheckpoint ? CheckpointType.FoldOver : CheckpointType.Snapshot);
 
         /// <summary>
         /// Initiate full checkpoint
@@ -335,17 +330,7 @@ namespace FASTER.core
         /// <param name="token">Checkpoint token</param>
         /// <returns>Whether we could initiate the checkpoint. Use CompleteCheckpointAsync to wait completion.</returns>
         public bool TakeHybridLogCheckpoint(out Guid token)
-        {
-            ISynchronizationTask backend;
-            if (FoldOverSnapshot)
-                backend = new FoldOverCheckpointTask();
-            else
-                backend = new SnapshotCheckpointTask();
-
-            var result = StartStateMachine(new HybridLogCheckpointStateMachine(backend, -1));
-            token = _hybridLogCheckpointToken;
-            return result;
-        }
+            => TakeHybridLogCheckpoint(out token, UseFoldOverCheckpoint ? CheckpointType.FoldOver : CheckpointType.Snapshot, tryIncremental: false);
 
         /// <summary>
         /// Initiate log-only checkpoint
@@ -629,7 +614,7 @@ namespace FASTER.core
         {
             if (!recordInfo.Invalid && !recordInfo.Tombstone)
             {
-                var recordId = new RecordId(address, recordInfo);
+                var recordId = new RecordId(recordInfo, address);
                 if (this.SecondaryIndexBroker.MutableKeyIndexCount > 0)
                     this.SecondaryIndexBroker.Insert(ref key, recordId, indexSessionBroker);
                 if (this.SecondaryIndexBroker.MutableValueIndexCount > 0)
@@ -720,7 +705,7 @@ namespace FASTER.core
 
                 // No need to lock here; we have just written a new record with a tombstone, so it will not be changed
                 // TODO - but this can race with an INSERT of the same key...
-                this.UpdateSIForDelete(ref key, new RecordId(pcontext.logicalAddress, pcontext.recordInfo), isNewRecord: true, fasterSession.SecondaryIndexSessionBroker);
+                this.UpdateSIForDelete(ref key, new RecordId(pcontext.recordInfo, pcontext.logicalAddress), isNewRecord: true, fasterSession.SecondaryIndexSessionBroker);
             }
 
             Debug.Assert(serialNo >= sessionCtx.serialNum, "Operation serial numbers must be non-decreasing");
