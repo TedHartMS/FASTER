@@ -279,7 +279,7 @@ namespace FASTER.test
                 var value = new ValueStruct { vfield1 = i, vfield2 = i + 1 };
 
                 Assert.IsTrue(session.Read(ref key1, ref input, ref output, Empty.Default, 0) == Status.PENDING);
-                session.CompletePendingWithOutputs(out var outputs, wait:true);
+                session.CompletePendingWithOutputs(out var outputs, wait: true);
                 Assert.IsTrue(outputs.Next());
                 Assert.IsTrue(outputs.Current.Output.value.vfield1 == value.vfield1);
                 outputs.Current.Dispose();

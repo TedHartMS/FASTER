@@ -37,12 +37,25 @@ namespace FASTER.test.HashValueIndex.QueryTests
             Setup(numPreds);
         }
 
+        [Test]
+        [Category(TestUtils.SecondaryIndexCategory), Category(TestUtils.HashValueIndexCategory)]
+        public async Task ThreadedInsertQueryTest([Values(1, 10)] int numThreads,
+                                            [Values(HashValueIndexTestBase.MinRecs, HashValueIndexTestBase.MidRecs, HashValueIndexTestBase.MaxRecs)] int numRecs,
+                                            [Values(1, 3)] int numPreds)
+        {
+            await RunTest(numThreads, numRecs, numPreds, isAsync: false);
+        }
 
         [Test]
         [Category(TestUtils.SecondaryIndexCategory), Category(TestUtils.HashValueIndexCategory)]
-        public async Task ThreadedInsertQueryTest([Values(1, 10)]int numThreads,
-                                            [Values(HashValueIndexTestBase.MinRecs, HashValueIndexTestBase.MidRecs, HashValueIndexTestBase.MaxRecs)] int numRecs,
-                                            [Values(1, 3)]int numPreds)
+        public async Task QueryAsyncTest([Values(1, 10)] int numThreads,
+                                            [Values(HashValueIndexTestBase.MinRecs, HashValueIndexTestBase.MidRecs)] int numRecs,
+                                            [Values(1, 3)] int numPreds)
+        {
+            await RunTest(numThreads, numRecs, numPreds, isAsync: true);
+        }
+
+        private async Task RunTest(int numThreads, int numRecs, int numPreds, bool isAsync)
         {
             Setup(numPreds);
             var half = numRecs / 2;
@@ -54,7 +67,7 @@ namespace FASTER.test.HashValueIndex.QueryTests
 
             // Tests query over mutable portion of primary log
             sw.Restart();
-            var numQueryRecs = Query(numThreads, half);
+            var numQueryRecs = await QueryAsync(numThreads, half, isAsync);
             Console.WriteLine($"Query with {half} primary, 0 SI records, {numQueryRecs} queried records: {sw.ElapsedMilliseconds} ms");
 
             // Tests query across records in secondary index; these went readonly in the primary log.
@@ -62,7 +75,7 @@ namespace FASTER.test.HashValueIndex.QueryTests
             Console.WriteLine($"FlushAndEvict Primary");
 
             sw.Restart();
-            numQueryRecs = Query(numThreads, half);
+            numQueryRecs = await QueryAsync(numThreads, half, isAsync);
             Console.WriteLine($"Query with {0} primary, {half} SI records, {numQueryRecs} queried records: {sw.ElapsedMilliseconds} ms");
 
             // Insert the second half of the records
@@ -72,13 +85,13 @@ namespace FASTER.test.HashValueIndex.QueryTests
 
             // Tests query over mutable portion of primary log, then across secondary index
             sw.Restart();
-            numQueryRecs = Query(numThreads, numRecs);
+            numQueryRecs = await QueryAsync(numThreads, numRecs, isAsync);
             Console.WriteLine($"Query with {half} primary, {half} SI records, {numQueryRecs} queried records: {sw.ElapsedMilliseconds} ms");
 
             // Tests query across records in secondary index.
             testBase.primaryFkv.Log.FlushAndEvict(wait: true);
             Console.WriteLine($"FlushAndEvict Primary");
-            numQueryRecs = Query(numThreads, numRecs);
+            numQueryRecs = await QueryAsync(numThreads, numRecs, isAsync);
             Console.WriteLine($"Query with 0 primary, {numRecs} SI records, {numQueryRecs} queried records: {sw.ElapsedMilliseconds} ms");
 
             // We need to complete one primary checkpoint before the secondary, then another primary checkpoint after secondary--the latter primary is what we'll
@@ -99,7 +112,7 @@ namespace FASTER.test.HashValueIndex.QueryTests
 
             // Now verify correct recovery.
             sw.Restart();
-            numQueryRecs = Query(numThreads, numRecs);
+            numQueryRecs = await QueryAsync(numThreads, numRecs, isAsync);
             Console.WriteLine($"Query with 0 primary, {numRecs} SI records, {numQueryRecs} queried records: {sw.ElapsedMilliseconds} ms");
         }
 
@@ -124,7 +137,7 @@ namespace FASTER.test.HashValueIndex.QueryTests
                 worker.Join();
         }
 
-        int Query(int numThreads, int numRecs)
+        private async ValueTask<int> QueryAsync(int numThreads, int numRecs, bool isAsync)
         {
             var expectedTotalRecs = numRecs * numThreads * testBase.intPredicates.Length;
             var expectedRecsPerPred = (numRecs * numThreads) / HashValueIndexTestBase.PredMod;
@@ -134,7 +147,7 @@ namespace FASTER.test.HashValueIndex.QueryTests
             // Verify the test retrieved all records
             int actualTotalRecs = 0;
 
-            void verifyResults(int startPredKey)
+            async Task verifyResults(int startPredKey)
             {
                 using var session = testBase.primaryFkv.For(new SimpleFunctions<int, int>()).NewSession<SimpleFunctions<int, int>>();
                 foreach (var pred in testBase.intPredicates.Select((predicate, ordinal) => new { predicate, ordinal }))
@@ -142,7 +155,9 @@ namespace FASTER.test.HashValueIndex.QueryTests
                     var maxPredKey = Math.Min(HashValueIndexTestBase.PredMod, startPredKey + predKeysPerThread);
                     for (int predKey = startPredKey; predKey < maxPredKey; ++predKey)
                     {
-                        var records = session.Query(pred.predicate, HashValueIndexTestBase.PredicateShiftKey(predKey, pred.ordinal), new QuerySettings()).ToArray();
+                        var records = isAsync
+                            ? await session.QueryAsync(pred.predicate, HashValueIndexTestBase.PredicateShiftKey(predKey, pred.ordinal), new QuerySettings()).ToArrayAsync()
+                            : session.Query(pred.predicate, HashValueIndexTestBase.PredicateShiftKey(predKey, pred.ordinal), new QuerySettings()).ToArray();
                         Assert.AreEqual(expectedRecsPerPred, records.Length);
                         Array.Sort(records, (ll, rr) => ll.KeyRef.CompareTo(rr.KeyRef));
                         var prevKey = records[0].KeyRef - 1;
@@ -163,16 +178,24 @@ namespace FASTER.test.HashValueIndex.QueryTests
                 }
             }
 
-            Thread[] workers = new Thread[numThreads];
-            for (int ii = 0; ii < numThreads; ++ii)
+            if (isAsync)
             {
-                var threadOrd = ii;
-                workers[ii] = new Thread(() => verifyResults(threadOrd * predKeysPerThread));
+                var tasks = Enumerable.Range(0, numThreads).Select(threadOrd => verifyResults(threadOrd * predKeysPerThread));
+                await Task.WhenAll(tasks);
             }
-            foreach (var worker in workers)
-                worker.Start();
-            foreach (var worker in workers)
-                worker.Join();
+            else
+            {
+                Thread[] workers = new Thread[numThreads];
+                for (int ii = 0; ii < numThreads; ++ii)
+                {
+                    var threadOrd = ii;
+                    workers[ii] = new Thread(async () => await verifyResults(threadOrd * predKeysPerThread));
+                }
+                foreach (var worker in workers)
+                    worker.Start();
+                foreach (var worker in workers)
+                    worker.Join();
+            }
             Assert.AreEqual(expectedTotalRecs, actualTotalRecs);
             return actualTotalRecs;
         }

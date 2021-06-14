@@ -1857,7 +1857,7 @@ namespace FASTER.core
             var spins = 0;
             while (true)
             {
-                var flushTask = allocator.FlushTask;
+                var flushEvent = allocator.FlushEvent;
                 logicalAddress = allocator.TryAllocate(recordSize);
                 if (logicalAddress > 0)
                     return;
@@ -1872,7 +1872,7 @@ namespace FASTER.core
                     try
                     {
                         epoch.Suspend();
-                        flushTask.GetAwaiter().GetResult();
+                        flushEvent.Wait();
                     }
                     finally
                     {
@@ -2278,12 +2278,12 @@ namespace FASTER.core
                         }
                     }
                 }
-                logicalAddress += allocatedSize;
                 if ((logicalAddress & readcache.PageSizeMask) + allocatedSize > readcache.PageSize)
                 {
                     logicalAddress = (1 + (logicalAddress >> readcache.LogPageSizeBits)) << readcache.LogPageSizeBits;
                     continue;
                 }
+                logicalAddress += allocatedSize;
             }
         }
 
