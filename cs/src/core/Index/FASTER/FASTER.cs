@@ -464,7 +464,7 @@ namespace FASTER.core
                     systemState.phase == Phase.IN_PROGRESS_GROW)
                     return;
 
-                List<ValueTask> valueTasks = new List<ValueTask>();
+                List<ValueTask> valueTasks = new();
                 
                 ThreadStateMachineStep<Empty, Empty, Empty, NullFasterSession>(null, NullFasterSession.Instance, valueTasks, token);
 
@@ -869,11 +869,11 @@ namespace FASTER.core
             var ptable_ = state[version].tableAligned;
             long total_record_count = 0;
             long beginAddress = hlog.BeginAddress;
-            Dictionary<int, long> histogram = new Dictionary<int, long>();
+            Dictionary<int, long> histogram = new();
 
             for (long bucket = 0; bucket < table_size_; ++bucket)
             {
-                List<int> tags = new List<int>();
+                List<int> tags = new();
                 int cnt = 0;
                 HashBucket b = *(ptable_ + bucket);
                 while (true)
