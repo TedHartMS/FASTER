@@ -39,7 +39,7 @@ namespace FASTER.core
 
         internal readonly InternalFasterSession FasterSession;
 
-        internal readonly SecondaryIndexSessionBroker SecondaryIndexSessionBroker = new SecondaryIndexSessionBroker();
+        internal readonly SecondaryIndexSessionBroker SecondaryIndexSessionBroker = new();
 
         internal const string NotAsyncSessionErr = ClientSession<int, int, int, int, Empty, SimpleFunctions<int, int>>.NotAsyncSessionErr;
 
@@ -70,7 +70,7 @@ namespace FASTER.core
             }
             else
             {
-                if (!(fht.hlog is VariableLengthBlittableAllocator<Key, Value>))
+                if (fht.hlog is not VariableLengthBlittableAllocator<Key, Value>)
                     Debug.WriteLine("Warning: Session param of variableLengthStruct provided for non-varlen allocator");
             }
 
@@ -103,7 +103,7 @@ namespace FASTER.core
 
         private void UpdateVarlen(ref IVariableLengthStruct<Value, Input> variableLengthStruct)
         {
-            if (!(fht.hlog is VariableLengthBlittableAllocator<Key, Value>))
+            if (fht.hlog is not VariableLengthBlittableAllocator<Key, Value>)
                 return;
 
             if (typeof(Value) == typeof(SpanByte) && typeof(Input) == typeof(SpanByte))

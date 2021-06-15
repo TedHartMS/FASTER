@@ -526,7 +526,7 @@ namespace FASTER.core
         public void Recover(Guid token, ICheckpointManager checkpointManager, int deltaLogPageSizeBits)
         {
             deltaFileDevice = checkpointManager.GetDeltaLogDevice(token);
-            if (!(deltaFileDevice is null))
+            if (deltaFileDevice is not null)
             {
                 deltaFileDevice.Initialize(-1);
                 if (deltaFileDevice.GetFileSize(0) > 0)

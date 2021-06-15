@@ -42,9 +42,9 @@ namespace FASTER.test.SecondaryIndex.SimpleIndex
             if (isMutableRecord)
                 Assert.AreEqual(sessionObject is null, this.sessionId == Guid.Empty);
 
-            if (!(sessionObject is SimpleIndexSession session))
+            if (sessionObject is not SimpleIndexSession session)
             {
-                if (sessionObject is { })
+                if (sessionObject is not null)
                     Assert.Fail($"Unexpected session object type {sessionObject.GetType().Name} for {indexType}");
 
                 if (this.sessionId == Guid.Empty)

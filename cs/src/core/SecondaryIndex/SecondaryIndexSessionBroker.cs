@@ -56,11 +56,11 @@ namespace FASTER.core
         public void Dispose()
         {
             var sessions = this.indexSessions;
-            if (sessions == null)
+            if (sessions is null)
                 return;
 
             sessions = Interlocked.CompareExchange(ref this.indexSessions, null, sessions);
-            if (sessions == null)
+            if (sessions is null)
                 return;
 
             foreach (var session in sessions)
