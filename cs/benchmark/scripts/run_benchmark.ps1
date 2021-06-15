@@ -30,6 +30,10 @@
     Number of threads to use.
     Used primarily to debug changes to this script or do a quick one-off run; the default is multiple counts as defined in the script.
 
+.PARAMETER IndexMode
+    Indexing mode to use: 0 = None, 1 = Key, 2 = Value, 3 = both.
+    Used primarily to debug changes to this script or do a quick one-off run; the default is multiple counts as defined in the script.
+
 .PARAMETER LockMode
     Locking mode to use: 0 = No locking, 1 = RecordInfo locking
     Used primarily to debug changes to this script or do a quick one-off run; the default is multiple counts as defined in the script.
@@ -76,6 +80,7 @@ param (
   [Parameter(Mandatory=$true)] [string[]]$ExeDirs,
   [Parameter(Mandatory=$false)] [int]$RunSeconds = 30,
   [Parameter(Mandatory=$false)] [int]$ThreadCount = -1,
+  [Parameter(Mandatory=$false)] [int]$IndexMode = -1,
   [Parameter(Mandatory=$false)] [int]$lockMode = -1,
   [Parameter(Mandatory=$false)] [switch]$UseRecover,
   [Parameter(Mandatory=$false)] [switch]$CloneAndBuild.
@@ -124,6 +129,7 @@ $iterations = 7
 $distributions = ("uniform", "zipf")
 $readPercents = (0, 100)
 $threadCounts = (1, 20, 40, 60, 80)
+$indexModes = (0, 1, 2) #, 3)
 $lockModes = (0, 1)
 $smallDatas = (0) #, 1)
 $smallMemories = (0) #, 1)
@@ -132,6 +138,9 @@ $k = ""
 
 if ($ThreadCount -ge 0) {
     $threadCounts = ($ThreadCount)
+}
+if ($IndexMode -ge 0) {
+    $indexModes = ($IndexMode)
 }
 if ($LockMode -ge 0) {
     $lockModes = ($LockMode)
@@ -144,6 +153,7 @@ if ($UseRecover) {
 $permutations = $distributions.Count *
                 $readPercents.Count *
                 $threadCounts.Count *
+                $indexModes.Count *
                 $lockModes.Count *
                 $smallDatas.Count *
                 $smallMemories.Count *
@@ -153,6 +163,7 @@ $permutation = 1
 foreach ($d in $distributions) {
     foreach ($r in $readPercents) {
         foreach ($t in $threadCounts) {
+            foreach ($x in $indexModes) {
             foreach ($z in $lockModes) {
                 foreach ($sd in $smallDatas) {
                     foreach ($sm in $smallMemories) {
@@ -171,7 +182,7 @@ foreach ($d in $distributions) {
                                 Write-Host "Permutation $permutation/$permutations generating results $($ii + 1)/$($exeNames.Count) to $resultDir for: -n $n -d $d -r $r -t $t -z $z -i $iterations --runsec $RunSeconds $k"
 
                                 # RunSec and Recover are for one-off operations and are not recorded in the filenames.
-                                & "$exeName" -b 0 -n $n -d $d -r $r -t $t -z $z -i $iterations --runsec $RunSeconds $k | Tee-Object "$resultDir/results_n-$($n)_d-$($d)_r-$($r)_t-$($t)_z-$($z).txt"
+                                & "$exeName" -b 0 -n $n -d $d -r $r -t $t -x $x -z $z -i $iterations --runsec $RunSeconds $k | Tee-Object "$resultDir/results_n-$($n)_d-$($d)_r-$($r)_t-$($t)_x-$($x)_z-$($z).txt"
                             }
                             ++$permutation
                         }

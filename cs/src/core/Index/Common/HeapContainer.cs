@@ -12,9 +12,8 @@ namespace FASTER.core
     public interface IHeapContainer<T> : IDisposable
     {
         /// <summary>
-        /// Get object
+        /// Get a reference to the contained object
         /// </summary>
-        /// <returns></returns>
         ref T Get();
     }
 
@@ -26,10 +25,7 @@ namespace FASTER.core
     {
         private T obj;
 
-        public StandardHeapContainer(ref T obj)
-        {
-            this.obj = obj;
-        }
+        public StandardHeapContainer(ref T obj) => this.obj = obj;
 
         public ref T Get() => ref obj;
 

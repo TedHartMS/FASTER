@@ -191,7 +191,6 @@ namespace FASTER.test
         {
             if (dst == null)
                 dst = new MyOutput();
-
             dst.value = value;
         }
 
@@ -249,7 +248,6 @@ namespace FASTER.test
 
         public MyLargeValue()
         {
-
         }
 
         public MyLargeValue(int size)

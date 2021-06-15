@@ -339,8 +339,12 @@ namespace FASTER.core
         /// <inheritdoc />
         internal override void MemoryPageScan(long beginAddress, long endAddress)
         {
-            using var iter = new BlittableScanIterator<Key, Value>(this, beginAddress, endAddress, ScanBufferingMode.NoBuffering, epoch, true);
-            OnEvictionObserver?.OnNext(iter);
+            var localObservers = OnEvictionObservers;
+            foreach (var observer in localObservers)
+            {
+                using var iter = new BlittableScanIterator<Key, Value>(this, beginAddress, endAddress, ScanBufferingMode.NoBuffering, epoch, true);
+                observer.OnNext(iter);
+            }
         }
 
         /// <summary>

@@ -15,11 +15,6 @@ namespace FASTER.test
     {
         internal class Functions : AdvancedSimpleFunctions<int, int>
         {
-            public override void ConcurrentReader(ref int key, ref int input, ref int value, ref int dst, ref RecordInfo recordInfo, long address)
-            {
-                dst = value;
-            }
-
             bool Increment(ref int dst)
             {
                 ++dst;
@@ -47,7 +42,7 @@ namespace FASTER.test
         public void Setup()
         {
             log = Devices.CreateLogDevice(TestContext.CurrentContext.TestDirectory + "/GenericStringTests.log", deleteOnClose: true);
-            fkv = new FasterKV<int, int>(1L << 20, new LogSettings { LogDevice = log, ObjectLogDevice = null });
+            fkv = new FasterKV<int, int>( 1L << 20, new LogSettings { LogDevice = log, ObjectLogDevice = null } );
             session = fkv.For(new Functions()).NewSession<Functions>();
         }
 

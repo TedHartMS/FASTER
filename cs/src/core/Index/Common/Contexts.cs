@@ -18,7 +18,6 @@ namespace FASTER.core
         READ,
         RMW,
         UPSERT,
-        INSERT,
         DELETE
     }
 
@@ -92,6 +91,7 @@ namespace FASTER.core
             internal const byte kNoKey = 0x02;
             internal const byte kSkipCopyReadsToTail = 0x04;
             internal const byte kIsAsync = 0x08;
+            internal const byte kIsNewRecord = 0x10;
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             internal IHeapContainer<Key> DetachKey()
@@ -143,6 +143,12 @@ namespace FASTER.core
             {
                 get => (operationFlags & kIsAsync) != 0;
                 set => operationFlags = value ? (byte)(operationFlags | kIsAsync) : (byte)(operationFlags & ~kIsAsync);
+            }
+
+            internal bool IsNewRecord
+            {
+                get => (operationFlags & kIsNewRecord) != 0;
+                set => operationFlags = value ? (byte)(operationFlags | kIsNewRecord) : (byte)(operationFlags & ~kIsNewRecord);
             }
 
             public void Dispose()
@@ -243,7 +249,7 @@ namespace FASTER.core
         /// </summary>
         public int nextVersion;
         /// <summary>
-        /// Flushed logical address
+        /// Flushed logical address; indicates the latest immutable address on the main FASTER log at recovery time.
         /// </summary>
         public long flushedLogicalAddress;
         /// <summary>
@@ -520,17 +526,18 @@ namespace FASTER.core
         public void Recover(Guid token, ICheckpointManager checkpointManager, int deltaLogPageSizeBits)
         {
             deltaFileDevice = checkpointManager.GetDeltaLogDevice(token);
-            deltaFileDevice.Initialize(-1);
-            if (deltaFileDevice.GetFileSize(0) > 0)
+            if (deltaFileDevice is not null)
             {
-                deltaLog = new DeltaLog(deltaFileDevice, deltaLogPageSizeBits, -1);
-                deltaLog.InitializeForReads();
-                info.Recover(token, checkpointManager, deltaLog);
+                deltaFileDevice.Initialize(-1);
+                if (deltaFileDevice.GetFileSize(0) > 0)
+                {
+                    deltaLog = new DeltaLog(deltaFileDevice, deltaLogPageSizeBits, -1);
+                    deltaLog.InitializeForReads();
+                    info.Recover(token, checkpointManager, deltaLog);
+                    return;
+                }
             }
-            else
-            {
-                info.Recover(token, checkpointManager, null);
-            }
+            info.Recover(token, checkpointManager, null);
         }
 
         public void Reset()

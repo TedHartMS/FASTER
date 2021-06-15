@@ -27,6 +27,15 @@ namespace FASTER.core
                     internalStatus = fasterKV.InternalUpsert(ref pendingContext.key.Get(), ref pendingContext.value.Get(), ref pendingContext.userContext, ref pendingContext, fasterSession, currentCtx, pendingContext.serialNum);
                 } while (internalStatus == OperationStatus.RETRY_NOW);
                 output = default;
+                if (internalStatus == OperationStatus.SUCCESS || internalStatus == OperationStatus.NOTFOUND)
+                {
+                    if (pendingContext.IsNewRecord)
+                    {
+                        long physicalAddress = fasterKV.hlog.GetPhysicalAddress(pendingContext.logicalAddress);
+                        fasterKV.UpdateSIForInsert<Input, Output, Context, IFasterSession<Key, Value, Input, Output, Context>>(ref pendingContext.key.Get(), ref pendingContext.value.Get(),
+                                            ref fasterKV.hlog.GetInfo(physicalAddress), pendingContext.logicalAddress, fasterSession);
+                    }
+                }
                 return TranslateStatus(internalStatus);
             }
 
@@ -106,7 +115,16 @@ namespace FASTER.core
                 } while (internalStatus == OperationStatus.RETRY_NOW);
 
                 if (internalStatus == OperationStatus.SUCCESS || internalStatus == OperationStatus.NOTFOUND)
+                {
+                    if (pcontext.IsNewRecord)
+                    {
+                        long physicalAddress = this.hlog.GetPhysicalAddress(pcontext.logicalAddress);
+                        UpdateSIForInsert<Input, Output, Context, IFasterSession<Key, Value, Input, Output, Context>>(ref key, ref this.hlog.GetValue(physicalAddress),
+                                            ref this.hlog.GetInfo(physicalAddress), pcontext.logicalAddress, fasterSession);
+                    }
                     return new ValueTask<UpsertAsyncResult<Input, Output, Context>>(new UpsertAsyncResult<Input, Output, Context>((Status)internalStatus));
+                }
+
                 Debug.Assert(internalStatus == OperationStatus.ALLOCATE_FAILED);
             }
             finally

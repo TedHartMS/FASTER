@@ -32,7 +32,16 @@ namespace FASTER.core
                     : fasterKV.CallInternalRMW(fasterSession, currentCtx, ref pendingContext, ref pendingContext.key.Get(), ref pendingContext.input.Get(), pendingContext.userContext,
                                                      pendingContext.serialNum, asyncOp, out flushEvent, out newDiskRequest);
 
-                if (status == Status.PENDING && !newDiskRequest.IsDefault())
+                if (status == Status.OK || status == Status.NOTFOUND)
+                {
+                    if (pendingContext.IsNewRecord)
+                    {
+                        long physicalAddress = fasterKV.hlog.GetPhysicalAddress(pendingContext.logicalAddress);
+                        fasterKV.UpdateSIForInsert<Input, Output, Context, IFasterSession<Key, Value, Input, Output, Context>>(ref fasterKV.hlog.GetKey(physicalAddress), ref fasterKV.hlog.GetValue(physicalAddress),
+                                            ref fasterKV.hlog.GetInfo(physicalAddress), pendingContext.logicalAddress, fasterSession);
+                    }
+                }
+                else if (status == Status.PENDING && !newDiskRequest.IsDefault())
                 {
                     flushEvent = default;
                     this.diskRequest = newDiskRequest;
@@ -157,12 +166,33 @@ namespace FASTER.core
             } while (internalStatus == OperationStatus.RETRY_NOW || internalStatus == OperationStatus.RETRY_LATER);
 
             if (internalStatus == OperationStatus.SUCCESS || internalStatus == OperationStatus.NOTFOUND)
+            {
+                if (pcontext.IsNewRecord)
+                {
+                    long physicalAddress = this.hlog.GetPhysicalAddress(pcontext.logicalAddress);
+                    UpdateSIForInsert<Input, Output, Context, IFasterSession<Key, Value, Input, Output, Context>>(ref key, ref this.hlog.GetValue(physicalAddress),
+                                        ref this.hlog.GetInfo(physicalAddress), pcontext.logicalAddress, fasterSession);
+                    pcontext.IsNewRecord = false;   // So DoFastOperation does not do this again
+                }
                 return (Status)internalStatus;
+            }
             if (internalStatus == OperationStatus.ALLOCATE_FAILED)
                 return Status.PENDING;    // This plus diskRequest.IsDefault() means allocate failed
 
             flushEvent = default;
-            return HandleOperationStatus(currentCtx, currentCtx, ref pcontext, fasterSession, internalStatus, asyncOp, out diskRequest);
+            var status = HandleOperationStatus(currentCtx, currentCtx, ref pcontext, fasterSession, internalStatus, asyncOp, out diskRequest);
+            if (status != Status.PENDING)
+            {
+                if (pcontext.IsNewRecord)
+                {
+                    Debug.Assert(status == Status.OK || status == Status.NOTFOUND);
+                    long physicalAddress = this.hlog.GetPhysicalAddress(pcontext.logicalAddress);
+                    UpdateSIForInsert<Input, Output, Context, IFasterSession<Key, Value, Input, Output, Context>>(ref key, ref this.hlog.GetValue(physicalAddress),
+                                    ref this.hlog.GetInfo(physicalAddress), pcontext.logicalAddress, fasterSession);
+                    pcontext.IsNewRecord = false;   // So DoFastOperation does not do this again
+                }
+            }
+            return status;
         }
 
         private static async ValueTask<RmwAsyncResult<Input, Output, Context>> SlowRmwAsync<Input, Output, Context>(

@@ -85,9 +85,16 @@ namespace FASTER.core
 
         internal void InitializeHybridLogCheckpoint(Guid hybridLogToken, int version)
         {
+            // At this point we do not know the FlushedUntilAddress
+            this.SecondaryIndexBroker.OnPrimaryCheckpointInitiated(new PrimaryCheckpointInfo(version, Constants.kInvalidAddress));
             _hybridLogCheckpoint.Initialize(hybridLogToken, version, checkpointManager);
         }
 
+        internal PrimaryCheckpointInfo GetCurrentPrimaryCheckpointInfo()
+            => GetCurrentPrimaryCheckpointInfo(_hybridLogCheckpoint.info);
+
+        internal PrimaryCheckpointInfo GetCurrentPrimaryCheckpointInfo(HybridLogRecoveryInfo info)
+            => new PrimaryCheckpointInfo(info.version, UseFoldOverCheckpoint ? info.finalLogicalAddress : info.flushedLogicalAddress);
         // #endregion
     }
 }

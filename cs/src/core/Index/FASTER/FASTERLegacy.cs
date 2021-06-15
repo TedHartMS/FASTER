@@ -412,6 +412,8 @@ namespace FASTER.core
 
             public bool CompletePendingWithOutputs(out CompletedOutputIterator<Key, Value, Input, Output, Context> completedOutputs, bool wait = false, bool spinWaitForCommit = false)
                 => throw new NotImplementedException();
+
+            public SecondaryIndexSessionBroker SecondaryIndexSessionBroker => null;
         }
     }
 

@@ -25,6 +25,7 @@ namespace FASTER.benchmark
 
         internal BenchmarkType BenchmarkType;
         internal LockImpl LockImpl;
+        internal SecondaryIndexType SecondaryIndexType;
         internal string Distribution;
 
         internal Key[] init_keys = default;
@@ -63,6 +64,10 @@ namespace FASTER.benchmark
             if (!verifyOption(Enum.IsDefined(typeof(LockImpl), this.LockImpl), "Lock Implementation"))
                 return false;
 
+            this.SecondaryIndexType = (SecondaryIndexType)Options.SecondaryIndexType;
+            if (!verifyOption(Enum.IsDefined(typeof(SecondaryIndexType), this.SecondaryIndexType), "Secondary Index Type"))
+                return false;
+
             if (!verifyOption(Options.IterationCount > 0, "Iteration Count"))
                 return false;
 
@@ -80,6 +85,7 @@ namespace FASTER.benchmark
             this.TxnCount = this.Options.UseSmallData ? 10000000 : 1000000000;
             this.MaxKey = this.Options.UseSmallData ? 1 << 22 : 1 << 28;
 
+            Console.WriteLine($"Scenario: {this.BenchmarkType}, Locking: {(LockImpl)Options.LockImpl}, Indexing: {(SecondaryIndexType)Options.SecondaryIndexType}");
             return true;
         }
 
@@ -355,7 +361,7 @@ namespace FASTER.benchmark
                 catch (Exception ex)
                 {
                     var suffix = Directory.Exists(this.BackupPath) ? "" : " (directory does not exist)";
-                    Console.WriteLine($"Unable to recover prior store: {ex.Message}{suffix}");
+                    Console.WriteLine($"  Unable to recover prior store: {ex.Message}{suffix}");
                 }
             }
             return false;

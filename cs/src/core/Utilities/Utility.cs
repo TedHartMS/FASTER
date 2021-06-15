@@ -2,6 +2,7 @@
 // Licensed under the MIT license.
 
 using System;
+using System.IO;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -66,6 +67,14 @@ namespace FASTER.core
                 return false;
             }
             return true;
+        }
+
+        internal static byte[] Slice(this byte[] source, int offset, int length)
+        {
+            // ArraySegment doesn't support ToArray() on all platforms we support
+            var result = new byte[length];
+            Array.Copy(source, offset, result, 0, length);
+            return result;
         }
 
         /// <summary>
@@ -325,5 +334,11 @@ namespace FASTER.core
             // make sure any exceptions in the task get unwrapped and exposed to the caller.
             return await task;
         }
+
+        internal static ICheckpointManager CreateDefaultCheckpointManager(CheckpointSettings checkpointSettings)
+            => new DeviceLogCommitCheckpointManager
+                (new LocalStorageNamedDeviceFactory(),
+                    new DefaultCheckpointNamingScheme(
+                      new DirectoryInfo(checkpointSettings.CheckpointDir ?? ".").FullName), removeOutdated: checkpointSettings.RemoveOutdated);
     }
 }

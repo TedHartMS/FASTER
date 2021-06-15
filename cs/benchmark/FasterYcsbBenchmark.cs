@@ -83,6 +83,11 @@ namespace FASTER.benchmark
                 store = new FasterKV<Key, Value>
                     (testLoader.MaxKey / 2, new LogSettings { LogDevice = device, PreallocateLog = true },
                     new CheckpointSettings { CheckPointType = CheckpointType.Snapshot, CheckpointDir = testLoader.BackupPath });
+
+            if (testLoader.SecondaryIndexType.HasFlag(SecondaryIndexType.Key))
+                store.SecondaryIndexBroker.AddIndex(new NullKeyIndex<Key>());
+            if (testLoader.SecondaryIndexType.HasFlag(SecondaryIndexType.Value))
+                store.SecondaryIndexBroker.AddIndex(new NullValueIndex<Key, Value>());
         }
 
         internal void Dispose()

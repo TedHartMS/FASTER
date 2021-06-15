@@ -39,6 +39,8 @@ namespace FASTER.core
 
         internal readonly InternalFasterSession FasterSession;
 
+        internal readonly SecondaryIndexSessionBroker SecondaryIndexSessionBroker = new();
+
         internal const string NotAsyncSessionErr = "Session does not support async operations";
 
         internal ClientSession(
@@ -68,7 +70,7 @@ namespace FASTER.core
             }
             else
             {
-                if (!(fht.hlog is VariableLengthBlittableAllocator<Key, Value>))
+                if (fht.hlog is not VariableLengthBlittableAllocator<Key, Value>)
                     Debug.WriteLine("Warning: Session param of variableLengthStruct provided for non-varlen allocator");
             }
 
@@ -101,7 +103,7 @@ namespace FASTER.core
 
         private void UpdateVarlen(ref IVariableLengthStruct<Value, Input> variableLengthStruct)
         {
-            if (!(fht.hlog is VariableLengthBlittableAllocator<Key, Value>))
+            if (fht.hlog is not VariableLengthBlittableAllocator<Key, Value>)
                 return;
 
             if (typeof(Value) == typeof(SpanByte) && typeof(Input) == typeof(SpanByte))
@@ -148,6 +150,7 @@ namespace FASTER.core
             this.completedOutputs?.Dispose();
             CompletePending(true);
             fht.DisposeClientSession(ID);
+            SecondaryIndexSessionBroker.Dispose();
 
             // Session runs on a single thread
             if (!SupportAsync)
@@ -939,7 +942,7 @@ namespace FASTER.core
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public bool ConcurrentWriter(ref Key key, ref Value src, ref Value dst, ref RecordInfo recordInfo, long address)
+            public bool ConcurrentWriter(ref Key key, ref Value src, ref Value dst, ref RecordInfo recordInfo, long address) 
                 => !this.SupportsLocking
                     ? ConcurrentWriterNoLock(ref key, ref src, ref dst, ref recordInfo, address)
                     : ConcurrentWriterLock(ref key, ref src, ref dst, ref recordInfo, address);
@@ -948,7 +951,8 @@ namespace FASTER.core
             private bool ConcurrentWriterNoLock(ref Key key, ref Value src, ref Value dst, ref RecordInfo recordInfo, long address)
             {
                 recordInfo.Version = _clientSession.ctx.version;
-                return _clientSession.functions.ConcurrentWriter(ref key, ref src, ref dst);
+                return _clientSession.functions.ConcurrentWriter(ref key, ref src, ref dst)
+                    && _clientSession.fht.UpdateSIForIPU(ref key, ref dst, new RecordId(recordInfo, address), this.SecondaryIndexSessionBroker);
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -970,13 +974,13 @@ namespace FASTER.core
             public void ConcurrentDeleter(ref Key key, ref Value value, ref RecordInfo recordInfo, long address)
             {
                 if (!this.SupportsLocking)
-                    ConcurrentDeleterNoLock(ref key, ref value, ref recordInfo, address);
+                    ConcurrentDeleterNoLock(ref recordInfo);
                 else
                     ConcurrentDeleterLock(ref key, ref value, ref recordInfo, address);
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            private void ConcurrentDeleterNoLock(ref Key key, ref Value value, ref RecordInfo recordInfo, long address)
+            private void ConcurrentDeleterNoLock(ref RecordInfo recordInfo)
             {
                 // Non-Advanced IFunctions has no ConcurrentDeleter
                 recordInfo.Version = _clientSession.ctx.version;
@@ -989,13 +993,14 @@ namespace FASTER.core
                 this.Lock(ref recordInfo, ref key, ref value, LockType.Exclusive, ref context);
                 try
                 {
-                    ConcurrentDeleterNoLock(ref key, ref value, ref recordInfo, address);
+                    ConcurrentDeleterNoLock(ref recordInfo);
                 }
                 finally
                 {
                     this.Unlock(ref recordInfo, ref key, ref value, LockType.Exclusive, context);
                 }
             }
+
 
             public bool NeedCopyUpdate(ref Key key, ref Input input, ref Value oldValue)
                 => _clientSession.functions.NeedCopyUpdate(ref key, ref input, ref oldValue);
@@ -1035,7 +1040,8 @@ namespace FASTER.core
             private bool InPlaceUpdaterNoLock(ref Key key, ref Input input, ref Value value, ref RecordInfo recordInfo, long address)
             {
                 recordInfo.Version = _clientSession.ctx.version;
-                return _clientSession.functions.InPlaceUpdater(ref key, ref input, ref value);
+                return _clientSession.functions.InPlaceUpdater(ref key, ref input, ref value)
+                    && _clientSession.fht.UpdateSIForIPU(ref key, ref value, new RecordId(recordInfo, address), this.SecondaryIndexSessionBroker);
             }
 
             private bool InPlaceUpdaterLock(ref Key key, ref Input input, ref Value value, ref RecordInfo recordInfo, long address)
@@ -1103,6 +1109,8 @@ namespace FASTER.core
 
             public bool CompletePendingWithOutputs(out CompletedOutputIterator<Key, Value, Input, Output, Context> completedOutputs, bool wait = false, bool spinWaitForCommit = false)
                 => throw new NotImplementedException();
+
+            public SecondaryIndexSessionBroker SecondaryIndexSessionBroker => _clientSession.SecondaryIndexSessionBroker;
         }
     }
 }

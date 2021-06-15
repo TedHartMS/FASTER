@@ -2,6 +2,7 @@
 // Licensed under the MIT license.
 
 using FASTER.core;
+using System;
 
 namespace FASTER.benchmark
 {
@@ -16,6 +17,15 @@ namespace FASTER.benchmark
     {
         None,
         RecordInfo
+    };
+
+    [Flags]
+    enum SecondaryIndexType : int
+    {
+        None = 0,
+        Key = 1,
+        Value = 2,
+        Both = 3
     };
 
     enum AddressLineNum : int

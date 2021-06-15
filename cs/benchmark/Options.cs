@@ -38,6 +38,14 @@ namespace FASTER.benchmark
                         "\n    1 = RecordInfo.SpinLock()")]
         public int LockImpl { get; set; }
 
+        [Option('x', "index", Required = false, Default = 0,
+             HelpText = "Secondary index type(s); these implement a no-op index to test the overhead on FasterKV operations:" +
+                        "\n    0 = None (default)" +
+                        "\n    1 = Key-based index" +
+                        "\n    2 = Value-based index" +
+                        "\n    3 = Both index types")]
+        public int SecondaryIndexType { get; set; }
+
         [Option('i', "iterations", Required = false, Default = 1,
          HelpText = "Number of iterations of the test to run")]
         public int IterationCount { get; set; }
@@ -95,7 +103,7 @@ namespace FASTER.benchmark
         public string GetOptionsString()
         {
             static string boolStr(bool value) => value ? "y" : "n";
-            return $"d: {DistributionName.ToLower()}; n: {NumaStyle}; r: {ReadPercent}; t: {ThreadCount}; z: {LockImpl}; i: {IterationCount};"
+            return $"d: {DistributionName.ToLower()}; n: {NumaStyle}; r: {ReadPercent}; t: {ThreadCount}; x: {SecondaryIndexType}; z: {LockImpl}; i: {IterationCount};"
                         + $" sd: {boolStr(UseSmallData)}; sm: {boolStr(UseSmallMemoryLog)}; sy: {boolStr(this.UseSyntheticData)}; noaff: {boolStr(this.NoThreadAffinity)};"
                         + $" chkptms: {this.PeriodicCheckpointMilliseconds}; chkpttype: {(this.PeriodicCheckpointMilliseconds > 0 ? this.PeriodicCheckpointType.ToString() : "None")}; chkptincr: {boolStr(this.PeriodicCheckpointTryIncremental)}";
         }

@@ -40,7 +40,7 @@ param (
 )
 
 class Result : System.IComparable, System.IEquatable[Object] {
-    # To make things work in one class, name the properties "Left", "Right", and "Diff"--they aren't displayed until the Diff is calculated.
+    # To make things work in one class, name the properties "Baseline", "Current", and "Diff"--they aren't displayed until the Diff is calculated.
     [double]$BaselineMean
     [double]$BaselineStdDev
     [double]$CurrentMean
@@ -56,6 +56,7 @@ class Result : System.IComparable, System.IEquatable[Object] {
     [string]$Distribution
     [int]$ReadPercent
     [uint]$ThreadCount
+    [uint]$IndexMode
     [uint]$LockMode
     [uint]$Iterations
     [bool]$SmallData
@@ -80,6 +81,7 @@ class Result : System.IComparable, System.IEquatable[Object] {
                 "d" { $this.Distribution = $value }
                 "r" { $this.ReadPercent = $value }
                 "t" { $this.ThreadCount = $value }
+                "x" { $this.IndexMode = $value }
                 "z" { $this.LockMode = $value }
                 "i" { $this.Iterations = $value }
                 "sd" { $this.SmallData = $value -eq "y" }
@@ -98,6 +100,7 @@ class Result : System.IComparable, System.IEquatable[Object] {
         $this.Distribution = $other.Distribution
         $this.ReadPercent = $other.ReadPercent
         $this.ThreadCount = $other.ThreadCount
+        $this.IndexMode = $other.IndexMode
         $this.LockMode = $other.LockMode
         $this.Iterations = $other.Iterations
         $this.SmallData = $other.SmallData
@@ -165,6 +168,7 @@ class Result : System.IComparable, System.IEquatable[Object] {
          -and $this.Distribution -eq $other.Distribution
          -and $this.ReadPercent -eq $other.ReadPercent
          -and $this.ThreadCount -eq $other.ThreadCount
+         -and $this.IndexMode -eq $other.IndexMode
          -and $this.LockMode -eq $other.LockMode
          -and $this.Iterations -eq $other.Iterations
          -and $this.SmallData -eq $other.SmallData
@@ -177,7 +181,7 @@ class Result : System.IComparable, System.IEquatable[Object] {
     }
 
     [int] GetHashCode() {
-        return ($this.Numa, $this.Distribution, $this.ReadPercent, $this.ThreadCount, $this.LockMode,
+        return ($this.Numa, $this.Distribution, $this.ReadPercent, $this.ThreadCount, $this.IndexMode, $this.LockMode,
                 $this.Iterations, $this.SmallData, $this.SmallMemory, $this.SyntheticData,
                 $this.NoAff, $this.ChkptMs, $this.ChkptType, $this.ChkptIncr).GetHashCode();
     }

@@ -5,7 +5,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
@@ -35,7 +34,7 @@ namespace FASTER.core
 
         internal readonly bool UseReadCache;
         private readonly CopyReadsToTail CopyReadsToTail;
-        private readonly bool FoldOverSnapshot;
+        internal readonly bool UseFoldOverCheckpoint;
         internal readonly int sectorSize;
         private readonly bool WriteDefaultOnDelete;
         internal bool RelaxedCPR;
@@ -79,6 +78,11 @@ namespace FASTER.core
         public LogAccessor<Key, Value> ReadCache { get; }
 
         internal ConcurrentDictionary<string, CommitPoint> _recoveredSessions;
+
+        /// <summary>
+        /// Manages secondary indexes for this FASTER instance.
+        /// </summary>
+        public SecondaryIndexBroker<Key, Value> SecondaryIndexBroker { get; }
 
         /// <summary>
         /// Create FASTER instance
@@ -131,17 +135,13 @@ namespace FASTER.core
             }
             else
             {
-                checkpointManager = checkpointSettings.CheckpointManager ??
-                    new DeviceLogCommitCheckpointManager
-                    (new LocalStorageNamedDeviceFactory(),
-                        new DefaultCheckpointNamingScheme(
-                          new DirectoryInfo(checkpointSettings.CheckpointDir ?? ".").FullName), removeOutdated: checkpointSettings.RemoveOutdated);
+                checkpointManager = checkpointSettings.CheckpointManager ?? Utility.CreateDefaultCheckpointManager(checkpointSettings);
             }
 
             if (checkpointSettings.CheckpointManager == null)
                 disposeCheckpointManager = true;
 
-            FoldOverSnapshot = checkpointSettings.CheckPointType == core.CheckpointType.FoldOver;
+            UseFoldOverCheckpoint = checkpointSettings.CheckPointType == core.CheckpointType.FoldOver;
             CopyReadsToTail = logSettings.CopyReadsToTail;
 
             if (logSettings.ReadCacheSettings != null)
@@ -217,6 +217,8 @@ namespace FASTER.core
 
             hlog.Initialize();
 
+            this.SecondaryIndexBroker = new SecondaryIndexBroker<Key, Value>(this);
+
             sectorSize = (int)logSettings.LogDevice.SectorSize;
             Initialize(size, sectorSize);
 
@@ -235,7 +237,7 @@ namespace FASTER.core
         /// operation such as growing the index). Use CompleteCheckpointAsync to wait completion.
         /// </returns>
         public bool TakeFullCheckpoint(out Guid token) 
-            => TakeFullCheckpoint(out token, this.FoldOverSnapshot ? CheckpointType.FoldOver : CheckpointType.Snapshot);
+            => TakeFullCheckpoint(out token, this.UseFoldOverCheckpoint ? CheckpointType.FoldOver : CheckpointType.Snapshot);
 
         /// <summary>
         /// Initiate full checkpoint
@@ -328,17 +330,7 @@ namespace FASTER.core
         /// <param name="token">Checkpoint token</param>
         /// <returns>Whether we could initiate the checkpoint. Use CompleteCheckpointAsync to wait completion.</returns>
         public bool TakeHybridLogCheckpoint(out Guid token)
-        {
-            ISynchronizationTask backend;
-            if (FoldOverSnapshot)
-                backend = new FoldOverCheckpointTask();
-            else
-                backend = new SnapshotCheckpointTask();
-
-            var result = StartStateMachine(new HybridLogCheckpointStateMachine(backend, -1));
-            token = _hybridLogCheckpointToken;
-            return result;
-        }
+            => TakeHybridLogCheckpoint(out token, UseFoldOverCheckpoint ? CheckpointType.FoldOver : CheckpointType.Snapshot, tryIncremental: false);
 
         /// <summary>
         /// Initiate log-only checkpoint
@@ -577,7 +569,6 @@ namespace FASTER.core
             while (internalStatus == OperationStatus.RETRY_NOW);
 
             Status status;
-
             if (internalStatus == OperationStatus.SUCCESS || internalStatus == OperationStatus.NOTFOUND)
             {
                 status = (Status)internalStatus;
@@ -587,9 +578,63 @@ namespace FASTER.core
                 status = HandleOperationStatus(sessionCtx, sessionCtx, ref pcontext, fasterSession, internalStatus, false, out _);
             }
 
+            if (pcontext.IsNewRecord)
+            {
+                Debug.Assert(status == Status.OK);
+                ref RecordInfo recordInfo = ref this.hlog.GetInfo(this.hlog.GetPhysicalAddress(pcontext.logicalAddress));
+                UpdateSIForInsert<Input, Output, Context, FasterSession>(ref key, ref value, ref recordInfo, pcontext.logicalAddress, fasterSession);
+            }
+
             Debug.Assert(serialNo >= sessionCtx.serialNum, "Operation serial numbers must be non-decreasing");
             sessionCtx.serialNum = serialNo;
             return status;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal bool UpdateSIForIPU(ref Key key, ref Value value, RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker)
+        {
+            // KeyIndexes do not need notification of in-place updates because the key does not change.
+            if (this.SecondaryIndexBroker.MutableValueIndexCount > 0)
+                this.SecondaryIndexBroker.Upsert(ref key, ref value, recordId, indexSessionBroker);
+            return true;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void UpdateSIForInsert<Input, Output, Context, FasterSession>(ref Key key, ref Value value, ref RecordInfo recordInfo, long address, FasterSession fasterSession)
+            where FasterSession : IFasterSession<Key, Value, Input, Output, Context>
+        {
+            if (!fasterSession.SupportsLocking)
+                UpdateSIForInsertNoLock(ref key, ref value, ref recordInfo, address, fasterSession.SecondaryIndexSessionBroker);
+            else
+                UpdateSIForInsertLock<Input, Output, Context, FasterSession>(ref key, ref value, ref recordInfo, address, fasterSession);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void UpdateSIForInsertNoLock(ref Key key, ref Value value, ref RecordInfo recordInfo, long address, SecondaryIndexSessionBroker indexSessionBroker)
+        {
+            if (!recordInfo.Invalid && !recordInfo.Tombstone)
+            {
+                var recordId = new RecordId(recordInfo, address);
+                if (this.SecondaryIndexBroker.MutableKeyIndexCount > 0)
+                    this.SecondaryIndexBroker.Insert(ref key, recordId, indexSessionBroker);
+                if (this.SecondaryIndexBroker.MutableValueIndexCount > 0)
+                    this.SecondaryIndexBroker.Insert(ref key, ref value, recordId, indexSessionBroker);
+            }
+        }
+
+        private void UpdateSIForInsertLock<Input, Output, Context, FasterSession>(ref Key key, ref Value value, ref RecordInfo recordInfo, long address, FasterSession fasterSession)
+            where FasterSession : IFasterSession<Key, Value, Input, Output, Context>
+        {
+            long context = 0;
+            fasterSession.Lock(ref recordInfo, ref key, ref value, LockType.Exclusive, ref context);
+            try
+            {
+                UpdateSIForInsertNoLock(ref key, ref value, ref recordInfo, address, fasterSession.SecondaryIndexSessionBroker);
+            }
+            finally
+            {
+                fasterSession.Unlock(ref recordInfo, ref key, ref value, LockType.Exclusive, context);
+            }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -612,6 +657,15 @@ namespace FASTER.core
             else
             {
                 status = HandleOperationStatus(sessionCtx, sessionCtx, ref pcontext, fasterSession, internalStatus, false, out _);
+            }
+
+            if (pcontext.IsNewRecord)
+            {
+                Debug.Assert(status == Status.OK || status == Status.NOTFOUND);
+                long physicalAddress = this.hlog.GetPhysicalAddress(pcontext.logicalAddress);
+                ref RecordInfo recordInfo = ref this.hlog.GetInfo(physicalAddress);
+                ref Value value = ref this.hlog.GetValue(physicalAddress);
+                UpdateSIForInsert<Input, Output, Context, FasterSession>(ref key, ref value, ref recordInfo, pcontext.logicalAddress, fasterSession);
             }
 
             Debug.Assert(serialNo >= sessionCtx.serialNum, "Operation serial numbers must be non-decreasing");
@@ -643,6 +697,15 @@ namespace FASTER.core
             else
             {
                 status = HandleOperationStatus(sessionCtx, sessionCtx, ref pcontext, fasterSession, internalStatus, false, out _);
+            }
+
+            if (pcontext.IsNewRecord)
+            {
+                Debug.Assert(status == Status.OK);
+
+                // No need to lock here; we have just written a new record with a tombstone, so it will not be changed
+                // TODO - but this can race with an INSERT of the same key...
+                this.UpdateSIForDelete(ref key, new RecordId(pcontext.recordInfo, pcontext.logicalAddress), isNewRecord: true, fasterSession.SecondaryIndexSessionBroker);
             }
 
             Debug.Assert(serialNo >= sessionCtx.serialNum, "Operation serial numbers must be non-decreasing");

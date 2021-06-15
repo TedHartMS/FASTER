@@ -7,12 +7,9 @@ using System.IO;
 using NUnit.Framework;
 using System.Threading.Tasks;
 using System.Threading;
-using System.Collections.Generic;
-using System.Diagnostics;
 
 namespace FASTER.test.readaddress
 {
-#if false // TODO temporarily deactivated due to removal of addresses from single-writer callbacks (also add UpsertAsync where we do RMWAsync/Upsert)
     [TestFixture]
     public class ReadAddressTests
     {
@@ -63,12 +60,41 @@ namespace FASTER.test.readaddress
             }
         }
 
+        private class InsertValueIndex : ISecondaryValueIndex<Key, Value>
+        {
+            public long lastWriteAddress;
+
+            public string Name => nameof(InsertValueIndex);
+
+            public bool IsMutable => true;
+
+            public void SetSessionSlot(long slot) { }
+
+            public void Delete(ref Key key, RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker) { }
+
+            public void Insert(ref Key key, ref Value value, RecordId recordId, SecondaryIndexSessionBroker indexSessionBroker) => lastWriteAddress = recordId.Address;
+
+            public void Upsert(ref Key key, ref Value value, RecordId recordId, bool isMutableRecord, SecondaryIndexSessionBroker indexSessionBroker) { }
+
+            public void OnPrimaryTruncate(long newBeginAddress) { }
+
+            public void ScanReadOnlyPages(IFasterScanIterator<Key, Value> iter, SecondaryIndexSessionBroker indexSessionBroker) { }
+
+            public void OnPrimaryCheckpointInitiated(PrimaryCheckpointInfo recoveredPCI) { }
+
+            public void OnPrimaryCheckpointCompleted(PrimaryCheckpointInfo primaryCheckpointInfo) { }
+
+            public PrimaryCheckpointInfo Recover(PrimaryCheckpointInfo recoveredPCI, bool undoNextVersion) => default;
+
+            public Task<PrimaryCheckpointInfo> RecoverAsync(PrimaryCheckpointInfo recoveredPCI, bool undoNextVersion, CancellationToken cancellationToken = default) => default;
+
+            public void RecoveryReplay(IFasterScanIterator<Key, Value> iter, SecondaryIndexSessionBroker indexSessionBroker) { }
+        }
+
         private static long SetReadOutput(long key, long value) => (key << 32) | value;
 
         internal class Functions : AdvancedSimpleFunctions<Key, Value, Context>
         {
-            internal long lastWriteAddress = Constants.kInvalidAddress;
-
             public override void ConcurrentReader(ref Key key, ref Value input, ref Value value, ref Value dst, ref RecordInfo recordInfo, long address) 
                 => dst.value = SetReadOutput(key.key, value.value);
 
@@ -79,25 +105,6 @@ namespace FASTER.test.readaddress
             public override bool ConcurrentWriter(ref Key key, ref Value src, ref Value dst, ref RecordInfo recordInfo, long address) => false;
 
             public override bool InPlaceUpdater(ref Key key, ref Value input, ref Value value, ref RecordInfo recordInfo, long address) => false;
-
-            // Record addresses
-            public override void SingleWriter(ref Key key, ref Value src, ref Value dst, long address)
-            {
-                this.lastWriteAddress = address;
-                base.SingleWriter(ref key, ref src, ref dst, address);
-            }
-
-            public override void InitialUpdater(ref Key key, ref Value input, ref Value value)
-            {
-                this.lastWriteAddress = address;
-                base.InitialUpdater(ref key, ref input, ref value);
-            }
-
-            public override void CopyUpdater(ref Key key, ref Value input, ref Value oldValue, ref Value newValue)
-            {
-                this.lastWriteAddress = newAddress;
-                base.CopyUpdater(ref key, ref input, ref oldValue, ref newValue);
-            }
 
             // Track the recordInfo for its PreviousAddress.
             public override void ReadCompletionCallback(ref Key key, ref Value input, ref Value output, Context ctx, Status status, RecordInfo recordInfo)
@@ -128,6 +135,7 @@ namespace FASTER.test.readaddress
             internal IDevice logDevice;
             internal string testDir;
             private readonly bool flush;
+            readonly InsertValueIndex insertValueIndex = new InsertValueIndex();
 
             internal long[] InsertAddresses = new long[numKeys];
 
@@ -155,6 +163,8 @@ namespace FASTER.test.readaddress
                     serializerSettings: null,
                     comparer: new Key.Comparer()
                     );
+
+                this.fkv.SecondaryIndexBroker.AddIndex(insertValueIndex);
             }
 
             internal async ValueTask Flush()
@@ -197,7 +207,8 @@ namespace FASTER.test.readaddress
                     if (status == Status.PENDING)
                         await session.CompletePendingAsync();
 
-                    InsertAddresses[ii] = functions.lastWriteAddress;
+                    Assert.IsTrue(insertValueIndex.lastWriteAddress > 0);
+                    InsertAddresses[ii] = insertValueIndex.lastWriteAddress;
                     //Assert.IsTrue(session.ctx.HasNoPendingRequests);
 
                     // Illustrate that deleted records can be shown as well (unless overwritten by in-place operations, which are not done here)
@@ -418,14 +429,13 @@ namespace FASTER.test.readaddress
             }
         }
 
-        // Test is similar to others but tests the Overload where RadFlag.none is set -- probably don't need all combinations of test but doesn't hurt 
+        // Test is similar to others but tests the Overload where ReadFlag.none is set -- probably don't need all combinations of test but doesn't hurt 
         [TestCase(false, CopyReadsToTail.None, false, false)]
         [TestCase(false, CopyReadsToTail.FromStorage, true, true)]
         [TestCase(true, CopyReadsToTail.None, false, true)]
         [Category("FasterKV")]
         public async Task ReadAtAddressAsyncReadFlagsNoneTests(bool useReadCache, CopyReadsToTail copyReadsToTail, bool useRMW, bool flush)
         {
-            CancellationToken cancellationToken;
             using var testStore = new TestStore(useReadCache, copyReadsToTail, flush);
             await testStore.Populate(useRMW, useAsync: true);
             using var session = testStore.fkv.For(new Functions()).NewSession<Functions>();
@@ -452,7 +462,7 @@ namespace FASTER.test.readaddress
                         var saveOutput = output;
                         var saveRecordInfo = recordInfo;
 
-                        readAsyncResult = await session.ReadAtAddressAsync(readAtAddress, ref input, ReadFlags.None, default, serialNo: maxLap + 1, cancellationToken);
+                        readAsyncResult = await session.ReadAtAddressAsync(readAtAddress, ref input, ReadFlags.None, default, serialNo: maxLap + 1);
                         (status, output) = readAsyncResult.Complete(out recordInfo);
 
                         Assert.AreEqual(saveOutput, output);
@@ -469,7 +479,6 @@ namespace FASTER.test.readaddress
         [Category("FasterKV")]
         public async Task ReadAtAddressAsyncReadFlagsSkipCacheTests(bool useReadCache, CopyReadsToTail copyReadsToTail, bool useRMW, bool flush)
         {
-            CancellationToken cancellationToken;
             using var testStore = new TestStore(useReadCache, copyReadsToTail, flush);
             await testStore.Populate(useRMW, useAsync: true);
             using var session = testStore.fkv.For(new Functions()).NewSession<Functions>();
@@ -496,7 +505,7 @@ namespace FASTER.test.readaddress
                         var saveOutput = output;
                         var saveRecordInfo = recordInfo;
 
-                        readAsyncResult = await session.ReadAtAddressAsync(readAtAddress, ref input, ReadFlags.SkipReadCache, default, maxLap + 1, cancellationToken);
+                        readAsyncResult = await session.ReadAtAddressAsync(readAtAddress, ref input, ReadFlags.SkipReadCache, default, maxLap + 1);
                         (status, output) = readAsyncResult.Complete(out recordInfo);
 
                         Assert.AreEqual(saveOutput, output);
@@ -575,5 +584,4 @@ namespace FASTER.test.readaddress
             await testStore.Flush();
         }
     }
-#endif
 }

@@ -188,7 +188,7 @@ namespace FASTER.core
                 if (!pendingContext.recordInfo.Tombstone)
                 {
                     fasterSession.SingleReader(ref key, ref input, ref hlog.GetValue(physicalAddress), ref output, logicalAddress);
-                    if (CopyReadsToTail == CopyReadsToTail.FromReadOnly)
+                    if (CopyReadsToTail == CopyReadsToTail.FromReadOnly && !pendingContext.SkipReadCache)
                     {
                         var container = hlog.GetValueContainer(ref hlog.GetValue(physicalAddress));
                         InternalUpsert(ref key, ref container.Get(), ref userContext, ref pendingContext, fasterSession, sessionCtx, lsn);
@@ -367,7 +367,7 @@ namespace FASTER.core
                 goto CreateNewRecord;
             }
 
-#region Entry latch operation
+            #region Entry latch operation
             if (sessionCtx.phase != Phase.REST)
             {
                 latchDestination = AcquireLatchUpsert(sessionCtx, bucket, ref status, ref latchOperation, ref entry);
@@ -545,6 +545,7 @@ namespace FASTER.core
             if (foundEntry.word == entry.word)
             {
                 pendingContext.logicalAddress = newLogicalAddress;
+                pendingContext.IsNewRecord = this.SecondaryIndexBroker.HasMutableIndexes;
                 return OperationStatus.SUCCESS;
             }
 
@@ -683,8 +684,8 @@ namespace FASTER.core
                 {
                     ref RecordInfo recordInfo = ref hlog.GetInfo(physicalAddress);
                     if (!recordInfo.Tombstone)
-                    { 
-                        if (FoldOverSnapshot)
+                    {
+                        if (UseFoldOverCheckpoint)
                         {
                             Debug.Assert(recordInfo.Version == sessionCtx.version);
                         }
@@ -746,9 +747,9 @@ namespace FASTER.core
                 }
             }
 
-#endregion
+        #endregion
 
-#region Create new record
+        #region Create new record
         CreateNewRecord:
             if (latchDestination != LatchDestination.CreatePendingContext)
             {
@@ -933,6 +934,7 @@ namespace FASTER.core
             if (foundEntry.word == entry.word)
             {
                 pendingContext.logicalAddress = newLogicalAddress;
+                pendingContext.IsNewRecord = this.SecondaryIndexBroker.HasMutableIndexes;
             }
             else
             {
@@ -1171,6 +1173,7 @@ namespace FASTER.core
                 if (foundEntry.word == entry.word)
                 {
                     pendingContext.logicalAddress = newLogicalAddress;
+                    pendingContext.IsNewRecord = this.SecondaryIndexBroker.HasMutableIndexes;
                     status = OperationStatus.SUCCESS;
                     goto LatchRelease;
                 }
@@ -1214,6 +1217,17 @@ namespace FASTER.core
 #endregion
 
             return status;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal bool UpdateSIForDelete(ref Key key, RecordId recordId, bool isNewRecord, SecondaryIndexSessionBroker indexSessionBroker)
+        {
+            // TODO: if isNewRecord, we've added a new record to mark a delete, but the index operation won't have the correct recordId here. Should we read it?
+            if (!isNewRecord)
+                recordId = default;
+            if (this.SecondaryIndexBroker.MutableKeyIndexCount > 0 || this.SecondaryIndexBroker.MutableValueIndexCount > 0)
+                this.SecondaryIndexBroker.Delete(ref key, recordId, indexSessionBroker);
+            return true;
         }
 
 #endregion
@@ -1368,8 +1382,7 @@ namespace FASTER.core
             var logicalAddress = Constants.kInvalidAddress;
             var physicalAddress = default(long);
 
-            // If NoKey, we do not have the key in the initial call and must use the key from the satisfied request.
-            ref Key key = ref pendingContext.NoKey ? ref hlog.GetContextRecordKey(ref request) : ref pendingContext.key.Get();
+            ref Key key = ref pendingContext.key.Get();
 
             var hash = comparer.GetHashCode64(ref key);
 
@@ -1592,6 +1605,12 @@ namespace FASTER.core
 
                 if (foundEntry.word == entry.word)
                 {
+                    if (this.SecondaryIndexBroker.HasMutableIndexes)
+                    {
+                        ref RecordInfo recordInfo = ref this.hlog.GetInfo(newPhysicalAddress);
+                        ref Value recordValue = ref this.hlog.GetValue(newPhysicalAddress);
+                        UpdateSIForInsert<Input, Output, Context, FasterSession>(ref key, ref recordValue, ref recordInfo, newLogicalAddress, fasterSession);
+                    }
                     return status;
                 }
                 else
@@ -1883,9 +1902,9 @@ namespace FASTER.core
             foundPhysicalAddress = Constants.kInvalidAddress;
             return false;
         }
-        #endregion
+#endregion
 
-        #region Split Index
+#region Split Index
         private void SplitBuckets(long hash)
         {
             long masked_bucket_index = hash & state[1 - resizeInfo.version].size_mask;
