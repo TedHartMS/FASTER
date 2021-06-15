@@ -416,7 +416,7 @@ namespace FASTER.core
             if (metadata == null)
                 throw new FasterException("Invalid log commit metadata for ID " + token.ToString());
 
-            using (StreamReader s = new StreamReader(new MemoryStream(metadata)))
+            using (StreamReader s = new(new MemoryStream(metadata)))
                 Initialize(s);
         }
 
@@ -425,9 +425,9 @@ namespace FASTER.core
         /// </summary>
         public byte[] ToByteArray()
         {
-            using (MemoryStream ms = new MemoryStream())
+            using (MemoryStream ms = new())
             {
-                using (StreamWriter writer = new StreamWriter(ms))
+                using (StreamWriter writer = new(ms))
                 {
                     writer.WriteLine(CheckpointVersion); // checkpoint version
                     writer.WriteLine(Checksum(checkpointTokens.Count)); // checksum
@@ -524,7 +524,8 @@ namespace FASTER.core
         public void Recover(Guid token, ICheckpointManager checkpointManager, int deltaLogPageSizeBits)
         {
             deltaFileDevice = checkpointManager.GetDeltaLogDevice(token);
-            if (!(deltaFileDevice is null)) {
+            if (!(deltaFileDevice is null))
+            {
                 deltaFileDevice.Initialize(-1);
                 if (deltaFileDevice.GetFileSize(0) > 0)
                 {
@@ -614,15 +615,15 @@ namespace FASTER.core
             var metadata = checkpointManager.GetIndexCheckpointMetadata(guid);
             if (metadata == null)
                 throw new FasterException("Invalid index commit metadata for ID " + guid.ToString());
-            using (StreamReader s = new StreamReader(new MemoryStream(metadata)))
+            using (StreamReader s = new(new MemoryStream(metadata)))
                 Initialize(s);
         }
 
         public readonly byte[] ToByteArray()
         {
-            using (MemoryStream ms = new MemoryStream())
+            using (MemoryStream ms = new())
             {
-                using (var writer = new StreamWriter(ms))
+                using (StreamWriter writer = new(ms))
                 {
                     writer.WriteLine(CheckpointVersion); // checkpoint version
                     writer.WriteLine(Checksum()); // checksum
