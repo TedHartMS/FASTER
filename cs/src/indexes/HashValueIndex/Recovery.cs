@@ -11,6 +11,7 @@ namespace FASTER.indexes.HashValueIndex
 {
     public partial class HashValueIndex<TKVKey, TKVValue, TPKey> : ISecondaryValueIndex<TKVKey, TKVValue>
     {
+        // These are for test
         internal PrimaryCheckpointInfo primaryRecoveredPci;
         internal long recoveredTailAddress;
         internal RecordId recoveredHighWaterRecordId;

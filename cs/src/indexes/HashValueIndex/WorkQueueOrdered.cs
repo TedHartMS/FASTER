@@ -23,7 +23,7 @@ namespace FASTER.indexes.HashValueIndex
         where TKey: IEquatable<TKey>
         where TWorkItem: IWorkQueueOrderedItem
     {
-        internal readonly ConcurrentDictionary<TKey, TWorkItem> workItems = new ConcurrentDictionary<TKey, TWorkItem>();
+        internal readonly ConcurrentDictionary<TKey, TWorkItem> workItems = new();
         internal TKey nextKey;
 
         public WorkQueueOrdered(TKey initialKey) => this.nextKey = initialKey;

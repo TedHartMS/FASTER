@@ -26,7 +26,7 @@ namespace FASTER.core
         private ISecondaryValueIndex<TKVKey, TKVValue>[] mutableValueIndexes = Array.Empty<ISecondaryValueIndex<TKVKey, TKVValue>>();
         internal int MutableValueIndexCount => mutableValueIndexes.Length;
 
-        readonly object membershipLock = new object();
+        readonly object membershipLock = new();
         
         readonly FasterKV<TKVKey, TKVValue> primaryFkv;
         IDisposable logSubscribeDisposable; // Used if we implement index removal, if we go to zero indexes; Dispose() and null this then.
@@ -44,7 +44,7 @@ namespace FASTER.core
             void AppendToArray<TIndex>(ref TIndex[] vec, TIndex idx)
             {
                 var resizedVec = new TIndex[vec is null ? 1 : vec.Length + 1];
-                if (vec is { })
+                if (vec is not null)
                     Array.Copy(vec, resizedVec, vec.Length);
                 resizedVec[resizedVec.Length - 1] = idx;
                 vec = resizedVec;
@@ -177,7 +177,7 @@ namespace FASTER.core
 
             // TODO: Parallelize ScanReadOnlyPages
             var ki = this.allKeyIndexes;
-            if (ki is { })
+            if (ki is not null)
             {
                 foreach (var keyIndex in ki)
                 {
@@ -187,7 +187,7 @@ namespace FASTER.core
                 }
             }
             var vi = this.allValueIndexes;
-            if (vi is { })
+            if (vi is not null)
             {
                 foreach (var valueIndex in vi)
                 {
@@ -201,13 +201,13 @@ namespace FASTER.core
         internal void OnPrimaryCheckpointInitiated(PrimaryCheckpointInfo currentPci)
         {
             var ki = this.allKeyIndexes;
-            if (ki is { })
+            if (ki is not null)
             {
                 foreach (var keyIndex in ki)
                     keyIndex.OnPrimaryCheckpointInitiated(currentPci);
             }
             var vi = this.allValueIndexes;
-            if (vi is { })
+            if (vi is not null)
             {
                 foreach (var valueIndex in vi)
                     valueIndex.OnPrimaryCheckpointInitiated(currentPci);
@@ -217,13 +217,13 @@ namespace FASTER.core
         internal void OnPrimaryCheckpointCompleted(PrimaryCheckpointInfo completedPci)
         {
             var ki = this.allKeyIndexes;
-            if (ki is { })
+            if (ki is not null)
             {
                 foreach (var keyIndex in ki)
                     keyIndex.OnPrimaryCheckpointCompleted(completedPci);
             }
             var vi = this.allValueIndexes;
-            if (vi is { })
+            if (vi is not null)
             {
                 foreach (var valueIndex in vi)
                     valueIndex.OnPrimaryCheckpointCompleted(completedPci);
@@ -239,13 +239,13 @@ namespace FASTER.core
             var tasks = new List<Task>();
 
             var ki = this.allKeyIndexes;
-            if (ki is { })
+            if (ki is not null)
             {
                 foreach (var keyIndex in ki)
                     tasks.Add(Task.Run(() => RecoverIndex(keyIndex, default, primaryRecoveredPci, undoNextVersion, indexSessionBroker)));
             }
             var vi = this.allValueIndexes;
-            if (vi is { })
+            if (vi is not null)
             {
                 foreach (var valueIndex in vi)
                     tasks.Add(Task.Run(() => RecoverIndex(default, valueIndex, primaryRecoveredPci, undoNextVersion, indexSessionBroker)));
@@ -263,13 +263,13 @@ namespace FASTER.core
             var tasks = new List<Task>();
 
             var ki = this.allKeyIndexes;
-            if (ki is { })
+            if (ki is not null)
             {
                 foreach (var keyIndex in ki)
                     tasks.Add(RecoverIndexAsync(keyIndex, default, primaryRecoveredPci, undoNextVersion, indexSessionBroker));
             }
             var vi = this.allValueIndexes;
-            if (vi is { })
+            if (vi is not null)
             {
                 foreach (var valueIndex in vi)
                     tasks.Add(RecoverIndexAsync(default, valueIndex, primaryRecoveredPci, undoNextVersion, indexSessionBroker));
@@ -299,7 +299,7 @@ namespace FASTER.core
             {
                 var startAddress = Math.Max(pci.FlushedUntilAddress, primaryFkv.Log.BeginAddress);
                 using var iter = primaryFkv.Log.Scan(startAddress, endAddress);
-                if (keyIndex is { })
+                if (keyIndex is not null)
                     keyIndex.RecoveryReplay(iter, indexSessionBroker);
                 else
                     valueIndex.RecoveryReplay(iter, indexSessionBroker);

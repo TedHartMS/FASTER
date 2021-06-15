@@ -248,9 +248,9 @@ namespace FASTER.test.readaddress
 
             public void Dispose()
             {
-                if (!(this.fkv is null))
+                if (this.fkv is not null)
                     this.fkv.Dispose();
-                if (!(this.logDevice is null))
+                if (this.logDevice is not null)
                     this.logDevice.Dispose();
                 if (!string.IsNullOrEmpty(this.testDir))
                     new DirectoryInfo(this.testDir).Delete(true);

@@ -34,7 +34,7 @@ namespace FASTER.indexes.HashValueIndex
 
         internal Predicate<TKVKey, TKVValue, TPKey>[] predicates;
         private int PredicateCount => this.predicates is { } ? this.predicates.Length : 0;
-        private readonly ConcurrentDictionary<string, Guid> predicateNames = new ConcurrentDictionary<string, Guid>();
+        private readonly ConcurrentDictionary<string, Guid> predicateNames = new();
 
         private readonly IFasterEqualityComparer<TPKey> userKeyComparer;
         private KeyAccessor<TPKey> keyAccessor;
@@ -191,10 +191,10 @@ namespace FASTER.indexes.HashValueIndex
         private int GetPredicateOrdinal(IPredicate iPred) => this.GetImplementingPredicate(iPred).Ordinal;
 
         private SecondaryFasterKV<TPKey>.Input MakeQueryInput(IPredicate iPred, ref TPKey key) 
-            => new SecondaryFasterKV<TPKey>.Input(this.bufferPool, this.keyAccessor, this.GetPredicateOrdinal(iPred), ref key);
+            => new(this.bufferPool, this.keyAccessor, this.GetPredicateOrdinal(iPred), ref key);
 
         private SecondaryFasterKV<TPKey>.Input MakeQueryInput(IPredicate iPred, ref TPKey key, QueryContinuationToken continuationToken, int queryOrdinal) 
-            => new SecondaryFasterKV<TPKey>.Input(this.bufferPool, this.keyAccessor, continuationToken, this.GetPredicateOrdinal(iPred), ref key, queryOrdinal);
+            => new(this.bufferPool, this.keyAccessor, continuationToken, this.GetPredicateOrdinal(iPred), ref key, queryOrdinal);
 
         private bool MakeQueryIterator(IPredicate predicate, ref TPKey key, string continuationString, out QueryContinuationToken continuationToken, out SecondaryFasterKV<TPKey>.Input input)
         {
@@ -238,7 +238,7 @@ namespace FASTER.indexes.HashValueIndex
         }
 
         internal QuerySegment<TKVKey, TKVValue> CreateSegment(IEnumerable<QueryRecord<TKVKey, TKVValue>> recordsEnum, QueryContinuationToken continuationToken)
-            => new QuerySegment<TKVKey, TKVValue>(recordsEnum.ToList(), continuationToken.ToString());
+            => new(recordsEnum.ToList(), continuationToken.ToString());
 
         internal async ValueTask<QuerySegment<TKVKey, TKVValue>> CreateSegmentAsync(IAsyncEnumerable<QueryRecord<TKVKey, TKVValue>> recordsEnum, QueryContinuationToken continuationToken, QuerySettings querySettings)
             => new QuerySegment<TKVKey, TKVValue>(await recordsEnum.ToListAsync(querySettings.CancellationToken), continuationToken.ToString());

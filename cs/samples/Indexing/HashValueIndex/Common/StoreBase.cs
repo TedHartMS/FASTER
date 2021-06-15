@@ -102,16 +102,11 @@ namespace HashValueIndexSampleCommon
 
         public virtual void Dispose()
         {
-            if (!(this.FasterKV is null))
-            {
-                this.FasterKV.Dispose();
-                this.FasterKV = null;
-            }
-            if (!(this.logFiles is null))
-            {
-                this.logFiles.Close();
-                this.logFiles = null;
-            }
+            this.FasterKV?.Dispose();
+            this.FasterKV = null;
+
+            this.logFiles?.Close();
+            this.logFiles = null;
         }
     }
 }

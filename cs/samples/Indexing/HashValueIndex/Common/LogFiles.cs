@@ -56,18 +56,13 @@ namespace HashValueIndexSampleCommon
 
         internal void Close()
         {
-            if (!(this.log is null))
-            {
-                this.log.Dispose();
-                this.log = null;
-            }
-            if (!(this.objLog is null))
-            {
-                this.objLog.Dispose();
-                this.objLog = null;
-            }
+            this.log?.Dispose();
+            this.log = null;
 
-            if (this.IndexDevices is { })
+            this.objLog?.Dispose();
+            this.objLog = null;
+
+            if (this.IndexDevices is not null)
             {
                 foreach (var device in this.IndexDevices)
                     device.Dispose();
