@@ -526,17 +526,18 @@ namespace FASTER.core
         public void Recover(Guid token, ICheckpointManager checkpointManager, int deltaLogPageSizeBits)
         {
             deltaFileDevice = checkpointManager.GetDeltaLogDevice(token);
-            deltaFileDevice.Initialize(-1);
-            if (deltaFileDevice.GetFileSize(0) > 0)
+            if (!(deltaFileDevice is null))
             {
-                deltaLog = new DeltaLog(deltaFileDevice, deltaLogPageSizeBits, -1);
-                deltaLog.InitializeForReads();
-                info.Recover(token, checkpointManager, deltaLog);
+                deltaFileDevice.Initialize(-1);
+                if (deltaFileDevice.GetFileSize(0) > 0)
+                {
+                    deltaLog = new DeltaLog(deltaFileDevice, deltaLogPageSizeBits, -1);
+                    deltaLog.InitializeForReads();
+                    info.Recover(token, checkpointManager, deltaLog);
+                    return;
+                }
             }
-            else
-            {
-                info.Recover(token, checkpointManager, null);
-            }
+            info.Recover(token, checkpointManager, null);
         }
 
         public void Reset()

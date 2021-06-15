@@ -429,14 +429,13 @@ namespace FASTER.test.readaddress
             }
         }
 
-        // Test is similar to others but tests the Overload where RadFlag.none is set -- probably don't need all combinations of test but doesn't hurt 
+        // Test is similar to others but tests the Overload where ReadFlag.none is set -- probably don't need all combinations of test but doesn't hurt 
         [TestCase(false, CopyReadsToTail.None, false, false)]
         [TestCase(false, CopyReadsToTail.FromStorage, true, true)]
         [TestCase(true, CopyReadsToTail.None, false, true)]
         [Category("FasterKV")]
         public async Task ReadAtAddressAsyncReadFlagsNoneTests(bool useReadCache, CopyReadsToTail copyReadsToTail, bool useRMW, bool flush)
         {
-            CancellationToken cancellationToken;
             using var testStore = new TestStore(useReadCache, copyReadsToTail, flush);
             await testStore.Populate(useRMW, useAsync: true);
             using var session = testStore.fkv.For(new Functions()).NewSession<Functions>();
@@ -463,7 +462,7 @@ namespace FASTER.test.readaddress
                         var saveOutput = output;
                         var saveRecordInfo = recordInfo;
 
-                        readAsyncResult = await session.ReadAtAddressAsync(readAtAddress, ref input, ReadFlags.None, default, serialNo: maxLap + 1, cancellationToken);
+                        readAsyncResult = await session.ReadAtAddressAsync(readAtAddress, ref input, ReadFlags.None, default, serialNo: maxLap + 1);
                         (status, output) = readAsyncResult.Complete(out recordInfo);
 
                         Assert.AreEqual(saveOutput, output);
@@ -480,7 +479,6 @@ namespace FASTER.test.readaddress
         [Category("FasterKV")]
         public async Task ReadAtAddressAsyncReadFlagsSkipCacheTests(bool useReadCache, CopyReadsToTail copyReadsToTail, bool useRMW, bool flush)
         {
-            CancellationToken cancellationToken;
             using var testStore = new TestStore(useReadCache, copyReadsToTail, flush);
             await testStore.Populate(useRMW, useAsync: true);
             using var session = testStore.fkv.For(new Functions()).NewSession<Functions>();
@@ -507,7 +505,7 @@ namespace FASTER.test.readaddress
                         var saveOutput = output;
                         var saveRecordInfo = recordInfo;
 
-                        readAsyncResult = await session.ReadAtAddressAsync(readAtAddress, ref input, ReadFlags.SkipReadCache, default, maxLap + 1, cancellationToken);
+                        readAsyncResult = await session.ReadAtAddressAsync(readAtAddress, ref input, ReadFlags.SkipReadCache, default, maxLap + 1);
                         (status, output) = readAsyncResult.Complete(out recordInfo);
 
                         Assert.AreEqual(saveOutput, output);
