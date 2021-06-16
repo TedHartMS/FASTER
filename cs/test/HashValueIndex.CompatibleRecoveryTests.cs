@@ -3,19 +3,18 @@
 
 using FASTER.core;
 using FASTER.indexes.HashValueIndex;
-using FASTER.test.HashValueIndex.CheckpointMetadata;
 using System;
 using NUnit.Framework;
 
-namespace FASTER.test.HashValueIndex.CompatibleRecoveryTests
+namespace FASTER.test.HashValueIndex
 {
     class HashValueIndexCheckpointRecoveryTester : CheckpointRecoveryTester
     {
         private HashValueIndexTestBase testBase;
-        private readonly RecoveryTests testContainer;
+        private readonly CompatibleRecoveryTests testContainer;
         bool usePrimarySnapshot;
 
-        internal HashValueIndexCheckpointRecoveryTester(HashValueIndexTestBase testBase, RecoveryTests tester)
+        internal HashValueIndexCheckpointRecoveryTester(HashValueIndexTestBase testBase, CompatibleRecoveryTests tester)
             : base(testBase.outerCheckpointManager,  testBase.innerCheckpointManager)
         {
             this.testBase = testBase;
@@ -113,7 +112,7 @@ namespace FASTER.test.HashValueIndex.CompatibleRecoveryTests
     }
 
     [TestFixture]
-    internal class RecoveryTests
+    internal class CompatibleRecoveryTests
     {
         HashValueIndexTestBase testBase;
         internal CheckpointRecoveryTester tester;

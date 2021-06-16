@@ -8,7 +8,7 @@ using System.Collections.Generic;
 using NUnit.Framework;
 using System.Linq;
 
-namespace FASTER.test.HashValueIndex.CheckpointMetadata
+namespace FASTER.test.HashValueIndex
 {
     internal class CheckpointRecoveryTester
     {

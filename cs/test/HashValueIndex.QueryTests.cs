@@ -10,7 +10,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Diagnostics;
 
-namespace FASTER.test.HashValueIndex.QueryTests
+namespace FASTER.test.HashValueIndex
 {
     [TestFixture]
     class QueryTests
