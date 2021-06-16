@@ -20,11 +20,11 @@ namespace FASTER.test.HashValueIndex
     internal class HashValueIndexTestBase
     {
         // Hash and log sizes
-        internal const int HashSizeBits = 20;
+        private const int HashSizeBits = 20;
         private const int MemorySizeBits = 29;
         private const int SegmentSizeBits = 25;
         private const int PageSizeBits = 20;
-        private const string IndexName = "IntIndex";
+
         internal const int MinRecs = 100;
         internal const int MidRecs = 500;
         internal const int MaxRecs = 5_000;
@@ -35,15 +35,15 @@ namespace FASTER.test.HashValueIndex
         private IDevice primaryLog;
         private IDevice secondaryLog;
 
-        // Used by HashValueIndexCheckpointRecoveryTester
         internal FasterKV<int, int> primaryFkv;
-        internal HashValueIndex<int, int, int> index;
-        internal IPredicate[] intPredicates;
+        internal IPredicate[] predicates;
         internal CheckpointManager<int> outerCheckpointManager;
         internal ICheckpointManager innerCheckpointManager;
+        internal HashValueIndex<int, int, int> index;
 
-        internal HashValueIndexTestBase(int numPreds)
+        internal HashValueIndexTestBase(int numPreds, bool filter = false)
         {
+            string indexName = filter ? "FilteredIntIndex" : "IntIndex";
             this.testBaseDir = Path.Combine(TestContext.CurrentContext.TestDirectory, TestContext.CurrentContext.Test.ClassName.Split('.').Last());
             this.testDir = Path.Combine(this.testBaseDir, TestContext.CurrentContext.Test.MethodName);
             var primaryDir = Path.Combine(this.testDir, "PrimaryFKV");
@@ -80,7 +80,7 @@ namespace FASTER.test.HashValueIndex
 
             var secondaryCheckpointSettings = new CheckpointSettings { CheckpointDir = secondaryDir, CheckPointType = CheckpointType.FoldOver };
             innerCheckpointManager = Utility.CreateDefaultCheckpointManager(secondaryCheckpointSettings);
-            this.outerCheckpointManager = new CheckpointManager<int>(IndexName, innerCheckpointManager);
+            this.outerCheckpointManager = new CheckpointManager<int>(indexName, innerCheckpointManager);
             secondaryCheckpointSettings.CheckpointManager = this.outerCheckpointManager;
 
             var secondaryRegSettings = new RegistrationSettings<int>
@@ -88,24 +88,39 @@ namespace FASTER.test.HashValueIndex
                 HashTableSize = 1L << HashSizeBits,
                 LogSettings = secondaryLogSettings,
                 KeyComparer = new IntKeyComparer(),
-                NullIndicator = -1,
                 CheckpointSettings = secondaryCheckpointSettings
             };
 
-            static string predName(int ord) => $"IntPred_{ord}";
+            static string predName(int ord) => $"Pred_{ord}";
 
-            var preds = Enumerable.Range(0, numPreds).Select<int, (string, Func<int, int>)>(ord => (predName(ord), v => PredicateKeyFunc(v, ord))).ToArray();
-            this.index = new HashValueIndex<int, int, int>(IndexName, this.primaryFkv, secondaryRegSettings, preds);
+            if (filter)
+            {
+                var preds = Enumerable.Range(0, numPreds).Select<int, (string, Func<int, (bool, int)>)>(ord => (predName(ord), v => PredicateKeyFuncFiltered(v, ord))).ToArray();
+                this.index = new HashValueIndex<int, int, int>(indexName, this.primaryFkv, secondaryRegSettings, preds);
+            }
+            else
+            {
+                var preds = Enumerable.Range(0, numPreds).Select<int, (string, Func<int, int>)>(ord => (predName(ord), v => PredicateKeyFunc(v, ord))).ToArray();
+                this.index = new HashValueIndex<int, int, int>(indexName, this.primaryFkv, secondaryRegSettings, preds);
+            }
             this.primaryFkv.SecondaryIndexBroker.AddIndex(this.index);
-            this.intPredicates = Enumerable.Range(0, numPreds).Select(ord => index.GetPredicate(predName(ord))).ToArray();
+            this.predicates = Enumerable.Range(0, numPreds).Select(ord => index.GetPredicate(predName(ord))).ToArray();
         }
 
-        private static int PredicateKeyFunc(int value, int ordinal) => PredicateShiftKey(value % PredMod, ordinal);
+        static int PredicateKeyFunc(int value, int ordinal) => PredicateShiftKey(value % PredMod, ordinal);
+
+        static (bool, int) PredicateKeyFuncFiltered(int value, int ordinal)
+        {
+            var mod = value % PredMod;
+            return FilterSkip(mod) ? (false, default) : (true, PredicateShiftKey(mod, ordinal));
+        }
+
+        internal static bool FilterSkip(int mod) => mod < PredMod / 2;
 
         // Note: HashValueIndex uses Predicate Ordinal as part of its secondary hash, but do this here as well.
         internal static int PredicateShiftKey(int modKey, int ordinal) => (MaxRecs * ordinal) + modKey;
 
-        public void TearDown(bool deleteDir)
+        internal void TearDown(bool deleteDir)
         {
             this.primaryFkv?.Dispose();
             this.primaryFkv = null;

@@ -20,7 +20,7 @@ namespace FASTER.test.HashValueIndex.QueryTests
         [SetUp]
         public void Setup() { /* Nothing here as we don't know numPreds yet */}
 
-        private void Setup(int numPreds) => this.testBase = new HashValueIndexTestBase(numPreds);
+        private void Setup(int numPreds, bool filter) => this.testBase = new HashValueIndexTestBase(numPreds, filter);
 
         [TearDown]
         public void TearDown() => TearDown(deleteDir: true);
@@ -31,10 +31,10 @@ namespace FASTER.test.HashValueIndex.QueryTests
             testBase = null;
         }
 
-        private void PrepareToRecover(int numPreds)
+        private void PrepareToRecover(int numPreds, bool filter)
         {
             TearDown(deleteDir: false);
-            Setup(numPreds);
+            Setup(numPreds, filter);
         }
 
         [Test]
@@ -55,9 +55,41 @@ namespace FASTER.test.HashValueIndex.QueryTests
             await RunTest(numThreads, numRecs, numPreds, isAsync: true);
         }
 
+        [Test]
+        [Category(TestUtils.SecondaryIndexCategory), Category(TestUtils.HashValueIndexCategory)]
+        public void FilteredPredicateResultTest([Values(1, 10)] int numThreads,
+                                            [Values(HashValueIndexTestBase.MinRecs, HashValueIndexTestBase.MidRecs)] int numRecs,
+                                            [Values(1, 3)] int numPreds)
+        {
+            Setup(1, filter: true);
+            Insert(numThreads, 0, numRecs);
+
+            // We skip (by returning null from the predicate) half of the records for those we skip; but the count for non-skipped records is not affected.
+            var expectedRecsPerPred = (numRecs * numThreads) / HashValueIndexTestBase.PredMod;
+
+            using var session = testBase.primaryFkv.For(new SimpleFunctions<int, int>()).NewSession<SimpleFunctions<int, int>>();
+            var pred = new { predicate = testBase.predicates[0], ordinal = 0 };
+
+            void verify()
+            {
+                for (int predKey = 0; predKey < HashValueIndexTestBase.PredMod; ++predKey)
+                {
+                    var records = session.Query(pred.predicate, HashValueIndexTestBase.PredicateShiftKey(predKey, pred.ordinal), new QuerySettings()).ToArray();
+                    if (HashValueIndexTestBase.FilterSkip(predKey))
+                        Assert.AreEqual(0, records.Length, $"predKey {predKey}");
+                    else
+                        VerifyRecords(expectedRecsPerPred, predKey, records);
+                }
+            }
+
+            verify();
+            testBase.primaryFkv.Log.FlushAndEvict(wait: true);
+            verify();
+        }
+
         private async Task RunTest(int numThreads, int numRecs, int numPreds, bool isAsync)
         {
-            Setup(numPreds);
+            Setup(numPreds, filter: false);
             var half = numRecs / 2;
 
             // Insert the first half of the records
@@ -98,14 +130,17 @@ namespace FASTER.test.HashValueIndex.QueryTests
             // recover, which will be able to recover the secondary checkpoint.
             sw.Restart();
             Assert.IsTrue(testBase.primaryFkv.TakeFullCheckpoint(out Guid primaryToken1, CheckpointType.FoldOver));
+            Assert.IsFalse(primaryToken1 == Guid.Empty);
             await testBase.primaryFkv.CompleteCheckpointAsync();
-            Assert.IsTrue(testBase.index.TakeFullCheckpoint(out Guid secondaryToken));
-            await testBase.index.CompleteCheckpointAsync();
+            var (matched, secondaryToken) = await testBase.index.TakeFullCheckpointAsync(CheckpointType.FoldOver);
+            Assert.IsTrue(matched);
+            Assert.IsFalse(secondaryToken == Guid.Empty);
             Assert.IsTrue(testBase.primaryFkv.TakeFullCheckpoint(out Guid primaryToken2, CheckpointType.FoldOver));
+            Assert.IsFalse(primaryToken2 == Guid.Empty);
             await testBase.primaryFkv.CompleteCheckpointAsync();
             Console.WriteLine($"Checkpoints in {sw.ElapsedMilliseconds} ms");
 
-            PrepareToRecover(numPreds);
+            PrepareToRecover(numPreds, filter: false);
             sw.Restart();
             testBase.primaryFkv.Recover(primaryToken2);
             Console.WriteLine($"Recover in {sw.ElapsedMilliseconds} ms");
@@ -123,6 +158,7 @@ namespace FASTER.test.HashValueIndex.QueryTests
                 using var session = testBase.primaryFkv.For(new SimpleFunctions<int, int>()).NewSession<SimpleFunctions<int, int>>();
                 for (var ii = startRec; ii < numRecs; ++ii)
                     session.Upsert(HashValueIndexTestBase.MaxRecs * threadId + ii, ii);
+                session.CompletePending();
             }
 
             Thread[] workers = new Thread[numThreads];
@@ -139,7 +175,7 @@ namespace FASTER.test.HashValueIndex.QueryTests
 
         private async ValueTask<int> QueryAsync(int numThreads, int numRecs, bool isAsync)
         {
-            var expectedTotalRecs = numRecs * numThreads * testBase.intPredicates.Length;
+            var expectedTotalRecs = numRecs * numThreads * testBase.predicates.Length;
             var expectedRecsPerPred = (numRecs * numThreads) / HashValueIndexTestBase.PredMod;
 
             int predKeysPerThread = (HashValueIndexTestBase.PredMod + numThreads - 1) / numThreads;
@@ -150,7 +186,7 @@ namespace FASTER.test.HashValueIndex.QueryTests
             async Task verifyResults(int startPredKey)
             {
                 using var session = testBase.primaryFkv.For(new SimpleFunctions<int, int>()).NewSession<SimpleFunctions<int, int>>();
-                foreach (var pred in testBase.intPredicates.Select((predicate, ordinal) => new { predicate, ordinal }))
+                foreach (var pred in testBase.predicates.Select((predicate, ordinal) => new { predicate, ordinal }))
                 {
                     var maxPredKey = Math.Min(HashValueIndexTestBase.PredMod, startPredKey + predKeysPerThread);
                     for (int predKey = startPredKey; predKey < maxPredKey; ++predKey)
@@ -158,22 +194,7 @@ namespace FASTER.test.HashValueIndex.QueryTests
                         var records = isAsync
                             ? await session.QueryAsync(pred.predicate, HashValueIndexTestBase.PredicateShiftKey(predKey, pred.ordinal), new QuerySettings()).ToArrayAsync()
                             : session.Query(pred.predicate, HashValueIndexTestBase.PredicateShiftKey(predKey, pred.ordinal), new QuerySettings()).ToArray();
-                        Assert.AreEqual(expectedRecsPerPred, records.Length);
-                        Array.Sort(records, (ll, rr) => ll.KeyRef.CompareTo(rr.KeyRef));
-                        var prevKey = records[0].KeyRef - 1;
-                        for (var ii = 0; ii < records.Length; ++ii)
-                        {
-                            var record = records[ii];
-
-                            // Make sure the key and value are consistent
-                            Assert.AreEqual(record.KeyRef % HashValueIndexTestBase.PredMod, predKey);
-
-                            // Make sure we didn't return the same key twice. The combination of verifying expectedCount and uniqueness
-                            // also verifies we got all keys.
-                            Assert.AreNotEqual(prevKey, record.KeyRef);
-                            record.Dispose();
-                        }
-                        Interlocked.Add(ref actualTotalRecs, records.Length);
+                        Interlocked.Add(ref actualTotalRecs, VerifyRecords(expectedRecsPerPred, predKey, records));
                     }
                 }
             }
@@ -198,6 +219,26 @@ namespace FASTER.test.HashValueIndex.QueryTests
             }
             Assert.AreEqual(expectedTotalRecs, actualTotalRecs);
             return actualTotalRecs;
+        }
+
+        private static int VerifyRecords(int expectedRecsPerPred, int predKey, QueryRecord<int, int>[] records)
+        {
+            Assert.AreEqual(expectedRecsPerPred, records.Length, $"predKey {predKey}");
+            Array.Sort(records, (ll, rr) => ll.KeyRef.CompareTo(rr.KeyRef));
+            var prevKey = records[0].KeyRef - 1;
+            for (var ii = 0; ii < records.Length; ++ii)
+            {
+                var record = records[ii];
+
+                // Make sure the key and value are consistent
+                Assert.AreEqual(record.KeyRef % HashValueIndexTestBase.PredMod, predKey);
+
+                // Make sure we didn't return the same key twice. The combination of verifying expectedCount and uniqueness
+                // also verifies we got all keys.
+                Assert.AreNotEqual(prevKey, record.KeyRef);
+                record.Dispose();
+            }
+            return records.Length;
         }
     }
 }

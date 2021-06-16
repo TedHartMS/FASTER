@@ -76,7 +76,7 @@ namespace FASTER.test.HashValueIndex.CompatibleRecoveryTests
         {
             // We always take full checkpoints in this test. TODO: extend this to show separate start/completed intermixing
             testBase.primaryFkv.TakeFullCheckpoint(out Guid primaryLogToken, this.usePrimarySnapshot ? CheckpointType.Snapshot : CheckpointType.FoldOver);
-            testBase.primaryFkv.CompleteCheckpointAsync().GetAwaiter().GetResult(); // Do not do this in production
+            testBase.primaryFkv.CompleteCheckpointAsync().AsTask().GetAwaiter().GetResult(); // Do not do this in production
 
             var hlci = new HybridLogCheckpointInfo();
             hlci.Recover(primaryLogToken, testBase.primaryFkv.checkpointManager, default);
@@ -91,7 +91,7 @@ namespace FASTER.test.HashValueIndex.CompatibleRecoveryTests
         {
             // We always take full checkpoints in this test.
             testBase.index.TakeFullCheckpoint(out var logToken);
-            testBase.index.CompleteCheckpointAsync().GetAwaiter().GetResult(); // Do not do this in production
+            testBase.index.CompleteCheckpointAsync().AsTask().GetAwaiter().GetResult(); // Do not do this in production
 
             // Return the metadata from the inner checkpoint manager so it is not stripped of the wrapper metadata.
             var metadata = this.innerCheckpointManager.GetLogCheckpointMetadata(logToken, default);

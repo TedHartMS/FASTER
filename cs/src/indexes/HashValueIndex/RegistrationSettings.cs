@@ -12,11 +12,6 @@ namespace FASTER.indexes.HashValueIndex
     public class RegistrationSettings<TPKey>
     {
         /// <summary>
-        /// The return value from a predicate that indicates the predicate did not match the value.
-        /// </summary>
-        public TPKey NullIndicator = default;
-
-        /// <summary>
         /// When registring new Indexes over an existing store, this is the logicalAddress in the primary
         /// FasterKV at which indexing will be started.
         /// </summary>

@@ -399,8 +399,8 @@ namespace FASTER.indexes.HashValueIndex
 
         private bool IsMatch(IFasterScanIterator<TKVKey, TKVValue> scanner, SecondaryFasterKV<TPKey>.Input input)
         {
-            var key = this.predicates[input.PredicateOrdinal].Execute(ref scanner.GetValue());
-            return this.userKeyComparer.Equals(ref input.KeyRef, ref key);
+            (var matched, var key) = this.predicates[input.PredicateOrdinal].Execute(ref scanner.GetValue());
+            return matched && this.userKeyComparer.Equals(ref input.KeyRef, ref key);
         }
 
         private bool IsMatch(IFasterScanIterator<TKVKey, TKVValue> scanner, MultiPredicateQueryIterator<TPKey> queryIter, Func<bool[], bool> lambda)
@@ -408,8 +408,8 @@ namespace FASTER.indexes.HashValueIndex
             for (var ii = 0; ii < queryIter.Length; ++ii)
             {
                 var activeIndex = queryIter.activeIndexes[ii];
-                var key = this.predicates[activeIndex].Execute(ref scanner.GetValue());
-                queryIter.matches[activeIndex] = this.userKeyComparer.Equals(ref queryIter[activeIndex].Input.KeyRef, ref key);
+                (var matched, var key) = this.predicates[activeIndex].Execute(ref scanner.GetValue());
+                queryIter.matches[activeIndex] = matched && this.userKeyComparer.Equals(ref queryIter[activeIndex].Input.KeyRef, ref key);
             }
             return lambda(queryIter.matches);
         }

@@ -43,14 +43,15 @@ namespace FASTER.test.HashValueIndex.CheckpointMetadata
 
         // For the default Test implementation; used by methods that are overridden by the HashValueIndex implementation.
         int defaultPrimaryVersion = 0;
-        protected readonly Dictionary<long, long> primaryTailAddresses = new Dictionary<long, long>() { [0] = 0, [BA] = BA};
-        protected Dictionary<long, long> secondaryTailAddresses = new Dictionary<long, long>() { [0] = 0, [BA] = BA };
+        protected readonly Dictionary<long, long> primaryTailAddresses = new() { [0] = 0, [BA] = BA};
+        protected Dictionary<long, long> secondaryTailAddresses = new() { [0] = 0, [BA] = BA };
         protected PrimaryCheckpointInfo lastCompletedPci;
         protected PrimaryCheckpointInfo lastStartedPci;
 
         // Recovery is done following the last Op here. The structures are initialized using rowcounts for addresses; these are mapped in the test (because the
         // simple test does not do inserts; see HashValueIndex.CompatibleRecoveryTests for that).
-        internal Dictionary<string, TestSequence> testSequences = new Dictionary<string, TestSequence>{
+        internal Dictionary<string, TestSequence> testSequences = new()
+        {
             [nameof(CheckpointMetadataTests.NoCheckpointsTest)] = 
                 new TestSequence { opSequence = new Op[] { Op.S1, Op.P1 },
                                    expected = new ExpectedRecoveryState {PrePTail = BA, PreSTail = BA, PostPTail = BA, PostSTail = BA,
@@ -185,10 +186,10 @@ namespace FASTER.test.HashValueIndex.CheckpointMetadata
         internal PrimaryCheckpointInfo LastStartedPci;
         internal static byte[] userMetadata = new byte[] { 11, 22, 33, 44, 55, 66, 77, 88 };
 
-        private readonly List<Guid> indexTokens = new List<Guid>();
-        private readonly List<Guid> logTokens = new List<Guid>();
-        private readonly Dictionary<Guid, byte[]> indexMetaDict = new Dictionary<Guid, byte[]>();
-        private readonly Dictionary<Guid, byte[]> logMetaDict = new Dictionary<Guid, byte[]>();
+        private readonly List<Guid> indexTokens = new();
+        private readonly List<Guid> logTokens = new();
+        private readonly Dictionary<Guid, byte[]> indexMetaDict = new();
+        private readonly Dictionary<Guid, byte[]> logMetaDict = new();
 
         internal static void VerifyIsUserMetadata(byte[] commitMetadata)
         {

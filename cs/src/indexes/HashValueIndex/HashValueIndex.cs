@@ -44,8 +44,9 @@ namespace FASTER.indexes.HashValueIndex
         /// </summary>
         public IHeapContainer<TPKey> GetKeyContainer(ref TPKey key) => this.secondaryFkv.hlog.GetKeyContainer(ref key);
 
+#region Constructors
         /// <summary>
-        /// Constructs a HashValueIndex with a single Predicate
+        /// Constructs a HashValueIndex with a single Predicate that will always map a <typeparamref name="TKVValue"/> to a <typeparamref name="TPKey"/>
         /// </summary>
         /// <param name="name">Name of the index</param>
         /// <param name="fkv">The primary FasterKV</param>
@@ -56,12 +57,12 @@ namespace FASTER.indexes.HashValueIndex
                               string predName, Func<TKVValue, TPKey> predFunc)
             : this(name, fkv, registrationSettings)
         {
-            UpdatePredicates(new[] { new Predicate<TKVKey, TKVValue, TPKey>(this, 0, predName, predFunc) });
+            UpdatePredicates(new[] { new Predicate<TKVKey, TKVValue, TPKey>(this, 0, predName, v => (true, predFunc(v))) });
             CreateSecondaryFkv();
         }
 
         /// <summary>
-        /// Constructs a HashValueIndex with multiple Predicates
+        /// Constructs a HashValueIndex with multiple Predicates that will always map a <typeparamref name="TKVValue"/> to a <typeparamref name="TPKey"/>
         /// </summary>
         /// <param name="name">Name of the index</param>
         /// <param name="fkv">The primary FasterKV</param>
@@ -71,9 +72,41 @@ namespace FASTER.indexes.HashValueIndex
                               params (string name, Func<TKVValue, TPKey> func)[] predFuncs)
             : this(name, fkv, registrationSettings)
         {
+            UpdatePredicates(predFuncs.Select((tup, ord) => new Predicate<TKVKey, TKVValue, TPKey>(this, ord, tup.name, v => (true, tup.func(v)))).ToArray());
+            CreateSecondaryFkv();
+        }
+
+        /// <summary>
+        /// Constructs a HashValueIndex with a single Predicate that will always map a <typeparamref name="TKVValue"/> to a <typeparamref name="TPKey"/>
+        /// </summary>
+        /// <param name="name">Name of the index</param>
+        /// <param name="fkv">The primary FasterKV</param>
+        /// <param name="registrationSettings">Settings for the index</param>
+        /// <param name="predName">Name of the Predicate</param>
+        /// <param name="predFunc">Function of the predicate, mapping the <typeparamref name="TKVValue"/> to <typeparamref name="TPKey"/></param>
+        public HashValueIndex(string name, FasterKV<TKVKey, TKVValue> fkv, RegistrationSettings<TPKey> registrationSettings,
+                              string predName, Func<TKVValue, (bool, TPKey)> predFunc)
+            : this(name, fkv, registrationSettings)
+        {
+            UpdatePredicates(new[] { new Predicate<TKVKey, TKVValue, TPKey>(this, 0, predName, predFunc) });
+            CreateSecondaryFkv();
+        }
+
+        /// <summary>
+        /// Constructs a HashValueIndex with multiple Predicates that will always map a <typeparamref name="TKVValue"/> to a <typeparamref name="TPKey"/>
+        /// </summary>
+        /// <param name="name">Name of the index</param>
+        /// <param name="fkv">The primary FasterKV</param>
+        /// <param name="registrationSettings">Settings for the index</param>
+        /// <param name="predFuncs">A vector of tuples of predicate name and the function implementing the Predicate</param>
+        public HashValueIndex(string name, FasterKV<TKVKey, TKVValue> fkv, RegistrationSettings<TPKey> registrationSettings,
+                              params (string name, Func<TKVValue, (bool, TPKey)> func)[] predFuncs)
+            : this(name, fkv, registrationSettings)
+        {
             UpdatePredicates(predFuncs.Select((tup, ord) => new Predicate<TKVKey, TKVValue, TPKey>(this, ord, tup.name, tup.func)).ToArray());
             CreateSecondaryFkv();
         }
+#endregion Constructors
 
         private HashValueIndex(string name, FasterKV<TKVKey, TKVValue> fkv, RegistrationSettings<TPKey> registrationSettings)
         {
@@ -187,7 +220,7 @@ namespace FASTER.indexes.HashValueIndex
             return pred;
         }
 
-        #region Query Utilities
+#region Query Utilities
         private int GetPredicateOrdinal(IPredicate iPred) => this.GetImplementingPredicate(iPred).Ordinal;
 
         private SecondaryFasterKV<TPKey>.Input MakeQueryInput(IPredicate iPred, ref TPKey key) 
@@ -243,9 +276,9 @@ namespace FASTER.indexes.HashValueIndex
         internal async ValueTask<QuerySegment<TKVKey, TKVValue>> CreateSegmentAsync(IAsyncEnumerable<QueryRecord<TKVKey, TKVValue>> recordsEnum, QueryContinuationToken continuationToken, QuerySettings querySettings)
             => new QuerySegment<TKVKey, TKVValue>(await recordsEnum.ToListAsync(querySettings.CancellationToken), continuationToken.ToString());
 
-        #endregion Query Utilities
+#endregion Query Utilities
 
-        #region Single Predicate Sync
+#region Single Predicate Sync
         internal IEnumerable<QueryRecord<TKVKey, TKVValue>> Query(IPredicate predicate, ref TPKey key, SecondaryIndexSessionBroker sessionBroker, QuerySettings querySettings)
             => InternalQuery(this.MakeQueryInput(predicate, ref key), sessionBroker, querySettings ?? QuerySettings.Default);
 
@@ -253,9 +286,9 @@ namespace FASTER.indexes.HashValueIndex
             => MakeQueryIterator(predicate, ref key, continuationString, out QueryContinuationToken continuationToken, out SecondaryFasterKV<TPKey>.Input input)
                 ? CreateSegment(InternalQuery(input, sessionBroker, querySettings ?? QuerySettings.Default, continuationToken, numRecords), continuationToken)
                 : new QuerySegment<TKVKey, TKVValue>(new List<QueryRecord<TKVKey, TKVValue>>(), continuationString);
-        #endregion Single Predicate Sync
+#endregion Single Predicate Sync
 
-        #region Single Predicate Async
+#region Single Predicate Async
         internal IAsyncEnumerable<QueryRecord<TKVKey, TKVValue>> QueryAsync(IPredicate predicate, ref TPKey key, SecondaryIndexSessionBroker sessionBroker, QuerySettings querySettings)
             => InternalQueryAsync(this.MakeQueryInput(predicate, ref key), sessionBroker, querySettings ?? QuerySettings.Default);
 
@@ -266,9 +299,9 @@ namespace FASTER.indexes.HashValueIndex
                            ? CreateSegmentAsync(InternalQueryAsync(input, sessionBroker, querySettings, continuationToken, numRecords), continuationToken, querySettings)
                            : new ValueTask<QuerySegment<TKVKey, TKVValue>>(new QuerySegment<TKVKey, TKVValue>(new List<QueryRecord<TKVKey, TKVValue>>(), continuationString));
         }
-        #endregion Single Predicate Async
+#endregion Single Predicate Async
 
-        #region Multi Predicate Sync
+#region Multi Predicate Sync
         internal IEnumerable<QueryRecord<TKVKey, TKVValue>> Query(IEnumerable<(IPredicate pred, TPKey key)> queryPredicates,
                     Func<bool[], bool> matchPredicate, SecondaryIndexSessionBroker sessionBroker, QuerySettings querySettings)
             => MakeQueryIterator(queryPredicates, string.Empty, out QueryContinuationToken _, out MultiPredicateQueryIterator<TPKey> queryIterator)
@@ -280,9 +313,9 @@ namespace FASTER.indexes.HashValueIndex
             => MakeQueryIterator(queryPredicates, continuationString, out QueryContinuationToken continuationToken, out MultiPredicateQueryIterator<TPKey> queryIterator)
                 ? CreateSegment(InternalQuery(queryIterator, matchPredicate, sessionBroker, querySettings ?? QuerySettings.Default, continuationToken, numRecords), continuationToken)
                 : new QuerySegment<TKVKey, TKVValue>(new List<QueryRecord<TKVKey, TKVValue>>(), continuationString);
-        #endregion Multi Predicate Sync
+#endregion Multi Predicate Sync
 
-        #region Multi Predicate Async
+#region Multi Predicate Async
         internal IAsyncEnumerable<QueryRecord<TKVKey, TKVValue>> QueryAsync(IEnumerable<(IPredicate pred, TPKey key)> queryPredicates, Func<bool[], bool> matchPredicate,
                     SecondaryIndexSessionBroker sessionBroker, QuerySettings querySettings = null)
             => MakeQueryIterator(queryPredicates, string.Empty, out QueryContinuationToken _, out MultiPredicateQueryIterator<TPKey> queryIterator)
@@ -297,7 +330,7 @@ namespace FASTER.indexes.HashValueIndex
                            ? CreateSegmentAsync(InternalQueryAsync(queryIterator, matchPredicate, sessionBroker, querySettings, continuationToken, numRecords), continuationToken, querySettings)
                            : new ValueTask<QuerySegment<TKVKey, TKVValue>>(new QuerySegment<TKVKey, TKVValue>(new List<QueryRecord<TKVKey, TKVValue>>(), continuationString));
         }
-        #endregion Multi Predicate Async
+#endregion Multi Predicate Async
 
         /// <summary>
         /// Flush data in the secondary FasterKV.

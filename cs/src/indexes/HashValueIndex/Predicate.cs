@@ -20,7 +20,7 @@ namespace FASTER.indexes.HashValueIndex
         /// <param name="kvValue">The value sent to FasterKV on Upsert or RMW</param>
         /// <remarks>This must be a delegate instead of a lambda to allow ref parameters</remarks>
         /// <returns>Null if the value does not match the predicate, else a key for the value in the Index hash table</returns>
-        private delegate TPKey PredicateFunction(ref TKVValue kvValue);
+        private delegate (bool matched, TPKey key) PredicateFunction(ref TKVValue kvValue);
 
         /// <summary>
         /// The predicate function that will be called by FasterKV on Upsert or RMW.
@@ -39,9 +39,9 @@ namespace FASTER.indexes.HashValueIndex
         /// <inheritdoc/>
         public string Name { get; }
 
-        internal Predicate(HashValueIndex<TKVKey, TKVValue, TPKey> index, int predOrdinal, string name, Func<TKVValue, TPKey> predicate)
+        internal Predicate(HashValueIndex<TKVKey, TKVValue, TPKey> index, int predOrdinal, string name, Func<TKVValue, (bool matched, TPKey key)> predicate)
         {
-            TPKey wrappedPredicate(ref TKVValue value) => predicate(value);
+            (bool matched, TPKey key) wrappedPredicate(ref TKVValue value) => predicate(value);
 
             this.Index = index;
             this.Ordinal = predOrdinal;
@@ -50,7 +50,7 @@ namespace FASTER.indexes.HashValueIndex
             this.PredicateFunc = wrappedPredicate;
         }
 
-        // This return is checked against RegistrationSettings.NullIndicator to determine if the predicate matches the value.
-        internal TPKey Execute(ref TKVValue value) => this.PredicateFunc(ref value);
+        // 'matched' indicates whether the predicate matches the value.
+        internal (bool matched, TPKey key) Execute(ref TKVValue value) => this.PredicateFunc(ref value);
     }
 }

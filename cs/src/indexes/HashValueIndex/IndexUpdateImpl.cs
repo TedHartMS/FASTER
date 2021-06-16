@@ -41,11 +41,11 @@ namespace FASTER.indexes.HashValueIndex
                 keyPointer.PreviousAddress = core.Constants.kInvalidAddress;
                 keyPointer.PredicateOrdinal = (byte)ii;
 
-                var pKey = localPreds[ii].Execute(ref kvValue);
-                keyPointer.IsNull = userKeyComparer.Equals(ref pKey, ref this.RegistrationSettings.NullIndicator);
-                if (!keyPointer.IsNull)
+                (var matched, var key) = localPreds[ii].Execute(ref kvValue);
+                keyPointer.IsNull = !matched;
+                if (matched)
                 {
-                    keyPointer.Key = pKey;  // TODO: handle the non-blittable cases here
+                    keyPointer.Key = key;   // TODO: handle the non-blittable cases here
                     anyMatch = true;
                 }
             }
